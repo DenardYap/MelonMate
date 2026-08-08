@@ -1,0 +1,42 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/.next-*/
+/out/
+/.capacitor-build/
+/.capacitor-build.trash-*/
+/mobile-dist/
+/mobile-dist.trash-*/
+/.ios-derived/
+
+# production
+/build
+
+# local/runtime
+/.data/
+/tmp/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env files
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+.next-build

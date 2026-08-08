@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Chammy the Korean melon assistant</title>
+  <desc id="desc">A minimal flat Korean melon character wearing a headset and holding a notebook.</desc>
+  <ellipse cx="91" cy="218" rx="29" ry="17" fill="#F5CA45" stroke="#705A1B" stroke-width="7"/>
+  <ellipse cx="165" cy="218" rx="29" ry="17" fill="#F5CA45" stroke="#705A1B" stroke-width="7"/>
+  <path d="M45 116C45 62 81 32 128 32s83 30 83 84" fill="none" stroke="#B79A2F" stroke-width="8" stroke-linecap="round"/>
+  <rect x="35" y="102" width="24" height="52" rx="12" fill="#B79A2F" stroke="#705A1B" stroke-width="6"/>
+  <rect x="197" y="102" width="24" height="52" rx="12" fill="#B79A2F" stroke="#705A1B" stroke-width="6"/>
+  <rect x="49" y="48" width="158" height="170" rx="79" fill="#F5CA45" stroke="#705A1B" stroke-width="7"/>
+  <path d="M83 67c-12 42-12 92 0 132M128 60v143M173 67c12 42 12 92 0 132" fill="none" stroke="#FFF2B8" stroke-width="8" stroke-linecap="round"/>
+  <path d="M126 50c-2-17 1-28 11-38" fill="none" stroke="#705A1B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M139 28c17-14 35-12 47-2-12 18-30 22-47 9z" fill="#9CAD44" stroke="#705A1B" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="101" cy="115" r="7" fill="#4B3E18"/>
+  <circle cx="155" cy="115" r="7" fill="#4B3E18"/>
+  <path d="M111 141c10 11 24 11 34 0" fill="none" stroke="#4B3E18" stroke-width="7" stroke-linecap="round"/>
+  <path d="M209 135c-1 21-13 31-33 31" fill="none" stroke="#705A1B" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="173" cy="166" r="9" fill="#B79A2F" stroke="#705A1B" stroke-width="5"/>
+  <g transform="rotate(-8 66 164)">
+    <rect x="39" y="132" width="56" height="70" rx="10" fill="#E5A92F" stroke="#705A1B" stroke-width="6"/>
+    <path d="M51 148h31M51 162h22M51 176h27" fill="none" stroke="#FFF8D9" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <circle cx="55" cy="169" r="13" fill="#F5CA45" stroke="#705A1B" stroke-width="6"/>
+</svg>

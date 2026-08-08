@@ -1,0 +1,23 @@
+{
+  "name": "@melonmate/capacitor-health",
+  "version": "1.0.0",
+  "description": "MelonMate's read-only Apple HealthKit bridge.",
+  "type": "module",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "dist/",
+    "ios/Sources",
+    "Package.swift",
+    "MelonMateHealth.podspec"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}

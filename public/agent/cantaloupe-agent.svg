@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Canta the cantaloupe assistant</title>
+  <desc id="desc">A minimal flat cantaloupe character wearing a headset and holding a notebook.</desc>
+  <ellipse cx="91" cy="218" rx="29" ry="17" fill="#F6BE7B" stroke="#5B6842" stroke-width="7"/>
+  <ellipse cx="165" cy="218" rx="29" ry="17" fill="#F6BE7B" stroke="#5B6842" stroke-width="7"/>
+  <path d="M45 116C45 62 81 32 128 32s83 30 83 84" fill="none" stroke="#8EA35F" stroke-width="8" stroke-linecap="round"/>
+  <rect x="35" y="102" width="24" height="52" rx="12" fill="#8EA35F" stroke="#5B6842" stroke-width="6"/>
+  <rect x="197" y="102" width="24" height="52" rx="12" fill="#8EA35F" stroke="#5B6842" stroke-width="6"/>
+  <rect x="49" y="48" width="158" height="170" rx="79" fill="#F6BE7B" stroke="#5B6842" stroke-width="7"/>
+  <path d="M80 76c25 14 71 14 96 0M70 180c31-12 85-12 116 0" fill="none" stroke="#FFE0AC" stroke-width="6" stroke-linecap="round"/>
+  <path d="M126 50c-2-17 1-28 11-38" fill="none" stroke="#5B6842" stroke-width="8" stroke-linecap="round"/>
+  <path d="M139 28c17-14 35-12 47-2-12 18-30 22-47 9z" fill="#8EA35F" stroke="#5B6842" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="101" cy="115" r="7" fill="#3F472F"/>
+  <circle cx="155" cy="115" r="7" fill="#3F472F"/>
+  <path d="M111 141c10 11 24 11 34 0" fill="none" stroke="#3F472F" stroke-width="7" stroke-linecap="round"/>
+  <path d="M209 135c-1 21-13 31-33 31" fill="none" stroke="#5B6842" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="173" cy="166" r="9" fill="#8EA35F" stroke="#5B6842" stroke-width="5"/>
+  <g transform="rotate(-8 66 164)">
+    <rect x="39" y="132" width="56" height="70" rx="10" fill="#E89450" stroke="#5B6842" stroke-width="6"/>
+    <path d="M51 148h31M51 162h22M51 176h27" fill="none" stroke="#FFF4D6" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <circle cx="55" cy="169" r="13" fill="#F6BE7B" stroke="#5B6842" stroke-width="6"/>
+</svg>

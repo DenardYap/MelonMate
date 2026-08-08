@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Honey</title>
+  <desc id="desc">The original cute two-dimensional Honey character with arms and feet, without a headset.</desc>
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2F9C5"/>
+      <stop offset="1" stop-color="#D9EDA0"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="165%">
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#4F6842" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <!-- Feet and arms sit behind Honey's body. -->
+    <ellipse cx="365" cy="858" rx="132" ry="72" fill="url(#face)" stroke="#4F6842" stroke-width="30"/>
+    <ellipse cx="659" cy="858" rx="132" ry="72" fill="url(#face)" stroke="#4F6842" stroke-width="30"/>
+    <path d="M210 558C145 578 124 662 160 733" fill="none" stroke="#4F6842" stroke-width="78" stroke-linecap="round"/>
+    <path d="M210 558C145 578 124 662 160 733" fill="none" stroke="url(#face)" stroke-width="42" stroke-linecap="round"/>
+    <path d="M814 558C879 578 900 662 864 733" fill="none" stroke="#4F6842" stroke-width="78" stroke-linecap="round"/>
+    <path d="M814 558C879 578 900 662 864 733" fill="none" stroke="url(#face)" stroke-width="42" stroke-linecap="round"/>
+
+    <!-- Original rounded melon body. -->
+    <rect x="184" y="176" width="656" height="684" rx="328" fill="url(#face)" stroke="#4F6842" stroke-width="30"/>
+
+    <!-- Original stem and leaf. -->
+    <path d="M503 188C493 135 505 91 546 50" fill="none" stroke="#4F6842" stroke-width="34" stroke-linecap="round"/>
+    <path d="M554 114C626 54 718 58 780 104C728 181 638 197 558 148Z" fill="#8EAE4F" stroke="#4F6842" stroke-width="27" stroke-linejoin="round"/>
+
+    <!-- Original face details. -->
+    <circle cx="402" cy="530" r="31" fill="#35452F"/>
+    <circle cx="622" cy="530" r="31" fill="#35452F"/>
+    <circle cx="391" cy="519" r="8" fill="#FFFFFF" opacity="0.72"/>
+    <circle cx="611" cy="519" r="8" fill="#FFFFFF" opacity="0.72"/>
+    <path d="M444 638C484 684 540 684 580 638" fill="none" stroke="#35452F" stroke-width="31" stroke-linecap="round"/>
+    <ellipse cx="344" cy="620" rx="46" ry="24" fill="#F4B7A2" opacity="0.5"/>
+    <ellipse cx="680" cy="620" rx="46" ry="24" fill="#F4B7A2" opacity="0.5"/>
+  </g>
+</svg>

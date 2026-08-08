@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Honey holding a pencil</title>
+  <desc id="desc">The original cute two-dimensional Honey character holding a pencil, with feet and no headset.</desc>
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2F9C5"/>
+      <stop offset="1" stop-color="#D9EDA0"/>
+    </linearGradient>
+    <linearGradient id="pencil" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD86B"/>
+      <stop offset="1" stop-color="#F2B94A"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="165%">
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#4F6842" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <!-- Feet. -->
+    <ellipse cx="365" cy="858" rx="132" ry="72" fill="url(#face)" stroke="#4F6842" stroke-width="30"/>
+    <ellipse cx="659" cy="858" rx="132" ry="72" fill="url(#face)" stroke="#4F6842" stroke-width="30"/>
+
+    <!-- Body. -->
+    <rect x="184" y="176" width="656" height="684" rx="328" fill="url(#face)" stroke="#4F6842" stroke-width="30"/>
+
+    <!-- Stem and leaf. -->
+    <path d="M503 188C493 135 505 91 546 50" fill="none" stroke="#4F6842" stroke-width="34" stroke-linecap="round"/>
+    <path d="M554 114C626 54 718 58 780 104C728 181 638 197 558 148Z" fill="#8EAE4F" stroke="#4F6842" stroke-width="27" stroke-linejoin="round"/>
+
+    <!-- Face. -->
+    <circle cx="402" cy="500" r="31" fill="#35452F"/>
+    <circle cx="622" cy="500" r="31" fill="#35452F"/>
+    <circle cx="391" cy="489" r="8" fill="#FFFFFF" opacity="0.72"/>
+    <circle cx="611" cy="489" r="8" fill="#FFFFFF" opacity="0.72"/>
+    <path d="M444 602C484 648 540 648 580 602" fill="none" stroke="#35452F" stroke-width="31" stroke-linecap="round"/>
+    <ellipse cx="344" cy="584" rx="46" ry="24" fill="#F4B7A2" opacity="0.5"/>
+    <ellipse cx="680" cy="584" rx="46" ry="24" fill="#F4B7A2" opacity="0.5"/>
+
+    <!-- Arms reaching toward the pencil. -->
+    <path d="M222 624C270 646 305 682 340 718" fill="none" stroke="#4F6842" stroke-width="78" stroke-linecap="round"/>
+    <path d="M222 624C270 646 305 682 340 718" fill="none" stroke="url(#face)" stroke-width="42" stroke-linecap="round"/>
+    <path d="M802 594C760 616 724 646 690 674" fill="none" stroke="#4F6842" stroke-width="78" stroke-linecap="round"/>
+    <path d="M802 594C760 616 724 646 690 674" fill="none" stroke="url(#face)" stroke-width="42" stroke-linecap="round"/>
+
+    <!-- Warm yellow pencil. -->
+    <g transform="rotate(-9 512 704)">
+      <rect x="142" y="668" width="652" height="88" rx="18" fill="url(#pencil)" stroke="#4F6842" stroke-width="28"/>
+      <rect x="142" y="668" width="92" height="88" rx="18" fill="#EFA6A3" stroke="#4F6842" stroke-width="28"/>
+      <path d="M794 668L906 712L794 756Z" fill="#F5D5A1" stroke="#4F6842" stroke-width="28" stroke-linejoin="round"/>
+      <path d="M873 699L906 712L873 725Z" fill="#35452F"/>
+      <path d="M268 689H744" stroke="#FFF1A8" stroke-width="14" stroke-linecap="round" opacity="0.78"/>
+    </g>
+
+    <!-- Rounded hands. -->
+    <circle cx="343" cy="720" r="55" fill="url(#face)" stroke="#4F6842" stroke-width="28"/>
+    <circle cx="690" cy="666" r="55" fill="url(#face)" stroke="#4F6842" stroke-width="28"/>
+  </g>
+</svg>

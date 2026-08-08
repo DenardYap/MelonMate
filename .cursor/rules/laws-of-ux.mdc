@@ -1,0 +1,52 @@
+---
+description: Apply established UX laws and heuristics (Hick's, Miller's, Fitts's, Jakob's, Doherty, Peak-End, and more) when designing, reviewing, or critiquing any UI, interaction, or user-facing feature.
+globs:
+alwaysApply: false
+---
+
+# Laws of UX
+
+Apply these principles when designing, reviewing, or critiquing any UI, interaction, or user-facing feature.
+
+### Cognitive Load & Decision Making
+
+- **Hick's Law** — Reduce choices. More options = slower decisions. Default to the most common action; progressively disclose the rest.
+- **Miller's Law** — Keep working memory load to ~7 items. Chunk lists, forms, and navigation into groups of 5–7.
+- **Cognitive Load** — Minimize mental effort. Prefer familiar patterns over clever ones. Never make users think when the interface can think for them.
+- **Choice Overload** — Curate options aggressively. Presenting too many choices causes paralysis and abandonment.
+- **Law of Prägnanz** — Use the simplest visual form possible. Ambiguity always costs cognitive effort.
+- **Occam's Razor** — Among designs that accomplish the same goal, always choose the simpler one.
+- **Chunking** — Break complex content into small, labeled groups to aid comprehension and recall.
+
+### Visual Perception & Grouping
+
+- **Law of Proximity** — Group related elements close together; separate unrelated ones with space.
+- **Law of Common Region** — Use borders, backgrounds, or cards to group related content visually.
+- **Law of Similarity** — Use consistent color, shape, and size for elements that share a function.
+- **Law of Uniform Connectedness** — Use lines or visual links to show relationships between elements.
+- **Von Restorff Effect** — Make the primary CTA visually distinct from everything around it.
+- **Serial Position Effect** — Place the most important actions first or last in a list or nav — never buried in the middle.
+
+### Interaction & Feedback
+
+- **Fitts's Law** — Make click/tap targets large and close to where users naturally are. Never put common actions far away or in tiny targets.
+- **Doherty Threshold** — Respond to user actions in under 400ms. Show loading states for anything slower. Under-promise and over-deliver on time estimates.
+- **Aesthetic-Usability Effect** — Polished, attractive UI is perceived as more usable. Visual quality directly affects perceived competence and trust.
+- **Jakob's Law** — Follow established platform and app conventions. Users expect your product to behave like the products they already know.
+
+### Motivation & Memory
+
+- **Goal-Gradient Effect** — Show progress toward completion (progress bars, step indicators) to increase engagement and completion.
+- **Zeigarnik Effect** — Incomplete tasks are remembered better — leverage this for onboarding and re-engagement nudges.
+- **Peak-End Rule** — Users remember the peak moment and the final moment of an experience. Design a strong, satisfying ending.
+- **Pareto Principle** — Focus design effort on the 20% of features that 80% of users rely on most.
+
+### Complexity, Systems & Mental Models
+
+- **Tesler's Law** — Every system has irreducible complexity. Don't hide it from users arbitrarily — decide consciously where that complexity lives (in the product or in the user's mind).
+- **Mental Model** — Design to match users' existing mental models. When you deviate, provide a clear new model and help users transition.
+- **Paradox of the Active User** — Users skip instructions and dive straight in. Make the default path obvious and self-correcting.
+- **Postel's Law** — Accept varied and imprecise user input gracefully. Output consistently and predictably.
+- **Selective Attention** — Users ignore content that doesn't match their current goal. Reduce noise; surface what matters in context.
+- **Parkinson's Law** — Work expands to fill the time available. Apply this to forms and flows: reduce steps and fields ruthlessly.
+- **Flow** — The optimal experience is when challenge slightly exceeds skill. Too easy = boredom. Too hard = anxiety. Calibrate difficulty to the user's level.

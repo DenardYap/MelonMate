@@ -1,0 +1,355 @@
+import type { Ingredient, Recipe } from "./types";
+import { EXPANDED_MEAL_PREP_RECIPES } from "./recipeExpansion";
+
+/**
+ * Seeded from the 瓜飼料 🥔 cooking list.
+ * Macros and times are practical estimates per serving — editable in-app.
+ */
+function ing(en: string, zh: string, amount_en: string, amount_zh: string, _seed: number, cat?: Ingredient["cat"]): Ingredient {
+  return { name: { en, zh }, amount: { en: amount_en, zh: amount_zh }, cat };
+}
+
+function r(
+  id: string,
+  en: string,
+  zh: string,
+  emoji: string,
+  cat: Recipe["cat"],
+  minutes: number,
+  difficulty: 1 | 2 | 3,
+  servings: number,
+  cal: number,
+  protein: number,
+  carbs: number,
+  fat: number,
+  _seed: number,
+  ingredients: Ingredient[],
+  tags: string[] = []
+): Recipe {
+  return {
+    id,
+    name: { en, zh },
+    emoji,
+    cat,
+    minutes,
+    difficulty,
+    servings,
+    perServing: { cal, protein, carbs, fat },
+    ingredients,
+    tags,
+  };
+}
+
+type MealPrepIngredient = [en: string, zh: string, amountEn: string, amountZh: string, cat?: Ingredient["cat"]];
+
+function mp(
+  id: string,
+  en: string,
+  zh: string,
+  emoji: string,
+  cat: Recipe["cat"],
+  minutes: number,
+  cal: number,
+  protein: number,
+  carbs: number,
+  fat: number,
+  tags: string[],
+  ingredients: MealPrepIngredient[],
+  steps: [string, string][]
+): Recipe {
+  return {
+    id,
+    name: { en, zh },
+    emoji,
+    cat,
+    minutes,
+    difficulty: minutes <= 30 ? 1 : 2,
+    servings: 4,
+    perServing: { cal, protein, carbs, fat },
+    ingredients: ingredients.map(([ien, izh, aen, azh, icat]) => ({
+      name: { en: ien, zh: izh },
+      amount: { en: aen, zh: azh },
+      cat: icat,
+    })),
+    steps: steps.map(([sen, szh]) => ({ en: sen, zh: szh })),
+    tags: ["mealPrep", "easy", ...tags],
+  };
+}
+
+const CORE_RECIPES: Recipe[] = [
+  // ============================== ASIAN ==============================
+  r("tamagoyaki-set", "Tamagoyaki + sesame rice + meat", "玉子燒＋芝麻飯＋肉肉", "🍳", "asian", 25, 2, 2, 620, 32, 68, 22, 95, [
+    ing("Eggs", "雞蛋", "4 eggs", "4 顆", 28),
+    ing("Sesame rice", "芝麻飯", "2 bowls", "2 碗", 16),
+    ing("Chicken thigh", "雞腿肉", "200 g", "200 克", 56),
+    ing("Dashi + mirin", "高湯＋味醂", "a splash", "少許", 10),
+    ing("Green onion", "蔥", "1 stalk", "1 根", 5),
+  ], ["highProtein"]),
+  r("chawanmushi", "Chawanmushi", "茶碗蒸", "🍮", "asian", 30, 2, 2, 130, 11, 5, 7, 40, [
+    ing("Eggs", "雞蛋", "2 eggs", "2 顆", 14),
+    ing("Dashi broth", "日式高湯", "300 ml", "300 毫升", 8),
+    ing("Shrimp", "蝦仁", "4 shrimp", "4 隻", 40),
+    ing("Mushroom", "香菇", "2 caps", "2 朵", 10),
+    ing("Naruto", "鳴門卷", "2 slices", "2 片", 8),
+  ], ["light"]),
+  r("tiny-hotpot", "Tiny hotpot", "小火鍋", "🍲", "asian", 30, 1, 2, 520, 35, 40, 24, 150, [
+    ing("Napa cabbage", "大白菜", "1/4 head", "1/4 顆", 15),
+    ing("Pork slices", "豬肉片", "200 g", "200 克", 60),
+    ing("Fish balls", "魚丸", "8 balls", "8 顆", 30),
+    ing("Firm tofu", "板豆腐", "1 box", "1 盒", 15),
+    ing("Mushrooms", "菇類", "1 pack", "1 包", 30),
+    ing("Udon", "烏龍麵", "1 pack", "1 包", 15),
+    ing("Hotpot soup base", "火鍋湯底", "1/2 pack", "半包", 35),
+  ], ["chinese", "taiwanese", "cozy"]),
+  r("udon-broth", "Udon in broth + fish balls & naruto", "烏龍麵＋魚丸＋鳴門卷", "🍜", "asian", 20, 1, 2, 450, 22, 70, 8, 80, [
+    ing("Udon noodles", "烏龍麵", "2 packs", "2 包", 30),
+    ing("Dashi broth", "高湯", "700 ml", "700 毫升", 15),
+    ing("Fish balls", "魚丸", "6 balls", "6 顆", 25),
+    ing("Naruto", "鳴門卷", "6 slices", "6 片", 15),
+    ing("Egg", "雞蛋", "2 eggs", "2 顆", 14),
+    ing("Green onion", "蔥", "1 stalk", "1 根", 5),
+  ], ["quick", "cozy"]),
+  r("skewers", "Skewers", "串燒", "🍢", "asian", 35, 2, 2, 480, 38, 18, 28, 140, [
+    ing("Chicken thigh", "雞腿肉", "300 g", "300 克", 84),
+    ing("Green onion", "蔥段", "3 stalks", "3 根", 15),
+    ing("Bell pepper", "甜椒", "1 pepper", "1 顆", 25),
+    ing("Yakitori sauce", "串燒醬", "3 tbsp", "3 匙", 20),
+  ], ["highProtein", "weekend"]),
+  r("egg-fried-rice", "Egg fried rice + Chinese sausage", "香腸蛋炒飯", "🍚", "asian", 15, 1, 2, 650, 20, 82, 26, 60, [
+    ing("Day-old rice", "隔夜飯", "2 bowls", "2 碗", 12),
+    ing("Eggs", "雞蛋", "3 eggs", "3 顆", 21),
+    ing("Chinese sausage", "香腸", "2 links", "2 條", 40),
+    ing("Green onion", "蔥", "2 stalks", "2 根", 10),
+    ing("Green peas", "豌豆", "1/2 cup", "半碗", 12),
+  ], ["chinese", "quick"]),
+  r("ramen-eggs-cup", "Ramen eggs + Asian cup noodles", "溏心蛋＋泡麵", "🍥", "asian", 15, 1, 1, 560, 22, 62, 24, 75, [
+    ing("Cup noodles", "杯麵", "1 cup", "1 杯", 45),
+    ing("Eggs (marinated)", "溏心蛋", "2 eggs", "2 顆", 16),
+    ing("Green onion", "蔥", "1 stalk", "1 根", 5),
+  ], ["quick", "lazy"]),
+  r("jajangmyeon", "Jajangmyeon + fried egg & green onion", "炸醬麵＋煎蛋＋蔥花", "🍜", "asian", 25, 2, 2, 680, 24, 92, 24, 85, [
+    ing("Wheat noodles", "麵條", "2 portions", "2 份", 20),
+    ing("Jajang sauce", "炸醬", "120 g", "120 克", 45),
+    ing("Ground pork", "豬絞肉", "150 g", "150 克", 42),
+    ing("Onion", "洋蔥", "1 onion", "1 顆", 8),
+    ing("Eggs", "雞蛋", "2 eggs", "2 顆", 14),
+    ing("Cucumber", "小黃瓜絲", "1/2 cucumber", "半條", 5),
+  ]),
+  r("japanese-curry", "Japanese curry + rice", "日式咖哩飯", "🍛", "asian", 40, 1, 4, 640, 26, 88, 20, 90, [
+    ing("Curry roux", "咖哩塊", "1/2 box", "半盒", 60),
+    ing("Chicken thigh", "雞腿肉", "400 g", "400 克", 112),
+    ing("Potato", "馬鈴薯", "2 potatoes", "2 顆", 18),
+    ing("Carrot", "紅蘿蔔", "1 carrot", "1 根", 8),
+    ing("Onion", "洋蔥", "2 onions", "2 顆", 16),
+    ing("White rice", "白飯", "4 bowls", "4 碗", 24),
+  ], ["mealPrep", "cozy"]),
+  r("nasi-goreng", "Nasi goreng kampung", "印尼炒飯（進階）", "🍛", "asian", 45, 3, 2, 620, 24, 76, 24, 110, [
+    ing("Day-old rice", "隔夜飯", "2 bowls", "2 碗", 12),
+    ing("Shrimp paste (belacan)", "蝦醬", "1 tsp", "1 小匙", 15),
+    ing("Bird's eye chili", "小辣椒", "3 chilis", "3 根", 10),
+    ing("Eggs", "雞蛋", "3 eggs", "3 顆", 21),
+    ing("Chicken thigh", "雞腿肉", "150 g", "150 克", 42),
+    ing("Shallots + garlic", "紅蔥頭＋蒜", "a handful", "適量", 15),
+    ing("Kangkung / greens", "空心菜", "1 bunch", "1 把", 20),
+  ], ["challenge", "weekend"]),
+
+  // ============================== WESTERN ==============================
+  r("sirloin-steak", "Sirloin steak + greens", "沙朗牛排＋青菜", "🥩", "western", 25, 2, 2, 520, 45, 12, 32, 240, [
+    ing("Sirloin steak", "沙朗牛排", "400 g", "400 克", 360),
+    ing("Green beans", "四季豆", "200 g", "200 克", 16),
+    ing("Butter + garlic", "奶油＋蒜", "2 tbsp", "2 匙", 15),
+    ing("Potato (optional)", "馬鈴薯（選）", "1 potato", "1 顆", 9),
+  ], ["highProtein", "dateNight"]),
+  r("mushroom-soup-garlic-bread", "Mushroom cream soup + cheesy garlic bread", "蘑菇濃湯＋起司大蒜麵包", "🍄", "western", 40, 2, 2, 560, 16, 52, 32, 110, [
+    ing("Mushrooms", "蘑菇", "300 g", "300 克", 54),
+    ing("Heavy cream", "鮮奶油", "150 ml", "150 毫升", 38),
+    ing("Onion", "洋蔥", "1 onion", "1 顆", 8),
+    ing("Baguette", "法國麵包", "1/2 loaf", "半條", 30),
+    ing("Mozzarella", "起司", "60 g", "60 克", 27),
+    ing("Butter + garlic", "奶油＋蒜", "3 tbsp", "3 匙", 20),
+  ], ["cozy", "dateNight"]),
+  r("chicken-wings", "Chicken wings", "烤雞翅", "🍗", "western", 45, 1, 2, 430, 34, 8, 28, 90, [
+    ing("Chicken wings", "雞翅", "600 g", "600 克", 120),
+    ing("Marinade (soy, honey, garlic)", "醃料（醬油蜂蜜蒜）", "some", "適量", 20),
+  ], ["highProtein", "airFryer"]),
+  r("french-toast", "French toast", "法式吐司", "🍞", "western", 15, 1, 2, 480, 16, 52, 22, 55, [
+    ing("Thick toast", "厚片吐司", "4 slices", "4 片", 24),
+    ing("Eggs", "雞蛋", "2 eggs", "2 顆", 14),
+    ing("Milk", "鮮奶", "100 ml", "100 毫升", 9),
+    ing("Butter", "奶油", "1 tbsp", "1 匙", 6),
+    ing("Honey / maple", "蜂蜜／楓糖", "2 tbsp", "2 匙", 15),
+  ], ["quick", "weekend"]),
+  r("salmon-plate", "Pan-seared salmon + sides", "香煎鮭魚＋配菜", "🐟", "western", 25, 2, 2, 540, 38, 28, 30, 190, [
+    ing("Salmon fillet", "鮭魚", "300 g", "300 克", 240),
+    ing("Broccoli", "花椰菜", "1 head", "1 顆", 25),
+    ing("Rice or potato", "白飯或馬鈴薯", "2 servings", "2 份", 15),
+    ing("Lemon + butter", "檸檬＋奶油", "some", "適量", 15),
+  ], ["highProtein", "omega3"]),
+  r("pork-chop-greens", "Pork chop + greens", "香煎豬排＋青菜", "🥩", "western", 25, 1, 2, 520, 40, 18, 32, 120, [
+    ing("Pork chops", "豬排", "400 g", "400 克", 128),
+    ing("Green beans / broccoli", "四季豆／花椰菜", "200 g", "200 克", 18),
+    ing("Garlic + butter", "蒜＋奶油", "2 tbsp", "2 匙", 12),
+  ], ["highProtein", "quick"]),
+  r("mashed-potatoes", "Mashed potatoes", "奶油薯泥", "🥔", "western", 30, 1, 4, 220, 4, 32, 9, 30, [
+    ing("Potatoes", "馬鈴薯", "800 g", "800 克", 40),
+    ing("Butter", "奶油", "3 tbsp", "3 匙", 18),
+    ing("Milk", "鮮奶", "120 ml", "120 毫升", 11),
+  ], ["side"]),
+  r("parm-chicken", "Parmesan chicken + greens", "帕瑪森起司雞＋青菜", "🧀", "western", 35, 2, 2, 590, 48, 30, 30, 150, [
+    ing("Chicken breast", "雞胸肉", "400 g", "400 克", 48),
+    ing("Parmesan + breadcrumbs", "帕瑪森＋麵包粉", "80 g", "80 克", 70),
+    ing("Tomato sauce", "紅醬", "1 cup", "1 杯", 30),
+    ing("Mozzarella", "莫札瑞拉", "80 g", "80 克", 36),
+    ing("Greens", "青菜", "200 g", "200 克", 18),
+  ], ["highProtein", "dateNight"]),
+
+  // ============================== PASTA ==============================
+  r("pesto-pasta", "Pesto pasta + chicken", "青醬雞肉義大利麵", "🌿", "pasta", 25, 1, 2, 720, 42, 68, 30, 130, [
+    ing("Pasta", "義大利麵", "180 g dry", "乾麵 180 克", 18),
+    ing("Pesto sauce", "青醬", "4 tbsp", "4 匙", 70),
+    ing("Chicken breast", "雞胸肉", "300 g", "300 克", 36),
+    ing("Parmesan", "帕瑪森", "2 tbsp", "2 匙", 16),
+  ], ["highProtein", "quick"]),
+  r("tomato-pasta", "Tomato pasta + chicken", "紅醬雞肉義大利麵", "🍅", "pasta", 25, 1, 2, 640, 40, 78, 16, 110, [
+    ing("Pasta", "義大利麵", "180 g dry", "乾麵 180 克", 18),
+    ing("Tomato sauce", "紅醬", "1.5 cups", "1.5 杯", 45),
+    ing("Chicken breast", "雞胸肉", "300 g", "300 克", 36),
+    ing("Onion + garlic", "洋蔥＋蒜", "1 onion", "1 顆", 10),
+  ], ["highProtein", "quick"]),
+  r("alfredo-pasta", "Alfredo pasta + chicken", "白醬雞肉義大利麵", "🥛", "pasta", 25, 1, 2, 780, 42, 70, 36, 125, [
+    ing("Pasta", "義大利麵", "180 g dry", "乾麵 180 克", 18),
+    ing("Alfredo sauce", "白醬", "1.5 cups", "1.5 杯", 60),
+    ing("Chicken breast", "雞胸肉", "300 g", "300 克", 36),
+    ing("Parmesan", "帕瑪森", "2 tbsp", "2 匙", 16),
+  ], ["cozy"]),
+
+  // ============================== BREAKFAST ==============================
+  r("mayo-egg-sandwich", "Mayo egg sandwich", "美乃滋蛋沙拉三明治", "🥪", "breakfast", 10, 1, 2, 380, 14, 34, 20, 40, [
+    ing("Bread", "吐司", "4 slices", "4 片", 16),
+    ing("Eggs", "雞蛋", "3 eggs", "3 顆", 21),
+    ing("Mayonnaise", "美乃滋", "2 tbsp", "2 匙", 8),
+    ing("Cucumber", "小黃瓜", "1/2 cucumber", "半條", 5),
+  ], ["quick"]),
+  r("taiwanese-sandwich", "Taiwanese sandwich", "台式三明治", "🥪", "breakfast", 12, 1, 2, 420, 20, 38, 20, 45, [
+    ing("Bread", "吐司", "4 slices", "4 片", 16),
+    ing("Ham", "火腿", "4 slices", "4 片", 28),
+    ing("Egg", "煎蛋", "2 eggs", "2 顆", 14),
+    ing("Cheese", "起司片", "2 slices", "2 片", 14),
+    ing("Cucumber + mayo", "小黃瓜＋美乃滋", "some", "適量", 8),
+  ], ["taiwanese", "quick"]),
+  r("avocado-toast", "Avocado toast sandwich", "酪梨吐司", "🥑", "breakfast", 10, 1, 1, 420, 14, 36, 26, 55, [
+    ing("Sourdough", "酸種麵包", "2 slices", "2 片", 18),
+    ing("Avocado", "酪梨", "1/2 avocado", "半顆", 28),
+    ing("Egg", "雞蛋", "1 egg", "1 顆", 7),
+    ing("Chili flakes + lemon", "辣椒片＋檸檬", "a pinch", "少許", 3),
+  ], ["quick", "healthy"]),
+  r("protein-smoothie", "Protein smoothie + fruits", "蛋白果昔", "🥤", "breakfast", 5, 1, 1, 320, 32, 38, 6, 70, [
+    ing("Whey protein", "乳清蛋白", "1 scoop", "1 匙", 29),
+    ing("Banana", "香蕉", "1 banana", "1 根", 6),
+    ing("Frozen berries", "冷凍莓果", "80 g", "80 克", 30),
+    ing("Milk / soy milk", "鮮奶／豆漿", "250 ml", "250 毫升", 10),
+  ], ["highProtein", "quick", "healthy"]),
+
+  // ============================== VEG ==============================
+  r("garlic-green-beans", "Garlic green beans", "蒜炒四季豆", "🫛", "veg", 10, 1, 2, 90, 3, 10, 5, 25, [
+    ing("Green beans", "四季豆", "300 g", "300 克", 24),
+    ing("Garlic", "蒜", "3 cloves", "3 瓣", 5),
+    ing("Olive oil", "橄欖油", "1 tbsp", "1 匙", 5),
+  ], ["side", "quick", "healthy"]),
+  r("buttered-peas", "Buttered green peas", "奶油豌豆", "🫛", "veg", 8, 1, 2, 130, 6, 16, 5, 25, [
+    ing("Green peas", "豌豆", "300 g", "300 克", 27),
+    ing("Butter", "奶油", "1 tbsp", "1 匙", 6),
+  ], ["side", "quick"]),
+
+  // ======================== WORLD MEAL PREP ========================
+  mp("vietnamese-lemongrass-tofu-jars", "Vietnamese lemongrass tofu noodle jars", "越式香茅豆腐米線罐", "🌿", "asian", 30, 470, 23, 64, 15,
+    ["vegan", "vegetarian", "dairyFree", "vietnamese", "balanced"],
+    [["Extra-firm tofu", "板豆腐", "600 g", "600 克", "protein"], ["Rice vermicelli", "米線", "300 g dry", "乾重 300 克", "carb"], ["Lemongrass", "香茅", "3 stalks", "3 根", "sauce"], ["Carrot, cucumber & herbs", "紅蘿蔔、小黃瓜與香草", "6 cups", "6 杯", "veg"], ["Lime-tamari dressing", "萊姆醬油醬", "3/4 cup", "3/4 杯", "sauce"]],
+    [["Crisp the tofu with minced lemongrass and tamari.", "豆腐與香茅、醬油煎至金黃。"], ["Divide noodles and vegetables among four jars; keep dressing at the bottom.", "醬汁先放罐底，再分裝米線與蔬菜。"], ["Add tofu and herbs after cooling.", "放涼後加入豆腐與香草。"]]),
+  mp("turkish-lentil-kofte-boxes", "Turkish red-lentil köfte boxes", "土耳其紅扁豆香料丸餐盒", "🧆", "veg", 35, 430, 20, 62, 12,
+    ["vegan", "vegetarian", "halal", "turkish", "dairyFree", "fatLoss"],
+    [["Red lentils", "紅扁豆", "2 cups dry", "乾重 2 杯", "protein"], ["Fine bulgur", "細布格麥", "1 cup", "1 杯", "carb"], ["Tomato-pepper paste", "番茄甜椒醬", "1/3 cup", "1/3 杯", "sauce"], ["Parsley, mint & scallions", "巴西里、薄荷與青蔥", "2 cups", "2 杯", "veg"], ["Lettuce & lemon", "生菜與檸檬", "4 portions", "4 份", "veg"]],
+    [["Simmer lentils until soft, then stir in bulgur and cover for ten minutes.", "紅扁豆煮軟後拌入布格麥，加蓋靜置十分鐘。"], ["Mix in pastes, herbs, cumin, and lemon; shape into logs.", "拌入醬料、香草、孜然與檸檬，捏成小條。"], ["Pack with crisp lettuce and lemon wedges.", "與生菜、檸檬角分裝。"]]),
+  mp("korean-doenjang-mushroom-barley", "Doenjang mushroom barley bibimbap", "韓式大醬菇菇薏仁拌飯", "🍄", "asian", 30, 510, 25, 70, 16,
+    ["vegetarian", "korean", "highFiber", "balanced"],
+    [["Pearled barley", "薏仁", "2 cups dry", "乾重 2 杯", "carb"], ["Mixed mushrooms", "綜合菇", "800 g", "800 克", "veg"], ["Eggs", "雞蛋", "4", "4 顆", "protein"], ["Spinach & bean sprouts", "菠菜與豆芽", "8 cups", "8 杯", "veg"], ["Doenjang-sesame sauce", "大醬芝麻醬", "1/2 cup", "1/2 杯", "sauce"]],
+    [["Cook barley until chewy and drain well.", "薏仁煮至有嚼勁並瀝乾。"], ["Sear mushrooms; quickly wilt spinach and sprouts in the same pan.", "菇類煎香，同鍋快速炒軟菠菜與豆芽。"], ["Portion with eggs and keep the doenjang sauce separate.", "與雞蛋分裝，大醬醬汁另放。"]]),
+  mp("moroccan-preserved-lemon-chickpeas", "Moroccan preserved-lemon chickpea couscous", "摩洛哥鹹檸檬鷹嘴豆庫斯庫斯", "🍋", "veg", 25, 480, 19, 74, 12,
+    ["vegan", "vegetarian", "halal", "moroccan", "dairyFree", "fatLoss"],
+    [["Chickpeas", "鷹嘴豆", "3 cans", "3 罐", "protein"], ["Whole-wheat couscous", "全麥庫斯庫斯", "2 cups dry", "乾重 2 杯", "carb"], ["Preserved lemon", "鹹檸檬", "1", "1 顆", "sauce"], ["Roasted peppers & zucchini", "烤甜椒與櫛瓜", "6 cups", "6 杯", "veg"], ["Ras el hanout", "摩洛哥綜合香料", "2 tbsp", "2 大匙", "sauce"]],
+    [["Bloom spices in a little oil and warm the chickpeas.", "以少量油炒香香料，再加入鷹嘴豆加熱。"], ["Steam couscous with hot stock and fluff.", "庫斯庫斯以熱高湯燜熟後撥鬆。"], ["Fold in vegetables and finely chopped preserved lemon.", "拌入蔬菜與切碎鹹檸檬後分裝。"]]),
+  mp("filipino-adobo-eggplant-tempeh", "Filipino adobo eggplant & tempeh rice", "菲式阿斗波茄子天貝飯", "🍆", "asian", 35, 540, 27, 72, 18,
+    ["vegan", "vegetarian", "filipino", "glutenFree", "dairyFree", "massGain"],
+    [["Tempeh", "天貝", "600 g", "600 克", "protein"], ["Eggplant", "茄子", "3 medium", "3 條", "veg"], ["Brown rice", "糙米", "2 cups dry", "乾重 2 杯", "carb"], ["Tamari, cane vinegar & bay", "無麩質醬油、蔗醋與月桂葉", "1 cup", "1 杯", "sauce"], ["Green beans", "四季豆", "500 g", "500 克", "veg"]],
+    [["Brown tempeh and eggplant in a wide pan.", "天貝與茄子以寬鍋煎上色。"], ["Simmer with tamari, vinegar, garlic, peppercorns, and bay until glossy.", "加入醬油、醋、蒜、胡椒粒與月桂葉煮至收亮。"], ["Pack with brown rice and quickly blanched green beans.", "與糙米、燙四季豆分裝。"]]),
+  mp("ethiopian-berbere-lentil-sweet-potato", "Ethiopian berbere lentils & sweet potato", "衣索比亞柏柏爾扁豆地瓜燉菜", "🍠", "veg", 40, 455, 22, 72, 10,
+    ["vegan", "vegetarian", "ethiopian", "glutenFree", "dairyFree", "fatLoss"],
+    [["Brown lentils", "棕扁豆", "2 cups dry", "乾重 2 杯", "protein"], ["Sweet potatoes", "地瓜", "800 g", "800 克", "carb"], ["Crushed tomatoes", "碎番茄", "2 cans", "2 罐", "veg"], ["Berbere spice", "柏柏爾香料", "2 tbsp", "2 大匙", "sauce"], ["Collard greens", "羽衣甘藍", "1 large bunch", "1 大把", "veg"]],
+    [["Toast berbere with onion and garlic.", "洋蔥、蒜與柏柏爾香料炒香。"], ["Add lentils, diced sweet potato, tomatoes, and water; simmer until tender.", "加入扁豆、地瓜丁、番茄與水，燉至軟熟。"], ["Fold in chopped greens for the final five minutes.", "最後五分鐘拌入切碎綠葉菜。"]]),
+  mp("mexican-mole-mushroom-quinoa", "Smoky mole mushroom quinoa bowls", "煙燻莫雷醬菇菇藜麥碗", "🌶️", "veg", 30, 490, 21, 65, 17,
+    ["vegan", "vegetarian", "mexican", "glutenFree", "dairyFree", "balanced"],
+    [["Quinoa", "藜麥", "2 cups dry", "乾重 2 杯", "carb"], ["Portobello mushrooms", "大褐菇", "8 caps", "8 朵", "veg"], ["Black beans", "黑豆", "2 cans", "2 罐", "protein"], ["Quick mole sauce", "快速莫雷醬", "1 cup", "1 杯", "sauce"], ["Pickled cabbage", "醃高麗菜", "3 cups", "3 杯", "veg"]],
+    [["Cook quinoa with cumin and a pinch of salt.", "藜麥加入孜然與少許鹽煮熟。"], ["Sear mushrooms, then glaze with mole sauce.", "菇類煎香後拌入莫雷醬收汁。"], ["Layer quinoa, beans, mushrooms, and pickled cabbage.", "依序分裝藜麥、黑豆、菇類與醃高麗菜。"]]),
+  mp("persian-saffron-chicken-jewelled-rice", "Persian saffron chicken & jewelled rice", "波斯番紅花雞肉珠寶飯", "✨", "asian", 40, 590, 42, 76, 15,
+    ["halal", "persian", "dairyFree", "massGain", "highProtein"],
+    [["Halal chicken thighs", "清真雞腿肉", "800 g", "800 克", "protein"], ["Basmati rice", "印度香米", "2 cups dry", "乾重 2 杯", "carb"], ["Saffron & orange zest", "番紅花與橙皮", "1 pinch + 1 orange", "1 撮＋1 顆柳橙", "sauce"], ["Pistachios & raisins", "開心果與葡萄乾", "1 cup", "1 杯", "fat"], ["Cucumber-herb salad", "小黃瓜香草沙拉", "4 cups", "4 杯", "veg"]],
+    [["Marinate chicken with saffron water, turmeric, and orange zest; roast until browned.", "雞肉以番紅花水、薑黃與橙皮醃製後烤熟。"], ["Cook basmati and fold in raisins and pistachios.", "煮熟香米後拌入葡萄乾與開心果。"], ["Pack with cucumber-herb salad after cooling.", "放涼後與小黃瓜香草沙拉分裝。"]]),
+  mp("japanese-miso-saba-soba", "Miso saba soba with sesame greens", "味噌鯖魚蕎麥麵與芝麻青菜", "🐟", "asian", 25, 525, 36, 61, 17,
+    ["pescatarian", "japanese", "dairyFree", "highProtein", "balanced"],
+    [["Mackerel fillets", "鯖魚片", "4 fillets", "4 片", "protein"], ["Soba noodles", "蕎麥麵", "320 g dry", "乾重 320 克", "carb"], ["White miso", "白味噌", "3 tbsp", "3 大匙", "sauce"], ["Bok choy", "青江菜", "8 heads", "8 棵", "veg"], ["Sesame, ginger & rice vinegar", "芝麻、薑與米醋", "1/2 cup dressing", "1/2 杯醬汁", "sauce"]],
+    [["Brush mackerel with miso and broil until caramelized.", "鯖魚刷上味噌後烤至焦香。"], ["Rinse cooked soba cold and toss with ginger-sesame dressing.", "蕎麥麵煮熟沖冷水，拌薑汁芝麻醬。"], ["Pack with blanched bok choy and fish kept on top.", "與燙青江菜分裝，魚片放最上層。"]]),
+  mp("thai-pumpkin-green-curry-tofu", "Thai pumpkin green curry tofu", "泰式南瓜綠咖哩豆腐", "🎃", "asian", 30, 500, 24, 59, 20,
+    ["vegan", "vegetarian", "thai", "glutenFree", "dairyFree", "balanced"],
+    [["Extra-firm tofu", "板豆腐", "600 g", "600 克", "protein"], ["Kabocha squash", "栗子南瓜", "1 kg", "1 公斤", "carb"], ["Light coconut milk", "低脂椰奶", "2 cans", "2 罐", "fat"], ["Green curry paste", "綠咖哩醬", "4 tbsp", "4 大匙", "sauce"], ["Thai basil & snow peas", "泰國羅勒與甜豆", "5 cups", "5 杯", "veg"]],
+    [["Simmer curry paste in coconut milk until fragrant.", "綠咖哩醬與椰奶煮至香氣釋出。"], ["Add squash and tofu; simmer until the squash is just tender.", "加入南瓜與豆腐燉至南瓜剛熟。"], ["Stir in snow peas and basil just before portioning.", "分裝前拌入甜豆與羅勒。"]]),
+  mp("indian-paneer-tikka-millet", "Paneer tikka millet bowls", "印度香料烤起司小米餐盒", "🧀", "asian", 35, 560, 31, 58, 23,
+    ["vegetarian", "indian", "glutenFree", "massGain", "highProtein"],
+    [["Paneer", "印度起司", "600 g", "600 克", "protein"], ["Millet", "小米", "2 cups dry", "乾重 2 杯", "carb"], ["Greek yogurt & tikka spices", "希臘優格與提卡香料", "1 cup", "1 杯", "sauce"], ["Bell pepper & red onion", "甜椒與紅洋蔥", "6 cups", "6 杯", "veg"], ["Mint chutney", "薄荷酸辣醬", "1/2 cup", "1/2 杯", "sauce"]],
+    [["Coat paneer and vegetables in yogurt and tikka spices.", "起司與蔬菜裹上優格提卡香料。"], ["Broil on a sheet pan until charred at the edges.", "鋪烤盤烤至邊緣微焦。"], ["Portion over fluffy millet with mint chutney on the side.", "放在鬆軟小米飯上，薄荷醬另裝。"]]),
+  mp("lebanese-sumac-turkey-mujadara", "Sumac turkey kofta & mujadara", "黎巴嫩漆樹香料火雞肉丸扁豆飯", "🧆", "western", 40, 575, 43, 70, 16,
+    ["halal", "lebanese", "dairyFree", "highProtein", "balanced"],
+    [["Halal ground turkey", "清真火雞絞肉", "800 g", "800 克", "protein"], ["Brown lentils", "棕扁豆", "1.5 cups dry", "乾重 1.5 杯", "protein"], ["Basmati rice", "印度香米", "1.5 cups dry", "乾重 1.5 杯", "carb"], ["Onions", "洋蔥", "5", "5 顆", "veg"], ["Sumac, parsley & allspice", "漆樹香料、巴西里與多香果", "1/2 cup herbs", "1/2 杯香草", "sauce"]],
+    [["Mix turkey with sumac, allspice, parsley, and onion; shape and bake.", "火雞肉拌漆樹香料、多香果、巴西里與洋蔥，塑形後烤熟。"], ["Cook lentils and rice together until tender.", "扁豆與香米同煮至熟。"], ["Top with deeply browned onions and portion with kofta.", "鋪上焦糖洋蔥並與肉丸分裝。"]]),
+  mp("caribbean-jerk-salmon-pineapple-rice", "Jerk salmon & pineapple rice", "加勒比海牙買加香料鮭魚鳳梨飯", "🍍", "western", 30, 570, 39, 71, 18,
+    ["pescatarian", "caribbean", "glutenFree", "dairyFree", "massGain"],
+    [["Salmon fillets", "鮭魚片", "4", "4 片", "protein"], ["Jerk seasoning", "牙買加香料", "3 tbsp", "3 大匙", "sauce"], ["Jasmine rice", "茉莉香米", "2 cups dry", "乾重 2 杯", "carb"], ["Pineapple", "鳳梨", "2 cups", "2 杯", "fruit"], ["Black beans & scallions", "黑豆與青蔥", "3 cups", "3 杯", "protein"]],
+    [["Rub salmon with jerk seasoning and roast.", "鮭魚抹上牙買加香料後烤熟。"], ["Fold pineapple, black beans, and scallions through cooked rice.", "熟飯拌入鳳梨、黑豆與青蔥。"], ["Cool before placing salmon over the rice.", "放涼後再將鮭魚放在飯上。"]]),
+  mp("greek-lemon-gigante-orzo", "Greek lemon gigante bean orzo", "希臘檸檬大白豆米粒麵", "🫒", "pasta", 30, 485, 24, 67, 14,
+    ["vegetarian", "greek", "mediterranean", "highFiber", "balanced"],
+    [["Gigante or butter beans", "大白豆", "3 cans", "3 罐", "protein"], ["Whole-wheat orzo", "全麥米粒麵", "320 g dry", "乾重 320 克", "carb"], ["Spinach", "菠菜", "8 cups", "8 杯", "veg"], ["Feta", "菲達起司", "160 g", "160 克", "dairy"], ["Lemon, dill & olives", "檸檬、蒔蘿與橄欖", "1 cup", "1 杯", "sauce"]],
+    [["Cook orzo and reserve a splash of its water.", "米粒麵煮熟並保留少許麵水。"], ["Wilt spinach with beans, lemon zest, and the reserved water.", "菠菜與白豆、檸檬皮及麵水煮軟。"], ["Fold in orzo, dill, olives, and feta after cooling slightly.", "稍放涼後拌入米粒麵、蒔蘿、橄欖與菲達起司。"]]),
+  mp("west-african-peanut-pea-stew", "West African peanut & black-eyed pea stew", "西非花生黑眼豆燉菜", "🥜", "veg", 35, 520, 25, 65, 20,
+    ["vegan", "vegetarian", "westAfrican", "glutenFree", "dairyFree", "massGain"],
+    [["Black-eyed peas", "黑眼豆", "3 cans", "3 罐", "protein"], ["Natural peanut butter", "天然花生醬", "3/4 cup", "3/4 杯", "fat"], ["Tomatoes", "番茄", "2 cans", "2 罐", "veg"], ["Sweet potato", "地瓜", "700 g", "700 克", "carb"], ["Kale & ginger", "羽衣甘藍與薑", "1 bunch", "1 把", "veg"]],
+    [["Sauté ginger, onion, smoked paprika, and chili.", "薑、洋蔥、煙燻紅椒粉與辣椒炒香。"], ["Simmer tomatoes, sweet potato, peas, and water until tender.", "番茄、地瓜、黑眼豆與水燉至軟熟。"], ["Whisk in peanut butter, then fold in kale.", "拌入花生醬至均勻，最後加入羽衣甘藍。"]]),
+  mp("keto-zaatar-beef-tabbouleh", "Za’atar beef & cauliflower tabbouleh", "扎塔香料牛肉與白花菜塔布勒", "🥩", "western", 30, 515, 43, 18, 31,
+    ["keto", "lowCarb", "halal", "middleEastern", "glutenFree", "highProtein"],
+    [["Halal lean ground beef", "清真瘦牛絞肉", "800 g", "800 克", "protein"], ["Cauliflower rice", "白花菜米", "1.2 kg", "1.2 公斤", "veg"], ["Parsley, mint & tomato", "巴西里、薄荷與番茄", "6 cups", "6 杯", "veg"], ["Za’atar", "扎塔香料", "3 tbsp", "3 大匙", "sauce"], ["Tahini-lemon sauce", "芝麻醬檸檬汁", "1/2 cup", "1/2 杯", "fat"]],
+    [["Brown beef with za’atar, garlic, and black pepper.", "牛肉與扎塔香料、蒜、黑胡椒炒香。"], ["Quickly sauté cauliflower rice so it stays dry and fluffy.", "白花菜米快速拌炒，保持乾爽鬆散。"], ["Mix cauliflower with herbs and tomato; pack sauce separately.", "白花菜米拌香草與番茄，醬汁另裝。"]]),
+  mp("paleo-chimichurri-pork-plantain", "Chimichurri pork & roasted plantain", "青醬香草豬肉與烤大蕉", "🌿", "western", 35, 545, 40, 52, 20,
+    ["paleo", "latin", "glutenFree", "dairyFree", "highProtein"],
+    [["Pork tenderloin", "豬里肌", "800 g", "800 克", "protein"], ["Ripe plantains", "熟大蕉", "4", "4 根", "carb"], ["Cabbage", "高麗菜", "1 small head", "1 小顆", "veg"], ["Parsley-cilantro chimichurri", "巴西里香菜青醬", "3/4 cup", "3/4 杯", "sauce"], ["Lime", "萊姆", "3", "3 顆", "fruit"]],
+    [["Roast sliced plantain until browned at the edges.", "大蕉切片烤至邊緣金黃。"], ["Sear or roast pork, rest, then slice thinly.", "豬里肌煎或烤熟，靜置後切薄片。"], ["Pack with lime cabbage slaw and chimichurri on the side.", "與萊姆高麗菜沙拉分裝，青醬另放。"]]),
+  mp("low-fodmap-ginger-fish-congee", "Ginger-scallion fish congee", "低腹脹薑蔥魚片粥", "🥣", "asian", 40, 410, 34, 57, 7,
+    ["lowFODMAP", "pescatarian", "chinese", "dairyFree", "fatLoss"],
+    [["Jasmine rice", "茉莉香米", "1.5 cups dry", "乾重 1.5 杯", "carb"], ["White fish fillets", "白肉魚片", "700 g", "700 克", "protein"], ["Fresh ginger", "新鮮薑", "60 g", "60 克", "sauce"], ["Scallion green tops", "青蔥綠色部分", "1 bunch", "1 把", "veg"], ["Baby spinach", "嫩菠菜", "6 cups", "6 杯", "veg"]],
+    [["Simmer rice with plenty of water and ginger until creamy.", "香米加大量水與薑煮至綿密。"], ["Poach fish pieces gently in the congee until just cooked.", "魚片放入粥中小火煮至剛熟。"], ["Fold in spinach and top with scallion greens after reheating.", "拌入菠菜，復熱後撒青蔥綠。"]]),
+  mp("georgian-walnut-bean-lobio", "Georgian walnut bean lobio", "喬治亞核桃紅豆燉菜", "🫘", "veg", 30, 465, 21, 54, 20,
+    ["vegan", "vegetarian", "georgian", "glutenFree", "dairyFree", "balanced"],
+    [["Kidney beans", "紅腰豆", "4 cans", "4 罐", "protein"], ["Walnuts", "核桃", "1 cup", "1 杯", "fat"], ["Cilantro & parsley", "香菜與巴西里", "2 cups", "2 杯", "veg"], ["Pomegranate", "石榴", "1", "1 顆", "fruit"], ["Coriander, fenugreek & vinegar", "芫荽籽、葫蘆巴與醋", "1/3 cup", "1/3 杯", "sauce"]],
+    [["Warm beans with coriander, fenugreek, garlic, and a splash of water.", "紅腰豆與芫荽籽、葫蘆巴、蒜及少量水加熱。"], ["Crush some beans and stir in ground walnuts and vinegar.", "壓碎部分豆子，拌入核桃粉與醋。"], ["Cool slightly, then add herbs and pomegranate seeds.", "稍放涼後加入香草與石榴籽。"]]),
+  mp("spanish-smoky-cod-romesco", "Smoky cod, white beans & romesco", "西班牙煙燻鱈魚白豆紅椒醬", "🐟", "western", 30, 495, 44, 45, 17,
+    ["pescatarian", "spanish", "mediterranean", "glutenFree", "highProtein"],
+    [["Cod fillets", "鱈魚片", "800 g", "800 克", "protein"], ["Cannellini beans", "白腰豆", "3 cans", "3 罐", "protein"], ["Roasted red peppers", "烤紅椒", "3 cups", "3 杯", "veg"], ["Almonds", "杏仁", "1/2 cup", "1/2 杯", "fat"], ["Sherry vinegar & smoked paprika", "雪莉醋與煙燻紅椒粉", "1/3 cup", "1/3 杯", "sauce"]],
+    [["Blend peppers, almonds, vinegar, garlic, and paprika into romesco.", "紅椒、杏仁、醋、蒜與煙燻紅椒粉打成醬。"], ["Roast cod until it flakes easily.", "鱈魚烤至可輕鬆剝片。"], ["Pack over white beans and greens with romesco separately.", "鱈魚放在白豆與青菜上，紅椒醬另裝。"]]),
+  mp("kosher-dill-salmon-farro", "Dill salmon, beet & farro boxes", "蒔蘿鮭魚甜菜法羅麥餐盒", "🌈", "western", 35, 550, 38, 60, 20,
+    ["kosher", "pescatarian", "easternEuropean", "dairyFree", "massGain"],
+    [["Kosher salmon fillets", "猶太潔食鮭魚片", "4", "4 片", "protein"], ["Farro", "法羅麥", "2 cups dry", "乾重 2 杯", "carb"], ["Cooked beets", "熟甜菜根", "600 g", "600 克", "veg"], ["Dill & lemon", "蒔蘿與檸檬", "1 cup", "1 杯", "sauce"], ["Mustard-caper vinaigrette", "芥末酸豆油醋汁", "1/2 cup", "1/2 杯", "sauce"]],
+    [["Roast salmon with dill, lemon, and black pepper.", "鮭魚與蒔蘿、檸檬、黑胡椒烤熟。"], ["Cook farro until chewy and toss with the vinaigrette.", "法羅麥煮至有嚼勁，拌入油醋汁。"], ["Add beet wedges after the farro cools to limit color bleeding.", "法羅麥放涼後再加入甜菜角，避免整盒染色。"]]),
+  mp("brazilian-moqueca-chickpea", "Brazilian chickpea & hearts-of-palm moqueca", "巴西椰香鷹嘴豆棕櫚心燉鍋", "🥥", "veg", 30, 480, 18, 58, 20,
+    ["vegan", "vegetarian", "brazilian", "glutenFree", "dairyFree", "balanced"],
+    [["Chickpeas", "鷹嘴豆", "3 cans", "3 罐", "protein"], ["Hearts of palm", "棕櫚心", "2 jars", "2 罐", "veg"], ["Light coconut milk", "低脂椰奶", "2 cans", "2 罐", "fat"], ["Tomatoes & bell peppers", "番茄與甜椒", "7 cups", "7 杯", "veg"], ["Lime & cilantro", "萊姆與香菜", "1 cup", "1 杯", "sauce"]],
+    [["Sauté peppers and tomatoes with paprika and garlic.", "甜椒與番茄加入紅椒粉、蒜炒香。"], ["Simmer with coconut milk, chickpeas, and hearts of palm for fifteen minutes.", "加入椰奶、鷹嘴豆與棕櫚心燉十五分鐘。"], ["Finish with lime and cilantro; portion with rice if desired.", "以萊姆與香菜收尾，可依喜好搭配米飯分裝。"]]),
+];
+
+export const BUILTIN_RECIPES: Recipe[] = [...CORE_RECIPES, ...EXPANDED_MEAL_PREP_RECIPES];

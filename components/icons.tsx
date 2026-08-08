@@ -1,0 +1,325 @@
+"use client";
+
+import Image from "next/image";
+import type { SVGProps } from "react";
+import {
+  Apple,
+  AppleHalf,
+  Barcode,
+  BellNotification,
+  BreadSlice,
+  Calendar,
+  Camera,
+  Check,
+  CheckCircle,
+  Chocolate,
+  CircleSpark,
+  CoffeeCup,
+  Community,
+  Copy,
+  Cutlery,
+  Download,
+  Droplet,
+  EditPencil,
+  Egg,
+  FireFlame,
+  Fish,
+  FloppyDisk,
+  Flower,
+  Fridge,
+  GlassHalf,
+  GraphUp,
+  Gym,
+  HalfMoon,
+  Heart,
+  HomeSimple,
+  Leaf,
+  LightBulb,
+  Lock,
+  MagicWand,
+  Medal,
+  Microphone,
+  Minus,
+  MusicNote,
+  NavArrowLeft,
+  NavArrowDown,
+  NavArrowRight,
+  NavArrowUp,
+  Package,
+  PageEdit,
+  Palette,
+  PizzaSlice,
+  Play,
+  Plus,
+  RefreshCircle,
+  ScanBarcode,
+  Search,
+  Settings,
+  ShoppingBag,
+  Soil,
+  SoundHigh,
+  SoundOff,
+  Sparks,
+  Star,
+  Stretching,
+  SunLight,
+  Timer,
+  Trash,
+  Trophy,
+  Upload,
+  UserCircle,
+  UserPlus,
+  Vegan,
+  WarningTriangle,
+  Weight,
+  Xmark,
+} from "iconoir-react";
+import type { FoodCat, MealSlot, RecipeCat } from "@/lib/types";
+
+const ICONS = {
+  home: HomeSimple,
+  kitchen: Cutlery,
+  cutlery: Cutlery,
+  gym: Gym,
+  user: UserCircle,
+  addUser: UserPlus,
+  plus: Plus,
+  close: Xmark,
+  fire: FireFlame,
+  goal: CircleSpark,
+  edit: EditPencil,
+  leaf: Leaf,
+  camera: Camera,
+  magic: MagicWand,
+  spark: Sparks,
+  search: Search,
+  microphone: Microphone,
+  water: Droplet,
+  weight: Weight,
+  save: FloppyDisk,
+  check: Check,
+  checkCircle: CheckCircle,
+  warning: WarningTriangle,
+  trash: Trash,
+  calendar: Calendar,
+  palette: Palette,
+  lock: Lock,
+  upload: Upload,
+  download: Download,
+  copy: Copy,
+  friends: Community,
+  refresh: RefreshCircle,
+  medal: Medal,
+  soil: Soil,
+  shopping: ShoppingBag,
+  idea: LightBulb,
+  chart: GraphUp,
+  star: Star,
+  play: Play,
+  timer: Timer,
+  stretch: Stretching,
+  package: Package,
+  fruit: AppleHalf,
+  apple: Apple,
+  flower: Flower,
+  trophy: Trophy,
+  settings: Settings,
+  scan: ScanBarcode,
+  barcode: Barcode,
+  bell: BellNotification,
+  manual: PageEdit,
+  sun: SunLight,
+  moon: HalfMoon,
+  coffee: CoffeeCup,
+  bread: BreadSlice,
+  fish: Fish,
+  egg: Egg,
+  vegan: Vegan,
+  pizza: PizzaSlice,
+  drink: GlassHalf,
+  fridge: Fridge,
+  heart: Heart,
+  back: NavArrowLeft,
+  next: NavArrowRight,
+  up: NavArrowUp,
+  down: NavArrowDown,
+  minus: Minus,
+  chocolate: Chocolate,
+  music: MusicNote,
+  sound: SoundHigh,
+  mute: SoundOff,
+} as const;
+
+export type IconName = keyof typeof ICONS;
+
+export function AppIcon({
+  name,
+  size = 20,
+  strokeWidth = 1.8,
+  className = "",
+  ...props
+}: {
+  name: IconName;
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+} & Omit<SVGProps<SVGSVGElement>, "name">) {
+  const Icon = ICONS[name];
+  return (
+    <Icon
+      width={size}
+      height={size}
+      strokeWidth={strokeWidth}
+      className={`app-icon ${className}`}
+      aria-hidden={props["aria-label"] ? undefined : true}
+      {...props}
+    />
+  );
+}
+
+const FOOD_ICONS: Record<FoodCat | RecipeCat, IconName> = {
+  protein: "fish",
+  carb: "bread",
+  veg: "vegan",
+  fruit: "apple",
+  dairy: "drink",
+  fat: "water",
+  drink: "coffee",
+  snack: "chocolate",
+  sauce: "package",
+  other: "cutlery" as IconName,
+  asian: "cutlery" as IconName,
+  western: "cutlery" as IconName,
+  pasta: "pizza",
+  breakfast: "egg",
+  custom: "spark",
+};
+
+export function FoodGlyph({
+  category,
+  size = 22,
+  compact = false,
+}: {
+  category: FoodCat | RecipeCat;
+  size?: number;
+  compact?: boolean;
+}) {
+  return (
+    <span className={`food-glyph food-glyph-${category} ${compact ? "compact" : ""}`} aria-hidden="true">
+      <AppIcon name={FOOD_ICONS[category]} size={size} />
+    </span>
+  );
+}
+
+const MEAL_ICONS: Record<MealSlot, IconName> = {
+  breakfast: "sun",
+  lunch: "apple",
+  dinner: "moon",
+  snack: "coffee",
+};
+
+export function MealGlyph({ meal, size = 18 }: { meal: MealSlot; size?: number }) {
+  return <AppIcon name={MEAL_ICONS[meal]} size={size} />;
+}
+
+export function BrandMark({ size = 28 }: { size?: number }) {
+  return (
+    <span className="brand-mark" style={{ width: size, height: size }} aria-hidden="true">
+      <Image
+        src="/brand/honey-generic-2d.png"
+        alt=""
+        width={size}
+        height={size}
+        sizes={`${size}px`}
+        loading="eager"
+      />
+    </span>
+  );
+}
+
+const LEGACY_ICON_MAP: Record<string, IconName> = {
+  "✅": "checkCircle",
+  "⚠️": "warning",
+  "🗑️": "trash",
+  "💾": "save",
+  "📥": "download",
+  "📋": "copy",
+  "📷": "camera",
+  "🎙️": "microphone",
+  "✨": "spark",
+  "🍈": "fruit",
+  "🍉": "fruit",
+  "👋": "friends",
+  "🏅": "medal",
+  "🏋️": "gym",
+  "💪": "gym",
+  "🌱": "leaf",
+  "💧": "water",
+  "⚖️": "weight",
+  "🎯": "goal",
+  "🛒": "shopping",
+  "🗓": "calendar",
+  "🎉": "spark",
+  "🔥": "fire",
+  "🔒": "lock",
+  "💡": "idea",
+  "📈": "chart",
+  "🥢": "cutlery" as IconName,
+  "🍽️": "cutlery",
+  "🍲": "cutlery",
+  "🍛": "cutlery",
+  "🍣": "fish",
+  "🍗": "fish",
+  "🥩": "fish",
+  "🥓": "fish",
+  "🍖": "fish",
+  "🦐": "fish",
+  "🐟": "fish",
+  "🍥": "fish",
+  "🌭": "fish",
+  "🥚": "egg",
+  "🧊": "package",
+  "🍚": "bread",
+  "🍜": "cutlery",
+  "🥡": "package",
+  "🍝": "pizza",
+  "🍞": "bread",
+  "🥖": "bread",
+  "🥔": "bread",
+  "🍠": "bread",
+  "🥣": "cutlery",
+  "🥫": "package",
+  "🫛": "vegan",
+  "🥦": "vegan",
+  "🥬": "vegan",
+  "🍄": "vegan",
+  "🧅": "vegan",
+  "🥕": "vegan",
+  "🍅": "vegan",
+  "🥒": "vegan",
+  "🌽": "vegan",
+  "🥗": "vegan",
+  "🍌": "apple",
+  "🍎": "apple",
+  "🍏": "apple",
+  "🫐": "apple",
+  "🍓": "apple",
+  "🥑": "apple",
+  "🍇": "apple",
+  "🥛": "drink",
+  "🧀": "drink",
+  "🧈": "drink",
+  "🫒": "water",
+  "🫙": "package",
+  "🥜": "package",
+  "🍫": "chocolate",
+  "🧋": "coffee",
+  "☕": "coffee",
+  "🥤": "drink",
+  "🍺": "drink",
+};
+
+export function iconFromLegacy(value?: string, fallback: IconName = "checkCircle"): IconName {
+  if (value && value in ICONS) return value as IconName;
+  return (value && LEGACY_ICON_MAP[value]) || fallback;
+}

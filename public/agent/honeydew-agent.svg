@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Honey the honeydew assistant</title>
+  <desc id="desc">A minimal flat honeydew character wearing a headset and holding a notebook.</desc>
+
+  <!-- feet -->
+  <ellipse cx="91" cy="218" rx="29" ry="17" fill="#E7F4AE" stroke="#4F6842" stroke-width="7"/>
+  <ellipse cx="165" cy="218" rx="29" ry="17" fill="#E7F4AE" stroke="#4F6842" stroke-width="7"/>
+
+  <!-- headset band behind the melon -->
+  <path d="M45 116C45 62 81 32 128 32s83 30 83 84" fill="none" stroke="#8EAE4F" stroke-width="8" stroke-linecap="round"/>
+  <rect x="35" y="102" width="24" height="52" rx="12" fill="#8EAE4F" stroke="#4F6842" stroke-width="6"/>
+  <rect x="197" y="102" width="24" height="52" rx="12" fill="#8EAE4F" stroke="#4F6842" stroke-width="6"/>
+
+  <!-- body -->
+  <rect x="49" y="48" width="158" height="170" rx="79" fill="#E7F4AE" stroke="#4F6842" stroke-width="7"/>
+
+  <!-- stem and leaf -->
+  <path d="M126 50c-2-17 1-28 11-38" fill="none" stroke="#4F6842" stroke-width="8" stroke-linecap="round"/>
+  <path d="M139 28c17-14 35-12 47-2-12 18-30 22-47 9z" fill="#8EAE4F" stroke="#4F6842" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- face -->
+  <circle cx="101" cy="115" r="7" fill="#35452F"/>
+  <circle cx="155" cy="115" r="7" fill="#35452F"/>
+  <path d="M111 141c10 11 24 11 34 0" fill="none" stroke="#35452F" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- simple microphone -->
+  <path d="M209 135c-1 21-13 31-33 31" fill="none" stroke="#4F6842" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="173" cy="166" r="9" fill="#8EAE4F" stroke="#4F6842" stroke-width="5"/>
+
+  <!-- notebook and hand -->
+  <g transform="rotate(-8 66 164)">
+    <rect x="39" y="132" width="56" height="70" rx="10" fill="#8EAE4F" stroke="#4F6842" stroke-width="6"/>
+    <path d="M51 148h31M51 162h22M51 176h27" fill="none" stroke="#FFFBE8" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <circle cx="55" cy="169" r="13" fill="#E7F4AE" stroke="#4F6842" stroke-width="6"/>
+</svg>
