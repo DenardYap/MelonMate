@@ -661,13 +661,14 @@ function reviewFromPhoto(estimate: FoodPhotoEstimate, lang: Lang): FoodLogReview
       ? estimate.assumptions.join(" · ")
       : lang === "zh" ? "依照照片中可見的食物與份量估算。" : "Estimated from the visible food and portion size.",
     confidence: estimate.confidence_score,
-    items: [{
-      name: { en: estimate.name, zh: estimate.name },
-      emoji: estimate.emoji || "🍽️",
-      qtyLabel: estimate.portion_description,
-      grams: estimate.estimated_grams,
-      macros: { cal: estimate.cal, protein: estimate.protein_g, carbs: estimate.carbs_g, fat: estimate.fat_g, fiber: estimate.fiber_g, sugar: estimate.sugar_g, sodiumMg: estimate.sodium_mg },
-    }],
+    items: estimate.items.map((item) => ({
+      name: { en: item.name, zh: item.name },
+      emoji: item.emoji || "🍽️",
+      qtyLabel: item.portion_description,
+      grams: item.estimated_grams,
+      refId: item.ref_id ?? undefined,
+      macros: { cal: item.cal, protein: item.protein_g, carbs: item.carbs_g, fat: item.fat_g, fiber: item.fiber_g, sugar: item.sugar_g, sodiumMg: item.sodium_mg },
+    })),
   };
 }
 

@@ -52,7 +52,7 @@ export async function searchFoodCandidates(
   providedCandidates: FoodCandidate[] = [],
   k = 30
 ): Promise<FoodCandidate[]> {
-  const queries = [...new Set(rawQueries.map(cleanQuery).filter(Boolean))].slice(0, 6);
+  const queries = [...new Set(rawQueries.map(cleanQuery).filter(Boolean))].slice(0, 12);
   if (!queries.length) return [];
   const limit = Math.min(30, Math.max(1, Math.round(k)));
 

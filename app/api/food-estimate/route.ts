@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { clampPhotoConfidence, type FoodPhotoEstimate } from "@/lib/foodPhoto";
+import {
+  sanitizeFoodPhotoEstimate,
+  type FoodPhotoModelEstimate,
+} from "@/lib/foodPhoto";
 import {
   sanitizeProvidedCandidates,
   searchFoodCandidates,
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
       store: false,
       reasoning: { effort: "low" },
       max_output_tokens: 600,
-      instructions: `Inspect the photo and call search_food_candidates once before estimating nutrition. Create one concise fuzzy-search query per distinct visible food or drink. Include visible brand/product text when available and preparation words that distinguish the food. Do not calculate calories or macros yet.`,
+      instructions: `Inspect the entire photo and call search_food_candidates once before estimating nutrition. Create one concise fuzzy-search query per distinct visible food or drink, including separate sides and countable items. Repeated identical items need only one query. Keep a composite prepared dish as one query when its components cannot be reliably portioned separately. Include visible brand/product text when available and preparation words that distinguish the food. Do not calculate calories or macros yet.`,
       input: [{
         role: "user",
         content: [
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
           type: "object",
           additionalProperties: false,
           properties: {
-            queries: { type: "array", minItems: 1, maxItems: 6, items: { type: "string" } },
+            queries: { type: "array", minItems: 1, maxItems: 12, items: { type: "string" } },
             visual_description: { type: "string" },
           },
           required: ["queries", "visual_description"],
@@ -95,7 +98,7 @@ export async function POST(request: Request) {
   if (searchCall?.arguments) {
     try {
       const parsed = JSON.parse(searchCall.arguments) as ImageFoodSearchPlan;
-      const queries = Array.isArray(parsed.queries) ? parsed.queries.map((query) => String(query).trim()).filter(Boolean).slice(0, 6) : [];
+      const queries = Array.isArray(parsed.queries) ? parsed.queries.map((query) => String(query).trim()).filter(Boolean).slice(0, 12) : [];
       if (queries.length) searchPlan = {
         queries,
         visual_description: String(parsed.visual_description || "").trim().slice(0, 500),
@@ -116,9 +119,23 @@ export async function POST(request: Request) {
       model: process.env.OPENAI_VISION_MODEL || "gpt-5.6-sol",
       store: false,
       reasoning: { effort: "low" },
-      max_output_tokens: 900,
-      instructions:
-        "Estimate the visible food and nutrition for the full pictured portion. First inspect the supplied fuzzy-search results from the MelonMate food library, recipes, recipe ingredients, and Open Food Facts. Use a candidate only when it genuinely matches what is visible; prefer a matching recipe or library food, and use an Open Food Facts result for a matching branded/product food. Scale the candidate serving nutrition to the visible amount. Only as a last resort, when no candidate credibly matches, make a general nutrition estimate and explicitly say in assumptions that no database match was used. Account for visible oils, sauces, toppings, and drinks. If several foods are present, return one combined meal. Write description as one short plain-language sentence. Score confidence_score from 0 to 100 based on identification, candidate-match quality, and portion certainty. In assumptions, name each selected candidate and its source, or disclose the free-text fallback. Never select a merely similar candidate. Always call estimate_food_nutrition exactly once.",
+      max_output_tokens: 1800,
+      instructions: `Estimate every visible food and drink for the full pictured portions.
+
+Itemization rules:
+1. Return one item for each distinct, separately portionable food or drink. A banana beside an apple must be two items. A plate containing steak, potatoes, and broccoli must be three items.
+2. Group repeated identical foods into one item with a counted portion, such as "2 eggs".
+3. Keep a genuinely composite prepared dish such as soup, lasagna, a smoothie, or an assembled sandwich as one item when its internal components cannot be estimated reliably as separate portions. Still return visible side dishes separately.
+4. Include a visible sauce, topping, oil, or drink as a separate item when it is identifiable and materially affects nutrition. Do not invent hidden ingredients.
+
+Candidate rules:
+1. Inspect the supplied fuzzy-search results from the MelonMate food library, recipes, recipe ingredients, and Open Food Facts independently for each item.
+2. Use a candidate only when its identity genuinely matches that item. Prefer a matching saved recipe or library food; use an Open Food Facts result for a matching branded/product food.
+3. Preserve the exact selected candidate id as ref_id and scale its serving nutrition to the visible amount.
+4. Never use a merely similar candidate. When no candidate credibly matches, make a general nutrition estimate only if the item is visually identifiable, set ref_id to null, and explicitly disclose "No database match" in that item's assumptions.
+5. If an item is too visually ambiguous to identify, describe it conservatively, use low confidence, and do not invent a specific identity.
+
+Write description as one short sentence covering the whole photo. Score each item's confidence from 0 to 100 based on identity, candidate quality, and portion certainty. In each item's assumptions, name the selected candidate and source or disclose the fallback. Always call estimate_food_nutrition exactly once.`,
       input: [
         {
           role: "user",
@@ -135,43 +152,56 @@ export async function POST(request: Request) {
         {
           type: "function",
           name: "estimate_food_nutrition",
-          description: "Return a structured nutrition estimate for the pictured food.",
+          description: "Return separate structured nutrition estimates for every distinct food and drink in the photo.",
           strict: true,
           parameters: {
             type: "object",
             additionalProperties: false,
             properties: {
-              name: { type: "string" },
-              emoji: { type: "string" },
               description: { type: "string" },
-              portion_description: { type: "string" },
-              estimated_grams: { type: "number", minimum: 1 },
-              cal: { type: "number", minimum: 0 },
-              protein_g: { type: "number", minimum: 0 },
-              carbs_g: { type: "number", minimum: 0 },
-              fat_g: { type: "number", minimum: 0 },
-              fiber_g: { type: "number", minimum: 0 },
-              sugar_g: { type: "number", minimum: 0 },
-              sodium_mg: { type: "number", minimum: 0 },
-              confidence_score: { type: "integer", minimum: 0, maximum: 100 },
-              assumptions: { type: "array", items: { type: "string" }, maxItems: 4 },
+              items: {
+                type: "array",
+                minItems: 1,
+                maxItems: 12,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    name: { type: "string" },
+                    emoji: { type: "string" },
+                    portion_description: { type: "string" },
+                    estimated_grams: { type: "number", minimum: 1 },
+                    ref_id: { type: ["string", "null"] },
+                    cal: { type: "number", minimum: 0 },
+                    protein_g: { type: "number", minimum: 0 },
+                    carbs_g: { type: "number", minimum: 0 },
+                    fat_g: { type: "number", minimum: 0 },
+                    fiber_g: { type: "number", minimum: 0 },
+                    sugar_g: { type: "number", minimum: 0 },
+                    sodium_mg: { type: "number", minimum: 0 },
+                    confidence_score: { type: "integer", minimum: 0, maximum: 100 },
+                    assumptions: { type: "array", items: { type: "string" }, maxItems: 4 },
+                  },
+                  required: [
+                    "name",
+                    "emoji",
+                    "portion_description",
+                    "estimated_grams",
+                    "ref_id",
+                    "cal",
+                    "protein_g",
+                    "carbs_g",
+                    "fat_g",
+                    "fiber_g",
+                    "sugar_g",
+                    "sodium_mg",
+                    "confidence_score",
+                    "assumptions",
+                  ],
+                },
+              },
             },
-            required: [
-              "name",
-              "emoji",
-              "description",
-              "portion_description",
-              "estimated_grams",
-              "cal",
-              "protein_g",
-              "carbs_g",
-              "fat_g",
-              "fiber_g",
-              "sugar_g",
-              "sodium_mg",
-              "confidence_score",
-              "assumptions",
-            ],
+            required: ["description", "items"],
           },
         },
       ],
@@ -200,49 +230,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const estimate = JSON.parse(call.arguments) as FoodPhotoEstimate;
+    const estimate = JSON.parse(call.arguments) as FoodPhotoModelEstimate;
     if (
-      !estimate.name ||
       !estimate.description ||
-      !Number.isFinite(estimate.estimated_grams) ||
-      estimate.estimated_grams <= 0 ||
-      !Number.isFinite(estimate.cal) ||
-      !Number.isFinite(estimate.confidence_score)
+      !Array.isArray(estimate.items) ||
+      !estimate.items.length ||
+      estimate.items.some((item) =>
+        !item.name ||
+        !Number.isFinite(item.estimated_grams) ||
+        item.estimated_grams <= 0 ||
+        !Number.isFinite(item.cal) ||
+        !Number.isFinite(item.confidence_score)
+      )
     ) {
       throw new Error("invalid estimate");
     }
-    return NextResponse.json({ estimate: sanitizeEstimate(estimate) });
+    return NextResponse.json({ estimate: sanitizeFoodPhotoEstimate(estimate) });
   } catch {
     return NextResponse.json({ error: "The nutrition estimate was incomplete. Try again." }, { status: 502 });
   }
-}
-
-function sanitizeEstimate(estimate: FoodPhotoEstimate): FoodPhotoEstimate {
-  const safe = (value: number, decimals = 1) => {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return 0;
-    const factor = 10 ** decimals;
-    return Math.max(0, Math.round(numeric * factor) / factor);
-  };
-
-  return {
-    ...estimate,
-    name: estimate.name.trim().slice(0, 100),
-    emoji: estimate.emoji.trim().slice(0, 8) || "🍽️",
-    description: estimate.description.trim().slice(0, 180),
-    portion_description: estimate.portion_description.trim().slice(0, 180),
-    estimated_grams: Math.max(1, Math.round(estimate.estimated_grams)),
-    cal: Math.round(safe(estimate.cal, 0)),
-    protein_g: safe(estimate.protein_g),
-    carbs_g: safe(estimate.carbs_g),
-    fat_g: safe(estimate.fat_g),
-    fiber_g: safe(estimate.fiber_g),
-    sugar_g: safe(estimate.sugar_g),
-    sodium_mg: Math.round(safe(estimate.sodium_mg, 0)),
-    confidence_score: clampPhotoConfidence(estimate.confidence_score),
-    assumptions: (Array.isArray(estimate.assumptions) ? estimate.assumptions : [])
-      .map((item) => String(item).trim())
-      .filter(Boolean)
-      .slice(0, 4),
-  };
 }
