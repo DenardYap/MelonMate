@@ -6,12 +6,13 @@ import { useActiveProfile, useStore, newId } from "@/lib/store";
 import { BUILTIN_FOODS } from "@/lib/foods";
 import { MEAL_ORDER, translate, type DictKey } from "@/lib/i18n";
 import { fmtDate, todayStr } from "@/lib/dates";
-import { fmtNum, mulMacros, scaleMacros, sumMacros } from "@/lib/nutrition";
+import { fmtNum, mulMacros, sumMacros } from "@/lib/nutrition";
 import { type FoodPhotoEstimate } from "@/lib/foodPhoto";
 import { defaultMealByTime, parseVoiceFood, startRecognition, type RecognitionHandle } from "@/lib/voice";
 import { lookupBarcode } from "@/lib/off";
 import { selectedRecipesForProfile } from "@/lib/onboarding";
 import { searchFoodCatalog, type FoodSearchResult } from "@/lib/foodSearch";
+import { resolveFoodServing } from "@/lib/foodServing";
 import { melonCheer } from "@/lib/melonCheers";
 import { GlassCard, Sheet, toast, fireConfetti } from "@/components/ui";
 import { AppIcon, FoodGlyph, MealGlyph, iconFromLegacy } from "@/components/icons";
@@ -609,25 +610,21 @@ function ManualFoodSheet({ open, lang, onClose, onReview }: { open: boolean; lan
 }
 
 function reviewFromFood(food: FoodItem, source: ReviewSource, lang: Lang, matchedOn: string): FoodLogReview {
-  const grams = food.serving?.grams ?? 100;
-  const qtyLabel = food.serving?.label[lang] || food.serving?.label.en || "100 g";
+  const serving = resolveFoodServing(food, lang);
   return {
     id: newId(),
     source,
-    description: `${qtyLabel} ${food.name[lang] || food.name.en}`,
+    description: `${serving.label} ${food.name[lang] || food.name.en}`,
     rationale: lang === "zh" ? `比對來源：${matchedOn}。使用資料庫中的標準份量。` : `Matched from ${matchedOn}. Uses the catalog's stated serving and nutrition.`,
     confidence: source === "barcode" ? 99 : 100,
-    items: [{ name: food.name, emoji: food.emoji, qtyLabel, grams, macros: scaleMacros(food.per100, grams), refId: food.id }],
+    items: [{ name: food.name, emoji: food.emoji, qtyLabel: serving.label, grams: serving.grams, macros: serving.macros, refId: food.id }],
   };
 }
 
 function searchResultNutrition(result: FoodSearchResult, lang: Lang): string {
   if (result.kind === "food") {
-    const grams = result.item.serving?.grams ?? 100;
-    const servingLabel = result.item.serving?.label[lang]
-      || result.item.serving?.label.en
-      || (lang === "zh" ? "每 100 克" : "per 100 g");
-    return `${servingLabel} · ${fmtNum(scaleMacros(result.item.per100, grams).cal)} cal`;
+    const serving = resolveFoodServing(result.item, lang);
+    return `${serving.label} · ${fmtNum(serving.macros.cal)} cal`;
   }
   return `${lang === "zh" ? "每份" : "per serving"} · ${fmtNum(result.item.perServing.cal)} cal`;
 }
@@ -664,9 +661,8 @@ function reviewFromPhoto(estimate: FoodPhotoEstimate, lang: Lang): FoodLogReview
 
 function catalogCandidate(result: FoodSearchResult) {
   if (result.kind === "food") {
-    const grams = result.item.serving?.grams ?? 100;
-    const macros = scaleMacros(result.item.per100, grams);
-    return { id: result.item.id, kind: "food" as const, name: result.item.name.en, emoji: result.item.emoji, serving: result.item.serving?.label.en ?? "100 g", cal: macros.cal, protein: macros.protein, carbs: macros.carbs, fat: macros.fat };
+    const serving = resolveFoodServing(result.item, "en");
+    return { id: result.item.id, kind: "food" as const, name: result.item.name.en, emoji: result.item.emoji, serving: serving.label, cal: serving.macros.cal, protein: serving.macros.protein, carbs: serving.macros.carbs, fat: serving.macros.fat };
   }
   return { id: result.item.id, kind: "recipe" as const, name: result.item.name.en, emoji: result.item.emoji, serving: "1 serving", ingredients: result.item.ingredients.map((ingredient) => ingredient.name.en), cal: result.item.perServing.cal, protein: result.item.perServing.protein, carbs: result.item.perServing.carbs, fat: result.item.perServing.fat };
 }

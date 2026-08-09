@@ -6,9 +6,10 @@ import {
   enablePushNotifications,
   isNativeApp,
   notificationState,
-  setDailyReminder,
+  setAutomatedCampaign,
   successHaptic,
 } from "@/lib/nativeApp";
+import type { CampaignPreferenceKey, NativeCampaignPreferences } from "@/lib/nativeNotificationCampaigns";
 import { useStore } from "@/lib/store";
 import { GlassCard, toast } from "@/components/ui";
 import { AppIcon } from "@/components/icons";
@@ -17,8 +18,12 @@ export default function NativeAppSettings() {
   const lang = useStore((state) => state.lang);
   const [native, setNative] = useState(false);
   const [permission, setPermission] = useState<string>("prompt");
-  const [dailyReminder, setReminder] = useState(false);
-  const [busy, setBusy] = useState<"health" | "push" | "reminder" | null>(null);
+  const [campaigns, setCampaigns] = useState<NativeCampaignPreferences>({
+    mealReminders: false,
+    streakReminders: false,
+    harvestReminders: false,
+  });
+  const [busy, setBusy] = useState<"health" | "push" | CampaignPreferenceKey | null>(null);
 
   useEffect(() => {
     const available = isNativeApp();
@@ -26,7 +31,7 @@ export default function NativeAppSettings() {
     if (available) {
       void notificationState().then((state) => {
         setPermission(state.permission);
-        setReminder(state.dailyReminder);
+        setCampaigns(state.campaigns);
       });
     }
   }, []);
@@ -61,11 +66,11 @@ export default function NativeAppSettings() {
     }
   };
 
-  const toggleReminder = async () => {
-    setBusy("reminder");
+  const toggleCampaign = async (campaign: CampaignPreferenceKey) => {
+    setBusy(campaign);
     try {
-      const enabled = await setDailyReminder(!dailyReminder, lang);
-      setReminder(enabled);
+      const enabled = await setAutomatedCampaign(campaign, !campaigns[campaign]);
+      setCampaigns((current) => ({ ...current, [campaign]: enabled }));
       if (enabled) setPermission("granted");
     } finally {
       setBusy(null);
@@ -88,12 +93,44 @@ export default function NativeAppSettings() {
         </div>
         <span className="chip">{permission === "granted" ? <AppIcon name="check" size={15} /> : (busy === "push" ? "…" : (lang === "zh" ? "開啟" : "Enable"))}</span>
       </button>
-      <button type="button" className="row row-button press" onClick={() => void toggleReminder()} disabled={busy !== null} aria-pressed={dailyReminder}>
+      <button
+        type="button"
+        className="row row-button press"
+        onClick={() => void toggleCampaign("mealReminders")}
+        disabled={busy !== null}
+        aria-pressed={campaigns.mealReminders}
+      >
         <div className="flex-1">
-          <div className="font-semibold icon-label"><AppIcon name="timer" size={18} /> {lang === "zh" ? "每日記錄提醒" : "Daily logging reminder"}</div>
-          <div className="t-cap mt-1">{lang === "zh" ? "每天晚上 7:00" : "Every day at 7:00 PM"}</div>
+          <div className="font-semibold icon-label"><AppIcon name="cutlery" size={18} /> {lang === "zh" ? "用餐提醒" : "Meal reminders"}</div>
+          <div className="t-cap mt-1">{lang === "zh" ? "早餐 9:00、午餐 1:00、晚餐 7:00；已記錄則略過" : "9 AM breakfast, 1 PM lunch, 7 PM dinner; skips meals already logged"}</div>
         </div>
-        <span className={`chip ${dailyReminder ? "chip-on" : ""}`}>{dailyReminder ? (lang === "zh" ? "開" : "On") : (lang === "zh" ? "關" : "Off")}</span>
+        <span className={`chip ${campaigns.mealReminders ? "chip-on" : ""}`}>{campaigns.mealReminders ? (lang === "zh" ? "開" : "On") : (lang === "zh" ? "關" : "Off")}</span>
+      </button>
+      <button
+        type="button"
+        className="row row-button press"
+        onClick={() => void toggleCampaign("streakReminders")}
+        disabled={busy !== null}
+        aria-pressed={campaigns.streakReminders}
+      >
+        <div className="flex-1">
+          <div className="font-semibold icon-label"><AppIcon name="fire" size={18} /> {lang === "zh" ? "連續紀錄提醒" : "Streak reminders"}</div>
+          <div className="t-cap mt-1">{lang === "zh" ? "晚上 8:30 提醒尚未完成的每日目標" : "8:30 PM nudge when the daily goal is incomplete"}</div>
+        </div>
+        <span className={`chip ${campaigns.streakReminders ? "chip-on" : ""}`}>{campaigns.streakReminders ? (lang === "zh" ? "開" : "On") : (lang === "zh" ? "關" : "Off")}</span>
+      </button>
+      <button
+        type="button"
+        className="row row-button press"
+        onClick={() => void toggleCampaign("harvestReminders")}
+        disabled={busy !== null}
+        aria-pressed={campaigns.harvestReminders}
+      >
+        <div className="flex-1">
+          <div className="font-semibold icon-label"><AppIcon name="fruit" size={18} /> {lang === "zh" ? "採收提醒" : "Harvest reminders"}</div>
+          <div className="t-cap mt-1">{lang === "zh" ? "每顆瓜成熟時立即通知" : "Alerts exactly when each growing melon is ready"}</div>
+        </div>
+        <span className={`chip ${campaigns.harvestReminders ? "chip-on" : ""}`}>{campaigns.harvestReminders ? (lang === "zh" ? "開" : "On") : (lang === "zh" ? "關" : "Off")}</span>
       </button>
     </GlassCard>
   );

@@ -10,6 +10,7 @@
     "cap:sync": "npm run cap:build && cap sync ios",
     "cap:open": "cap open ios",
     "cap:run": "npm run cap:sync && cap run ios",
+    "catalog:generate": "node scripts/generate-food-catalog.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@capacitor/cli": "^8.5.0",
     "@eslint/eslintrc": "^3.3.6",
+    "@next/env": "^16.3.0",
     "@tailwindcss/postcss": "^4.1.11",
     "@types/node": "^22.15.0",
     "@types/react": "^19.2.18",

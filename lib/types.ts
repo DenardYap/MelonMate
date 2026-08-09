@@ -61,9 +61,12 @@ export interface FoodItem {
   emoji: string;
   /** macros per 100 g (or per 100 ml for liquids) */
   per100: Macros;
-  /** a common serving, e.g. 1 egg = 55 g */
-  serving?: { label: BiText; grams: number };
+  /** A common serving. `unitCount` prevents counted input such as "3 wings"
+   * from multiplying a multi-item serving (for example, a 3-wing serving) 3×. */
+  serving?: { label: BiText; grams: number; unitCount?: number; unitLabel?: BiText };
   cat: FoodCat;
+  /** Nutrition provenance for bundled reference foods. */
+  source?: { name: string; id?: string };
   barcode?: string;
   custom?: boolean;
 }

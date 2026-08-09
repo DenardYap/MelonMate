@@ -13,8 +13,8 @@ const egg = { cal: 143, protein: 12.6, carbs: 0.7, fat: 9.5 };
 
 describe("nutrition math", () => {
   test("scaleMacros scales per-100g linearly with rounding", () => {
-    const one = scaleMacros(egg, 55); // one egg
-    expect(one).toMatchObject({ cal: 79, protein: 6.9, carbs: 0.4, fat: 5.2 });
+    const one = scaleMacros(egg, 50); // one USDA large egg
+    expect(one).toMatchObject({ cal: 72, protein: 6.3, carbs: 0.4, fat: 4.8 });
     const zero = scaleMacros(egg, 0);
     expect(zero.cal).toBe(0);
   });

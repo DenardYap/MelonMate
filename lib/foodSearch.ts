@@ -4,6 +4,24 @@ export type FoodSearchResult =
   | { kind: "food"; item: FoodItem; score: number; matchedOn: string }
   | { kind: "recipe"; item: Recipe; score: number; matchedOn: string };
 
+const SEARCH_SYNONYMS: Record<string, string[]> = {
+  lychee: ["litchi", "litchis"],
+  venison: ["deer", "game meat deer"],
+  cilantro: ["coriander leaves"],
+  scallion: ["spring onion", "green onion"],
+  scallions: ["spring onions", "green onions"],
+  arugula: ["rocket"],
+  zucchini: ["summer squash"],
+  aubergine: ["eggplant"],
+  garbanzo: ["chickpea"],
+  garbanzos: ["chickpeas"],
+  prawn: ["shrimp"],
+  prawns: ["shrimp"],
+  capsicum: ["bell pepper"],
+  yuca: ["cassava", "manioc"],
+  pitaya: ["dragon fruit"],
+};
+
 function normalize(value: string): string {
   return value
     .toLowerCase()
@@ -12,15 +30,35 @@ function normalize(value: string): string {
     .trim();
 }
 
+function singularizeWord(word: string): string {
+  if (word.length <= 3) return word;
+  if (word.endsWith("ies")) return `${word.slice(0, -3)}y`;
+  if (word.endsWith("oes")) return word.slice(0, -2);
+  if (word.endsWith("ches") || word.endsWith("shes") || word.endsWith("xes") || word.endsWith("zes")) {
+    return word.slice(0, -2);
+  }
+  if (word.endsWith("ses") && !word.endsWith("sses")) return word.slice(0, -2);
+  if (word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+  return word;
+}
+
+function singularizePhrase(value: string): string {
+  return value.split(" ").map(singularizeWord).join(" ");
+}
+
 function scoreText(query: string, value: string): number {
   const normalized = normalize(value);
   if (!normalized) return 0;
-  if (normalized === query) return 120;
-  if (query.endsWith("s") && normalized === query.slice(0, -1)) return 112;
-  if (normalized.startsWith(query)) return 92;
-  if (normalized.includes(query)) return 72;
-  const words = query.split(" ").filter(Boolean);
-  if (words.length && words.every((word) => normalized.includes(word))) return 58;
+  const synonyms = SEARCH_SYNONYMS[query] ?? [];
+  const queryVariants = [...new Set([query, singularizePhrase(query), ...synonyms.map(normalize), ...synonyms.map((item) => singularizePhrase(normalize(item)))])];
+  const valueVariants = [...new Set([normalized, singularizePhrase(normalized)])];
+  if (queryVariants.some((candidate) => valueVariants.includes(candidate))) return 120;
+  if (queryVariants.some((candidate) => valueVariants.some((target) => target.startsWith(candidate)))) return 92;
+  if (queryVariants.some((candidate) => valueVariants.some((target) => target.includes(candidate)))) return 72;
+  if (queryVariants.some((candidate) => {
+    const words = candidate.split(" ").filter(Boolean);
+    return words.length && valueVariants.some((target) => words.every((word) => target.includes(word)));
+  })) return 58;
   return 0;
 }
 

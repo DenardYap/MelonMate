@@ -1,4 +1,5 @@
 import type { FoodItem, Lang, Macros, MealSlot, Recipe } from "./types";
+import { resolveCountedFood } from "./foodServing";
 import { mulMacros, scaleMacros } from "./nutrition";
 
 /** A parsed, loggable candidate from a voice transcript. */
@@ -176,24 +177,30 @@ export function parseVoiceFood(
     // then foods — check zh name, en name, and en words
     let bestFood: FoodItem | undefined;
     let bestLen = 0;
+    let bestFoodScore = 0;
     for (const f of foods) {
+      const curatedBonus = f.source ? 0 : 10;
+      const chooseFood = (score: number, matchedLength: number) => {
+        if (score > bestFoodScore) {
+          bestFood = f;
+          bestLen = matchedLength;
+          bestFoodScore = score;
+        }
+      };
       const zh = f.name.zh;
       if (zh) {
         // allow partial zh matches like 蛋 in 雞蛋 or 飯 in 白飯 — CJK chars only,
         // so spaces/digits inside names like 乳清蛋白（1 匙） can't false-match
         const zhCore = zh.replace(/[^一-鿿]/g, "");
-        if (seg.includes(zh) && zh.length > bestLen) {
-          bestFood = f;
-          bestLen = zh.length;
+        if (seg.includes(zh)) {
+          chooseFood(1000 + zh.length + curatedBonus, zh.length);
         } else if (zhCore.length >= 1) {
           for (let l = zhCore.length; l >= 1; l--) {
-            if (l <= bestLen) break;
             let found = false;
             for (let i = 0; i + l <= zhCore.length; i++) {
               const sub = zhCore.slice(i, i + l);
               if (seg.includes(sub)) {
-                bestFood = f;
-                bestLen = l;
+                chooseFood(500 + l + curatedBonus, l);
                 found = true;
                 break;
               }
@@ -203,15 +210,13 @@ export function parseVoiceFood(
         }
       }
       const en = f.name.en.toLowerCase().replace(/\(.*?\)/g, "").trim();
-      if (en && segLow.includes(en) && en.length > bestLen) {
-        bestFood = f;
-        bestLen = en.length;
+      if (en && segLow.includes(en)) {
+        chooseFood(800 + en.length + curatedBonus, en.length);
       } else {
         // singular / first word ("eggs" -> "egg", "chicken breast")
         const w = en.split(" ")[0];
-        if (w.length >= 3 && (segLow.includes(w) || segLow.includes(w + "s")) && w.length > bestLen) {
-          bestFood = f;
-          bestLen = w.length;
+        if (w.length >= 3 && (segLow.includes(w) || segLow.includes(w + "s"))) {
+          chooseFood(300 + w.length + curatedBonus, w.length);
         }
       }
     }
@@ -242,9 +247,9 @@ export function parseVoiceFood(
         grams = qty.ml;
         qtyLabel = `${qty.ml} ml`;
       } else if (qty.count != null) {
-        const per = bestFood.serving?.grams ?? 100;
-        grams = per * qty.count;
-        qtyLabel = `${qty.count} × ${bestFood.serving ? bestFood.serving.label[lang] : "100 g"}`;
+        const counted = resolveCountedFood(bestFood, qty.count, lang);
+        grams = counted.grams;
+        qtyLabel = counted.label;
       } else {
         grams = bestFood.serving?.grams ?? 100;
         qtyLabel = bestFood.serving ? bestFood.serving.label[lang] : "100 g";

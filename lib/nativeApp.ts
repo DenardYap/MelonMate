@@ -8,15 +8,25 @@ import { PushNotifications } from "@capacitor/push-notifications";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { apiFetch } from "./api";
 import { connectAndSyncAppleHealth, shouldAutoSyncAppleHealth } from "./appleHealth";
+import { useGardenStore } from "./gardenStore";
+import {
+  buildNativeCampaignNotifications,
+  isAutomatedCampaignNotificationId,
+  type CampaignPreferenceKey,
+  type NativeCampaignPreferences,
+} from "./nativeNotificationCampaigns";
+import { useStore } from "./store";
 import type { Lang } from "./types";
 
 const SETTINGS_KEY = "melonmate-native-settings-v1";
 const PUSH_TOKEN_KEY = "melonmate-apns-token";
-const DAILY_REMINDER_ID = 7_001;
+const LEGACY_DAILY_REMINDER_ID = 7_001;
 
 interface NativeSettings {
   remoteNotifications: boolean;
-  dailyReminder: boolean;
+  mealReminders: boolean;
+  streakReminders: boolean;
+  harvestReminders: boolean;
 }
 
 interface NativeContext {
@@ -29,21 +39,33 @@ interface NativeContext {
 let context: NativeContext | null = null;
 let listenerSetup: Promise<void> | null = null;
 let listenerHandles: PluginListenerHandle[] = [];
+let storeUnsubscribers: (() => void)[] = [];
+let campaignRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let campaignRefreshPromise: Promise<void> = Promise.resolve();
 
 export function isNativeApp(): boolean {
   return Capacitor.isNativePlatform();
 }
 
 function readSettings(): NativeSettings {
-  if (typeof localStorage === "undefined") return { remoteNotifications: false, dailyReminder: false };
+  const fallback: NativeSettings = {
+    remoteNotifications: false,
+    mealReminders: false,
+    streakReminders: false,
+    harvestReminders: false,
+  };
+  if (typeof localStorage === "undefined") return fallback;
   try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<NativeSettings> & {
+      dailyReminder?: boolean;
+    };
     return {
-      remoteNotifications: false,
-      dailyReminder: false,
-      ...(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<NativeSettings>),
+      ...fallback,
+      ...saved,
+      mealReminders: saved.mealReminders ?? saved.dailyReminder ?? false,
     };
   } catch {
-    return { remoteNotifications: false, dailyReminder: false };
+    return fallback;
   }
 }
 
@@ -51,6 +73,67 @@ function writeSettings(patch: Partial<NativeSettings>): NativeSettings {
   const next = { ...readSettings(), ...patch };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
   return next;
+}
+
+function campaignPreferences(settings = readSettings()): NativeCampaignPreferences {
+  return {
+    mealReminders: settings.mealReminders,
+    streakReminders: settings.streakReminders,
+    harvestReminders: settings.harvestReminders,
+  };
+}
+
+async function performCampaignRefresh(): Promise<void> {
+  if (!isNativeApp()) return;
+  const pending = await LocalNotifications.getPending().catch(() => ({ notifications: [] }));
+  const stale = pending.notifications
+    .filter((notification) => notification.id === LEGACY_DAILY_REMINDER_ID
+      || isAutomatedCampaignNotificationId(notification.id))
+    .map(({ id }) => ({ id }));
+  if (stale.length > 0) await LocalNotifications.cancel({ notifications: stale }).catch(() => {});
+
+  const permission = (await LocalNotifications.checkPermissions()).display;
+  if (permission !== "granted") return;
+
+  const settings = readSettings();
+  const state = useStore.getState();
+  const profileId = state.activeProfileId;
+  const profile = state.profiles.find((item) => item.id === profileId) ?? state.profiles[0];
+  if (!profile) return;
+  const garden = useGardenStore.getState().gardens[profileId];
+  const notifications = buildNativeCampaignNotifications(campaignPreferences(settings), {
+    lang: state.lang,
+    logs: state.logs[profileId] ?? [],
+    calorieTarget: profile.goals.cal,
+    streak: state.game[profileId]?.streak ?? 0,
+    plots: garden?.plots ?? [],
+  });
+  if (notifications.length === 0) return;
+  await LocalNotifications.schedule({
+    notifications: notifications.map((notification) => ({
+      id: notification.id,
+      title: notification.title,
+      body: notification.body,
+      sound: "default",
+      schedule: { at: notification.at },
+      extra: notification.extra,
+    })),
+  });
+}
+
+export function refreshAutomatedNotifications(): Promise<void> {
+  campaignRefreshPromise = campaignRefreshPromise
+    .catch(() => {})
+    .then(() => performCampaignRefresh());
+  return campaignRefreshPromise;
+}
+
+function queueCampaignRefresh(delay = 150) {
+  if (campaignRefreshTimer) clearTimeout(campaignRefreshTimer);
+  campaignRefreshTimer = setTimeout(() => {
+    campaignRefreshTimer = null;
+    void refreshAutomatedNotifications();
+  }, delay);
 }
 
 function safePath(raw: unknown): string | null {
@@ -115,12 +198,17 @@ async function ensureNativeListeners() {
         if (!isActive) return;
         const settings = readSettings();
         if (settings.remoteNotifications) void PushNotifications.register();
+        queueCampaignRefresh(0);
         if (shouldAutoSyncAppleHealth()) {
           void connectAndSyncAppleHealth().then((result) => {
             if (result.status === "synced") context?.onHealthSynced?.(result.xp);
           }).catch(() => {});
         }
       }),
+    ];
+    storeUnsubscribers = [
+      useStore.subscribe(() => queueCampaignRefresh()),
+      useGardenStore.subscribe(() => queueCampaignRefresh()),
     ];
   })();
   return listenerSetup;
@@ -141,7 +229,7 @@ export async function initializeNativeApp(nextContext: NativeContext): Promise<(
 
   const settings = readSettings();
   if (settings.remoteNotifications) await PushNotifications.register().catch(() => {});
-  if (settings.dailyReminder) await scheduleDailyReminder(nextContext.lang).catch(() => {});
+  await refreshAutomatedNotifications().catch(() => {});
   if (shouldAutoSyncAppleHealth()) {
     void connectAndSyncAppleHealth().then((result) => {
       if (result.status === "synced") nextContext.onHealthSynced?.(result.xp);
@@ -155,11 +243,16 @@ export async function initializeNativeApp(nextContext: NativeContext): Promise<(
 
 export async function notificationState(): Promise<{
   permission: PermissionState;
-  dailyReminder: boolean;
+  campaigns: NativeCampaignPreferences;
 }> {
-  if (!isNativeApp()) return { permission: "denied", dailyReminder: false };
+  if (!isNativeApp()) {
+    return {
+      permission: "denied",
+      campaigns: { mealReminders: false, streakReminders: false, harvestReminders: false },
+    };
+  }
   const permission = (await PushNotifications.checkPermissions()).receive;
-  return { permission, dailyReminder: readSettings().dailyReminder };
+  return { permission, campaigns: campaignPreferences() };
 }
 
 export async function enablePushNotifications(): Promise<PermissionState> {
@@ -178,11 +271,14 @@ export async function enablePushNotifications(): Promise<PermissionState> {
   return permission;
 }
 
-export async function setDailyReminder(enabled: boolean, lang: Lang): Promise<boolean> {
+export async function setAutomatedCampaign(
+  campaign: CampaignPreferenceKey,
+  enabled: boolean
+): Promise<boolean> {
   if (!isNativeApp()) return false;
   if (!enabled) {
-    writeSettings({ dailyReminder: false });
-    await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] });
+    writeSettings({ [campaign]: false });
+    await refreshAutomatedNotifications().catch(() => {});
     return false;
   }
 
@@ -191,22 +287,14 @@ export async function setDailyReminder(enabled: boolean, lang: Lang): Promise<bo
     permission = (await LocalNotifications.requestPermissions()).display;
   }
   if (permission !== "granted") return false;
-  writeSettings({ dailyReminder: true });
-  await scheduleDailyReminder(lang);
+  writeSettings({ [campaign]: true });
+  await refreshAutomatedNotifications();
   return true;
 }
 
-async function scheduleDailyReminder(lang: Lang) {
-  await LocalNotifications.cancel({ notifications: [{ id: DAILY_REMINDER_ID }] }).catch(() => {});
-  await LocalNotifications.schedule({
-    notifications: [{
-      id: DAILY_REMINDER_ID,
-      title: lang === "zh" ? "今天的瓜園在等你" : "Your melon farm is waiting",
-      body: lang === "zh" ? "記錄晚餐並看看今天的 XP 進度。" : "Log dinner and check today's XP progress.",
-      schedule: { on: { hour: 19, minute: 0 }, repeats: true },
-      extra: { path: "/add?meal=dinner&source=notification" },
-    }],
-  });
+/** Backward-compatible alias for callers that treated the old reminder as a meal reminder. */
+export async function setDailyReminder(enabled: boolean, _lang: Lang): Promise<boolean> {
+  return setAutomatedCampaign("mealReminders", enabled);
 }
 
 export async function successHaptic() {
@@ -215,7 +303,11 @@ export async function successHaptic() {
 }
 
 export async function disposeNativeListeners() {
+  if (campaignRefreshTimer) clearTimeout(campaignRefreshTimer);
+  campaignRefreshTimer = null;
   await Promise.all(listenerHandles.map((handle) => handle.remove().catch(() => {})));
   listenerHandles = [];
+  storeUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  storeUnsubscribers = [];
   listenerSetup = null;
 }

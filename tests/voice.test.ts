@@ -26,7 +26,7 @@ describe("parseVoiceFood", () => {
   test("chinese counted servings: 兩顆蛋 = 2 eggs", () => {
     const hits = parseVoiceFood("兩顆蛋", BUILTIN_FOODS, [], "zh");
     expect(hits).toHaveLength(1);
-    expect(hits[0].grams).toBe(110); // 2 × 55 g
+    expect(hits[0].grams).toBe(100); // 2 × 50 g USDA large eggs
   });
 
   test("single-char zh food match: 一碗飯 = a bowl of rice", () => {
@@ -44,8 +44,18 @@ describe("parseVoiceFood", () => {
   test("multiple foods split on connectors", () => {
     const hits = parseVoiceFood("2 eggs and one banana", BUILTIN_FOODS, [], "en");
     expect(hits).toHaveLength(2);
-    expect(hits[0].grams).toBe(110);
+    expect(hits[0].grams).toBe(100);
     expect(hits[1].grams).toBe(118);
+  });
+
+  test("counted items use one unit, not one multi-item catalog serving", () => {
+    const wings = parseVoiceFood("3 chicken wings", BUILTIN_FOODS, [], "en");
+    expect(wings).toHaveLength(1);
+    expect(wings[0].grams).toBe(90); // the catalog serving is already 3 wings
+
+    const bacon = parseVoiceFood("2 slices bacon", BUILTIN_FOODS, [], "en");
+    expect(bacon).toHaveLength(1);
+    expect(bacon[0].grams).toBe(16); // 2 cooked USDA slices at 8 g each
   });
 
   test("recipe names win over ingredient words", () => {

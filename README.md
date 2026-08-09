@@ -34,7 +34,7 @@ npx vercel --prod
 Option B — GitHub:
 
 1. Push this folder to a GitHub repo (`git init && git add -A && git commit -m "MelonMate v1"`, then push).
-2. In [vercel.com/new](https://vercel.com/new), import the repo. Framework auto-detects as Next.js. Add `OPENAI_API_KEY` to enable AI food-photo estimates and Honey. `OPENAI_VISION_MODEL` and `OPENAI_AGENT_MODEL` are optional; both default to `gpt-5.6-sol`.
+2. In [vercel.com/new](https://vercel.com/new), import the repo. Framework auto-detects as Next.js. Add `OPENAI_API_KEY` to enable AI food-photo estimates and Honey. `OPENAI_VISION_MODEL`, `OPENAI_FOOD_MODEL`, and `OPENAI_AGENT_MODEL` are optional; all three default to `gpt-5.6-sol`.
 3. Every push to `main` auto-deploys.
 
 **After deploying, on each iPhone:** open the URL in Safari → Share → **Add to Home Screen**. It launches full-screen like a native app.
@@ -67,8 +67,8 @@ In Xcode:
 Set these on the hosted Next.js API:
 
 ```dotenv
-KV_REST_API_URL=          # or UPSTASH_REDIS_REST_URL
-KV_REST_API_TOKEN=        # or UPSTASH_REDIS_REST_TOKEN
+UPSTASH_REDIS_REST_URL=   # legacy alias: KV_REST_API_URL
+UPSTASH_REDIS_REST_TOKEN= # legacy alias: KV_REST_API_TOKEN
 APNS_KEY_ID=
 APNS_TEAM_ID=
 APNS_PRIVATE_KEY=         # .p8 contents; literal \n escapes are accepted

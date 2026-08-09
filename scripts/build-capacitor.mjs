@@ -2,8 +2,11 @@ import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+import nextEnv from "@next/env";
 
 const root = process.cwd();
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(root);
 // Each build gets its own staging tree so a simulator run, Xcode sync, or
 // another terminal build cannot remove files while Next is compiling them.
 const staging = path.join(root, ".capacitor-build", `run-${process.pid}`);
