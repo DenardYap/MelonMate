@@ -12,6 +12,7 @@
 /mobile-dist/
 /mobile-dist.trash-*/
 /.ios-derived/
+/.ios-archives/
 
 # production
 /build

@@ -59,6 +59,7 @@ interface TextEstimateResponse {
       fat: number;
     }[];
   };
+  clarification?: string;
   error?: string;
   code?: string;
 }
@@ -115,7 +116,7 @@ function AddInner() {
     setBusy(true);
     setError("");
     const localHits = parseVoiceFood(note, foods, recipes, lang);
-    if (localHits.length > 0) {
+    if (hasTrustworthyCatalogMatches(note, localHits.map((hit) => hit.refId), foods, recipes)) {
       setReview({
         id: newId(),
         source,
@@ -138,13 +139,18 @@ function AddInner() {
     }
 
     try {
-      const candidates = searchFoodCatalog(note, foods, recipes, 30).map(catalogCandidate);
+      const candidates = catalogCandidatesForNote(note, foods, recipes);
       const response = await apiFetch("/api/food-text-estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: note, lang, catalog: candidates }),
       });
       const data = (await response.json()) as TextEstimateResponse;
+      if (response.ok && data.clarification) {
+        setReview(null);
+        setError(data.clarification);
+        return;
+      }
       if (!response.ok || !data.estimate) {
         throw new Error(
           data.code === "AI_NOT_CONFIGURED"
@@ -252,7 +258,7 @@ function AddInner() {
           <p className="log-food-intro">
             {lang === "zh" ? "搜尋、輸入或說出你吃了什麼，也可以用相機拍食物或掃條碼。" : "Search, type or say what you ate, or use the camera for a food photo or barcode."}
           </p>
-          <div className={`food-composer ${listening ? "is-listening" : ""}`}>
+          <div className="food-composer">
             <AppIcon name="search" size={20} />
             <input
               value={input}
@@ -261,14 +267,6 @@ function AddInner() {
               placeholder={lang === "zh" ? "你吃了什麼？" : "What did you eat?"}
               aria-label={lang === "zh" ? "輸入食物" : "Describe or search food"}
             />
-            <button
-              type="button"
-              className={`food-composer-action press ${listening ? "on" : ""}`}
-              onClick={toggleListening}
-              aria-label={listening ? (lang === "zh" ? "停止聆聽" : "Stop listening") : (lang === "zh" ? "語音輸入" : "Speak food")}
-            >
-              <AppIcon name={listening ? "close" : "microphone"} size={21} />
-            </button>
             <button
               type="button"
               className="food-composer-submit press"
@@ -285,7 +283,16 @@ function AddInner() {
               <b>{lang === "zh" ? "相機" : "Camera"}</b>
               <small>{lang === "zh" ? "拍照或條碼" : "Photo or barcode"}</small>
             </button>
-            <button className="log-food-action press" onClick={() => setManualOpen(true)}>
+            <button
+              className={`log-food-action log-food-talk press ${listening ? "is-listening" : ""}`}
+              onClick={toggleListening}
+              aria-pressed={listening}
+            >
+              <span><AppIcon name={listening ? "close" : "microphone"} size={22} /></span>
+              <b>{listening ? (lang === "zh" ? "完成" : "Finish talking") : (lang === "zh" ? "自然地告訴 AI" : "Talk naturally to AI")}</b>
+              <small>{listening ? (lang === "zh" ? "點一下即可分析" : "Tap when you’re done") : (lang === "zh" ? "例如：兩顆蛋和酪梨吐司" : "Try: 2 large eggs and 1 avocado toast")}</small>
+            </button>
+            <button className="log-food-action log-food-custom press" onClick={() => setManualOpen(true)}>
               <span><AppIcon name="manual" size={22} /></span>
               <b>{lang === "zh" ? "自訂" : "Custom"}</b>
               <small>{lang === "zh" ? "自行輸入營養" : "Enter nutrition"}</small>
@@ -294,7 +301,7 @@ function AddInner() {
         </GlassCard>
       </div>
 
-      {listening && <div className="food-listening" role="status"><span />{lang === "zh" ? "聆聽中…" : "Listening…"}</div>}
+      {listening && <div className="food-listening" role="status"><span />{lang === "zh" ? "請自然地說出食物與份量…" : "Listening — say foods and amounts naturally…"}</div>}
       {error && <div className="target-error mt-3" role="alert">{error}</div>}
 
       {!review && results.length > 0 && (
@@ -417,7 +424,12 @@ function MealPick({ slot, setSlot, lang }: { slot: MealSlot; setSlot: (slot: Mea
 
 function CameraSheet({ open, lang, onClose, onReview }: { open: boolean; lang: Lang; onClose: () => void; onReview: (review: FoodLogReview) => void }) {
   const customFoods = useStore((state) => state.customFoods);
+  const allRecipes = useStore((state) => state.recipes);
   const addCustomFood = useStore((state) => state.addCustomFood);
+  const imageCatalog = useMemo(() => [
+    ...customFoods.filter((food) => food.custom).map(foodCandidateFromItem),
+    ...allRecipes.filter((recipe) => recipe.custom).map(recipeCandidateFromItem),
+  ].slice(0, 120), [allRecipes, customFoods]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
@@ -499,7 +511,7 @@ function CameraSheet({ open, lang, onClose, onReview }: { open: boolean; lang: L
       const response = await apiFetch("/api/food-estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl }),
+        body: JSON.stringify({ imageDataUrl, catalog: imageCatalog }),
       });
       const data = (await response.json()) as { estimate?: FoodPhotoEstimate; error?: string; code?: string };
       if (!response.ok || !data.estimate) {
@@ -660,11 +672,81 @@ function reviewFromPhoto(estimate: FoodPhotoEstimate, lang: Lang): FoodLogReview
 }
 
 function catalogCandidate(result: FoodSearchResult) {
-  if (result.kind === "food") {
-    const serving = resolveFoodServing(result.item, "en");
-    return { id: result.item.id, kind: "food" as const, name: result.item.name.en, emoji: result.item.emoji, serving: serving.label, cal: serving.macros.cal, protein: serving.macros.protein, carbs: serving.macros.carbs, fat: serving.macros.fat };
+  return result.kind === "food" ? foodCandidateFromItem(result.item) : recipeCandidateFromItem(result.item);
+}
+
+function foodCandidateFromItem(item: FoodItem) {
+  const serving = resolveFoodServing(item, "en");
+  return { id: item.id, kind: "food" as const, source: "MelonMate food library" as const, name: item.name.en, serving: serving.label, grams: serving.grams, cal: serving.macros.cal, protein: serving.macros.protein, carbs: serving.macros.carbs, fat: serving.macros.fat };
+}
+
+function recipeCandidateFromItem(item: Recipe) {
+  return { id: item.id, kind: "recipe" as const, source: "MelonMate recipe" as const, name: item.name.en, serving: "1 serving", grams: null, ingredients: item.ingredients.map((ingredient) => ingredient.name.en), cal: item.perServing.cal, protein: item.perServing.protein, carbs: item.perServing.carbs, fat: item.perServing.fat };
+}
+
+const FOOD_NOTE_SPLIT = /(?:,|，|、|;|；|\band\b|\bwith\b|加上|還有|跟|和|以及|\+)/i;
+
+function foodNoteSegments(note: string): string[] {
+  return note.split(FOOD_NOTE_SPLIT).map((segment) => segment.trim()).filter(Boolean);
+}
+
+function cleanFoodQuery(segment: string): string {
+  return segment
+    .toLowerCase()
+    .replace(/\b(?:i\s+(?:ate|had)|for\s+(?:breakfast|lunch|dinner)|breakfast|lunch|dinner|snack)\b/g, " ")
+    .replace(/\b(?:\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|half|quarter)\b/g, " ")
+    .replace(/\b(?:large|medium|small|big|extra|about|roughly|around)\b/g, " ")
+    .replace(/\b(?:g|grams?|kg|ml|oz|ounces?|cups?|bowls?|slices?|pieces?|servings?|bars?|cans?|glasses?|scoops?)\b/g, " ")
+    .replace(/[零一二兩两三四五六七八九十百千半\d.]+\s*(?:克|公克|毫升|顆|個|粒|份|碗|杯|片|條|根|塊|匙|隻)?/g, " ")
+    .replace(/(?:早餐|午餐|晚餐|點心|宵夜|早上吃|中午吃|晚上吃)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function catalogSearchQueries(note: string): string[] {
+  const queries: string[] = [note];
+  for (const segment of foodNoteSegments(note)) {
+    queries.push(segment);
+    const cleaned = cleanFoodQuery(segment);
+    if (cleaned) {
+      queries.push(cleaned);
+      const words = cleaned.split(/\s+/).filter((word) => word.length >= 2);
+      if (words.length > 1) queries.push(...words);
+    }
   }
-  return { id: result.item.id, kind: "recipe" as const, name: result.item.name.en, emoji: result.item.emoji, serving: "1 serving", ingredients: result.item.ingredients.map((ingredient) => ingredient.name.en), cal: result.item.perServing.cal, protein: result.item.perServing.protein, carbs: result.item.perServing.carbs, fat: result.item.perServing.fat };
+  return [...new Set(queries.map((query) => query.trim()).filter(Boolean))];
+}
+
+function catalogCandidatesForNote(note: string, foods: FoodItem[], recipes: Recipe[]) {
+  const seen = new Set<string>();
+  const candidates: ReturnType<typeof catalogCandidate>[] = [];
+  for (const query of catalogSearchQueries(note)) {
+    for (const result of searchFoodCatalog(query, foods, recipes, 12)) {
+      const key = `${result.kind}:${result.item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(catalogCandidate(result));
+      if (candidates.length >= 60) return candidates;
+    }
+  }
+  return candidates;
+}
+
+function hasTrustworthyCatalogMatches(
+  note: string,
+  refIds: (string | undefined)[],
+  foods: FoodItem[],
+  recipes: Recipe[]
+): boolean {
+  const segments = foodNoteSegments(note);
+  if (!segments.length || refIds.length !== segments.length || refIds.some((id) => !id)) return false;
+  return segments.every((segment, index) => {
+    const query = cleanFoodQuery(segment);
+    if (!query) return false;
+    const exact = searchFoodCatalog(query, foods, recipes, 5)
+      .find((result) => result.score >= 120 && result.item.id === refIds[index]);
+    return Boolean(exact);
+  });
 }
 
 function scaleMacroFactor(macros: Macros, factor: number): Macros {

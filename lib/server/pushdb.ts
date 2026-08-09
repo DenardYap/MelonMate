@@ -12,6 +12,7 @@ export interface PushDeviceRecord {
   lang: "en" | "zh";
   timezone: string;
   updatedAt: number;
+  lastTestAt?: number;
 }
 
 export function pushStorageAvailable(): boolean {

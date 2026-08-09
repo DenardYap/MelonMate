@@ -1669,7 +1669,7 @@ input, textarea {
 }
 .food-composer {
   display: grid;
-  grid-template-columns: auto minmax(0,1fr) 42px 42px;
+  grid-template-columns: auto minmax(0,1fr) 42px;
   align-items: center;
   gap: 7px;
   min-height: 58px;
@@ -1679,11 +1679,9 @@ input, textarea {
   background: color-mix(in srgb, var(--glass-strong) 94%, white);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
 }
-.food-composer.is-listening { border-color: color-mix(in srgb, var(--danger) 46%, var(--glass-brd)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 10%, transparent); }
 .food-composer > .app-icon { color: var(--ink-3); }
 .food-composer input { min-width: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font: 650 15px/1.3 inherit; }
 .food-composer input::placeholder { color: var(--ink-3); font-weight: 500; }
-.food-composer-action,
 .food-composer-submit {
   display: grid;
   width: 42px;
@@ -1694,10 +1692,9 @@ input, textarea {
   color: var(--melon-700);
   background: var(--track);
 }
-.food-composer-action.on { color: #fff; background: var(--danger); animation: pulse-rec 1.6s infinite; }
 .food-composer-submit { color: #fff; background: var(--melon-600); }
 .food-composer-submit:disabled { opacity: .38; }
-.log-food-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 12px; }
+.log-food-actions { display: grid; grid-template-columns: minmax(0,.82fr) minmax(0,1.18fr); gap: 10px; margin-top: 12px; }
 .log-food-action {
   display: grid;
   grid-template-columns: 38px 1fr;
@@ -1715,6 +1712,10 @@ input, textarea {
 .log-food-action > span { display: grid; grid-row: 1/3; width: 38px; height: 38px; place-items: center; border-radius: 13px; color: var(--melon-700); background: color-mix(in srgb, var(--melon-100) 72%, white); }
 .log-food-action b { align-self: end; font-size: 13px; }
 .log-food-action small { overflow: hidden; color: var(--ink-3); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
+.log-food-talk b { font-size: 12.5px; line-height: 1.15; }
+.log-food-talk.is-listening { border-color: color-mix(in srgb, var(--danger) 48%, var(--glass-brd)); background: color-mix(in srgb, var(--danger) 8%, var(--track)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 9%, transparent); }
+.log-food-talk.is-listening > span { color: #fff; background: var(--danger); animation: pulse-rec 1.6s infinite; }
+.log-food-custom { grid-column: 1 / -1; }
 .food-listening { display: flex; width: max-content; align-items: center; gap: 7px; margin: 12px auto 0; color: var(--danger); font-size: 12px; font-weight: 750; }
 .food-listening span { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse-rec 1.4s infinite; }
 .food-search-results { max-height: 43dvh; overflow-y: auto; }
@@ -1749,7 +1750,8 @@ input, textarea {
   pointer-events: none;
 }
 .toast-host--with-tabbar {
-  bottom: calc(env(safe-area-inset-bottom) + 142px);
+  /* Clear the tab bar's full 134px footprint, including its Log food CTA. */
+  bottom: calc(env(safe-area-inset-bottom) + 134px + 24px);
 }
 .toast-slot {
   display: flex;
@@ -1820,8 +1822,8 @@ input, textarea {
   .tabbar-log-food { bottom: 73px; min-height: 43px; padding-inline: 17px; font-size: 13px; }
   .tab-item { min-height: 50px; font-size: 8.5px; }
   .log-food-console { padding: 14px; }
-  .food-composer { grid-template-columns: auto minmax(0,1fr) 38px 38px; gap: 5px; padding-left: 10px; }
-  .food-composer-action,.food-composer-submit { width: 38px; height: 38px; border-radius: 12px; }
+  .food-composer { grid-template-columns: auto minmax(0,1fr) 38px; gap: 5px; padding-left: 10px; }
+  .food-composer-submit { width: 38px; height: 38px; border-radius: 12px; }
   .log-food-action { grid-template-columns: 32px 1fr; padding: 9px; }
   .log-food-action > span { width: 32px; height: 32px; }
 }

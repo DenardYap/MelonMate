@@ -6,6 +6,7 @@ import {
   enablePushNotifications,
   isNativeApp,
   notificationState,
+  sendPushTestNotification,
   setAutomatedCampaign,
   successHaptic,
 } from "@/lib/nativeApp";
@@ -23,7 +24,7 @@ export default function NativeAppSettings() {
     streakReminders: false,
     harvestReminders: false,
   });
-  const [busy, setBusy] = useState<"health" | "push" | CampaignPreferenceKey | null>(null);
+  const [busy, setBusy] = useState<"health" | "push" | "pushTest" | CampaignPreferenceKey | null>(null);
 
   useEffect(() => {
     const available = isNativeApp();
@@ -77,6 +78,18 @@ export default function NativeAppSettings() {
     }
   };
 
+  const testPush = async () => {
+    setBusy("pushTest");
+    try {
+      await sendPushTestNotification();
+      toast(lang === "zh" ? "測試推播已送出" : "Test push sent", "checkCircle");
+    } catch {
+      toast(lang === "zh" ? "測試推播失敗，請稍後再試" : "Test push failed — please try again", "warning");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <GlassCard className="px-4 py-2 mb-4">
       <button type="button" className="row row-button press" onClick={() => void syncHealth()} disabled={busy !== null}>
@@ -93,6 +106,15 @@ export default function NativeAppSettings() {
         </div>
         <span className="chip">{permission === "granted" ? <AppIcon name="check" size={15} /> : (busy === "push" ? "…" : (lang === "zh" ? "開啟" : "Enable"))}</span>
       </button>
+      {permission === "granted" && (
+        <button type="button" className="row row-button press" onClick={() => void testPush()} disabled={busy !== null}>
+          <div className="flex-1">
+            <div className="font-semibold icon-label"><AppIcon name="bell" size={18} /> {lang === "zh" ? "測試遠端推播" : "Test remote push"}</div>
+            <div className="t-cap mt-1">{lang === "zh" ? "透過 Vercel 與 Apple 推播服務傳送" : "Sends through Vercel and Apple Push Notification service"}</div>
+          </div>
+          <span className="chip">{busy === "pushTest" ? "…" : (lang === "zh" ? "測試" : "Test")}</span>
+        </button>
+      )}
       <button
         type="button"
         className="row row-button press"

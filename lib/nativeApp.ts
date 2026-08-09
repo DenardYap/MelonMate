@@ -19,7 +19,6 @@ import { useStore } from "./store";
 import type { Lang } from "./types";
 
 const SETTINGS_KEY = "melonmate-native-settings-v1";
-const PUSH_TOKEN_KEY = "melonmate-apns-token";
 const LEGACY_DAILY_REMINDER_ID = 7_001;
 
 interface NativeSettings {
@@ -42,6 +41,8 @@ let listenerHandles: PluginListenerHandle[] = [];
 let storeUnsubscribers: (() => void)[] = [];
 let campaignRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let campaignRefreshPromise: Promise<void> = Promise.resolve();
+let sessionPushToken: string | null = null;
+let pushTokenWaiters: ((token: string) => void)[] = [];
 
 export function isNativeApp(): boolean {
   return Capacitor.isNativePlatform();
@@ -153,10 +154,9 @@ function pathFromAppUrl(raw: string): string | null {
 }
 
 async function uploadPushToken(token: string) {
-  localStorage.setItem(PUSH_TOKEN_KEY, token);
   if (!context) return;
   try {
-    await apiFetch("/api/push/register", {
+    const response = await apiFetch("/api/push/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -167,10 +167,31 @@ async function uploadPushToken(token: string) {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     });
+    if (!response.ok) throw new Error(`push-registration-${response.status}`);
+    sessionPushToken = token;
+    pushTokenWaiters.splice(0).forEach((resolve) => resolve(token));
   } catch {
     // APNs registration still succeeded. The token is retained and retried
     // whenever the app becomes active or notifications are enabled again.
   }
+}
+
+async function currentPushToken(): Promise<string> {
+  if (sessionPushToken) return sessionPushToken;
+  await ensureNativeListeners();
+  const token = new Promise<string>((resolve, reject) => {
+    const waiter = (value: string) => {
+      clearTimeout(timeout);
+      resolve(value);
+    };
+    const timeout = setTimeout(() => {
+      pushTokenWaiters = pushTokenWaiters.filter((candidate) => candidate !== waiter);
+      reject(new Error("push-token-timeout"));
+    }, 15_000);
+    pushTokenWaiters.push(waiter);
+  });
+  await PushNotifications.register();
+  return token;
 }
 
 async function ensureNativeListeners() {
@@ -265,10 +286,24 @@ export async function enablePushNotifications(): Promise<PermissionState> {
   if (permission === "granted") {
     writeSettings({ remoteNotifications: true });
     await PushNotifications.register();
-    const savedToken = localStorage.getItem(PUSH_TOKEN_KEY);
-    if (savedToken) void uploadPushToken(savedToken);
   }
   return permission;
+}
+
+export async function sendPushTestNotification(): Promise<void> {
+  if (!isNativeApp() || !context) throw new Error("native-context-unavailable");
+  const permission = (await PushNotifications.checkPermissions()).receive;
+  if (permission !== "granted") throw new Error("push-permission-not-granted");
+  const token = await currentPushToken();
+  const response = await apiFetch("/api/push/self-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceId: context.deviceId, token }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(payload.error || `push-test-${response.status}`);
+  }
 }
 
 export async function setAutomatedCampaign(
@@ -309,5 +344,7 @@ export async function disposeNativeListeners() {
   listenerHandles = [];
   storeUnsubscribers.forEach((unsubscribe) => unsubscribe());
   storeUnsubscribers = [];
+  pushTokenWaiters = [];
+  sessionPushToken = null;
   listenerSetup = null;
 }

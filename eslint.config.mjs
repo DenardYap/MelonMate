@@ -10,6 +10,7 @@ const eslintConfig = [
       ".capacitor-build/**",
       "mobile-dist/**",
       ".ios-derived/**",
+      ".ios-archives/**",
       "ios/DerivedData/**",
       "ios/App/App/public/**",
       "node_modules/**",

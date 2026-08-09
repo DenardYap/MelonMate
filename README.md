@@ -70,7 +70,7 @@ Set these on the hosted Next.js API:
 UPSTASH_REDIS_REST_URL=   # legacy alias: KV_REST_API_URL
 UPSTASH_REDIS_REST_TOKEN= # legacy alias: KV_REST_API_TOKEN
 APNS_KEY_ID=
-APNS_TEAM_ID=
+APNS_TEAM_ID=KF7Y4XG4SG   # Campfire Loyalty team that owns com.melonmate.app
 APNS_PRIVATE_KEY=         # .p8 contents; literal \n escapes are accepted
 APNS_BUNDLE_ID=com.melonmate.app
 APNS_PRODUCTION=true      # false for Xcode development builds
@@ -89,6 +89,8 @@ After a device registers, send a protected test notification through `POST /api/
 ```
 
 Use `Authorization: Bearer <PUSH_ADMIN_SECRET>`. This test endpoint sends only to the requested registered device; scheduled or campaign notifications can build on the same APNs sender and token store.
+
+In a TestFlight build, the simpler end-to-end check is **Me → Test remote push**. It requests a fresh production APNs token, confirms Vercel stored that exact token, and sends a notification back to the same installation through `POST /api/push/self-test`. The self-test is limited to one request per device per minute.
 
 ### App Store release checklist
 

@@ -1,19 +1,11 @@
 import { NextResponse } from "next/server";
+import {
+  sanitizeProvidedCandidates,
+  searchFoodCandidates,
+  type FoodCandidate,
+} from "@/lib/server/foodCandidateSearch";
 
 export const runtime = "nodejs";
-
-interface CatalogCandidate {
-  id: string;
-  kind: "food" | "recipe";
-  name: string;
-  emoji?: string;
-  serving?: string;
-  ingredients?: string[];
-  cal: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
 
 interface EstimateItem {
   name: string;
@@ -34,6 +26,14 @@ interface TextEstimate {
   items: EstimateItem[];
 }
 
+interface FoodClarification {
+  question: string;
+}
+
+interface FoodSearchPlan {
+  queries: string[];
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -45,19 +45,74 @@ export async function POST(request: Request) {
 
   let text = "";
   let lang: "en" | "zh" = "en";
-  let catalog: CatalogCandidate[] = [];
+  let providedCandidates: FoodCandidate[] = [];
   try {
     const body = (await request.json()) as { text?: unknown; lang?: unknown; catalog?: unknown };
     text = typeof body.text === "string" ? body.text.trim().slice(0, 500) : "";
     lang = body.lang === "zh" ? "zh" : "en";
-    catalog = Array.isArray(body.catalog)
-      ? body.catalog.filter(isCatalogCandidate).slice(0, 30)
-      : [];
+    providedCandidates = sanitizeProvidedCandidates(body.catalog);
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
   if (!text) return NextResponse.json({ error: "Describe what you ate." }, { status: 400 });
+
+  const searchPlanResponse = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_FOOD_MODEL || "gpt-5.6-sol",
+      store: false,
+      reasoning: { effort: "low" },
+      max_output_tokens: 500,
+      instructions: `Identify each distinct food or drink in the note and call search_food_candidates once. Create one concise product-name query per item. Keep useful brand or preparation words, but remove quantities, filler words, and meal-time phrases. Do not estimate nutrition yet.`,
+      input: [{ role: "user", content: [{ type: "input_text", text }] }],
+      tools: [{
+        type: "function",
+        name: "search_food_candidates",
+        description: "Fuzzy-search MelonMate foods, saved recipes, recipe ingredients, and Open Food Facts products.",
+        strict: true,
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            queries: {
+              type: "array",
+              minItems: 1,
+              maxItems: 6,
+              items: { type: "string" },
+            },
+          },
+          required: ["queries"],
+        },
+      }],
+      tool_choice: { type: "function", name: "search_food_candidates" },
+    }),
+  });
+
+  const searchPlanData = await searchPlanResponse.json() as {
+    error?: { message?: string };
+    output?: { type?: string; name?: string; arguments?: string }[];
+  };
+  if (!searchPlanResponse.ok) {
+    console.error("OpenAI food search planning failed", searchPlanResponse.status, searchPlanData.error?.message);
+    return NextResponse.json({ error: "That food note could not be analyzed. Try again." }, { status: 502 });
+  }
+  const searchCall = searchPlanData.output?.find((item) => item.type === "function_call" && item.name === "search_food_candidates");
+  let queries = [text];
+  if (searchCall?.arguments) {
+    try {
+      const plan = JSON.parse(searchCall.arguments) as FoodSearchPlan;
+      const planned = Array.isArray(plan.queries) ? plan.queries.map((query) => String(query).trim()).filter(Boolean).slice(0, 6) : [];
+      if (planned.length) queries = planned;
+    } catch {
+      // The original note remains a safe retrieval query.
+    }
+  }
+  const candidates = await searchFoodCandidates(queries, providedCandidates, 30);
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -70,52 +125,75 @@ export async function POST(request: Request) {
       store: false,
       reasoning: { effort: "low" },
       max_output_tokens: 1100,
-      instructions: `Turn a short food note into a confirmation preview. Reply in ${lang === "zh" ? "Traditional Chinese" : "English"}. Prefer an exact candidate from the supplied catalog, especially a saved recipe or ingredient, and preserve its ref_id and nutrition. Scale candidate nutrition to the quantity the user stated. Only estimate from general nutrition knowledge when the catalog has no good match. The rationale must briefly say which source and portion assumption produced the numbers. Confidence is 0-100 and must reflect both identity and portion certainty. Never claim the food is already logged. Always call estimate_food_log exactly once.`,
+      instructions: `Turn a natural spoken food note into a confirmation preview. Reply in ${lang === "zh" ? "Traditional Chinese" : "English"}.
+
+Decision order:
+1. First inspect the supplied fuzzy-search results from the MelonMate library, saved recipes, recipe ingredients, and Open Food Facts. Select a candidate only when its identity genuinely fits. Prefer a matching saved recipe or MelonMate food; use an Open Food Facts result when it is the matching branded/product food. Preserve the selected candidate id as ref_id and scale its listed serving nutrition to the stated quantity.
+2. When no candidate is a credible match, estimate from general nutrition knowledge only if both the food identity and amount are specific enough for a useful estimate. A standard counted item such as "1 avocado toast" is specific enough; "some breakfast", "a plate of food", or "I ate healthy" is not.
+3. If any necessary food identity or amount is truly vague, do not invent ingredients, portions, calories, or macros. Call request_food_clarification with one short, focused question instead.
+
+Return one item for each distinct food the user mentioned, including multiple foods in one sentence. The rationale must briefly identify catalog matches and any general estimate or portion assumption. Confidence is 0-100 and must reflect identity and portion certainty. Never claim the food is already logged. Call exactly one function.`,
       input: [{
         role: "user",
         content: [{
           type: "input_text",
-          text: `FOOD NOTE:\n${text}\n\nSEARCHED FOOD, RECIPE, AND INGREDIENT CANDIDATES:\n${JSON.stringify(catalog)}`,
+          text: `FOOD NOTE:\n${text}\n\nSEARCH QUERIES USED:\n${JSON.stringify(queries)}\n\nTOP ${candidates.length} FUZZY-SEARCH CANDIDATES (maximum k=30):\n${JSON.stringify(candidates)}`,
         }],
       }],
-      tools: [{
-        type: "function",
-        name: "estimate_food_log",
-        description: "Return a reviewable food log estimate.",
-        strict: true,
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            description: { type: "string" },
-            rationale: { type: "string" },
-            confidence_score: { type: "integer", minimum: 0, maximum: 100 },
-            items: {
-              type: "array",
-              minItems: 1,
-              maxItems: 12,
+      tools: [
+        {
+          type: "function",
+          name: "estimate_food_log",
+          description: "Return a reviewable food log estimate when every mentioned item is sufficiently clear.",
+          strict: true,
+          parameters: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              description: { type: "string" },
+              rationale: { type: "string" },
+              confidence_score: { type: "integer", minimum: 0, maximum: 100 },
               items: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  name: { type: "string" },
-                  emoji: { type: "string" },
-                  qty_label: { type: "string" },
-                  grams: { type: ["number", "null"], minimum: 0 },
-                  ref_id: { type: ["string", "null"] },
-                  cal: { type: "number", minimum: 0 },
-                  protein: { type: "number", minimum: 0 },
-                  carbs: { type: "number", minimum: 0 },
-                  fat: { type: "number", minimum: 0 },
+                type: "array",
+                minItems: 1,
+                maxItems: 12,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    name: { type: "string" },
+                    emoji: { type: "string" },
+                    qty_label: { type: "string" },
+                    grams: { type: ["number", "null"], minimum: 0 },
+                    ref_id: { type: ["string", "null"] },
+                    cal: { type: "number", minimum: 0 },
+                    protein: { type: "number", minimum: 0 },
+                    carbs: { type: "number", minimum: 0 },
+                    fat: { type: "number", minimum: 0 },
+                  },
+                  required: ["name", "emoji", "qty_label", "grams", "ref_id", "cal", "protein", "carbs", "fat"],
                 },
-                required: ["name", "emoji", "qty_label", "grams", "ref_id", "cal", "protein", "carbs", "fat"],
               },
             },
+            required: ["description", "rationale", "confidence_score", "items"],
           },
-          required: ["description", "rationale", "confidence_score", "items"],
         },
-      }],
-      tool_choice: { type: "function", name: "estimate_food_log" },
+        {
+          type: "function",
+          name: "request_food_clarification",
+          description: "Ask for missing food or portion detail instead of guessing.",
+          strict: true,
+          parameters: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              question: { type: "string" },
+            },
+            required: ["question"],
+          },
+        },
+      ],
+      tool_choice: "required",
     }),
   });
 
@@ -126,6 +204,17 @@ export async function POST(request: Request) {
   if (!response.ok) {
     console.error("OpenAI text food estimate failed", response.status, data.error?.message);
     return NextResponse.json({ error: "That food note could not be analyzed. Try a shorter description." }, { status: 502 });
+  }
+
+  const clarificationCall = data.output?.find((item) => item.type === "function_call" && item.name === "request_food_clarification");
+  if (clarificationCall?.arguments) {
+    try {
+      const clarification = JSON.parse(clarificationCall.arguments) as FoodClarification;
+      const question = String(clarification.question || "").trim().slice(0, 240);
+      if (question) return NextResponse.json({ clarification: question });
+    } catch {
+      return NextResponse.json({ error: "A little more detail is needed. Try naming the food and amount." }, { status: 502 });
+    }
   }
 
   const call = data.output?.find((item) => item.type === "function_call" && item.name === "estimate_food_log");
@@ -140,12 +229,6 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "The food estimate was incomplete. Try again." }, { status: 502 });
   }
-}
-
-function isCatalogCandidate(value: unknown): value is CatalogCandidate {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Partial<CatalogCandidate>;
-  return typeof item.id === "string" && (item.kind === "food" || item.kind === "recipe") && typeof item.name === "string";
 }
 
 function safeNumber(value: number, decimals = 1): number {

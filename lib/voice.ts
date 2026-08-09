@@ -295,6 +295,7 @@ export function startRecognition(
   rec.maxAlternatives = 1;
 
   let finalText = "";
+  let deliveredFinal = false;
   rec.onresult = (ev: SpeechRecognitionEventLike) => {
     let interim = "";
     for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -303,7 +304,10 @@ export function startRecognition(
       else interim += res[0].transcript;
     }
     onResult(finalText + interim, false);
-    if (finalText) onResult(finalText, true);
+    if (finalText && !deliveredFinal) {
+      deliveredFinal = true;
+      onResult(finalText, true);
+    }
   };
   rec.onerror = (ev: { error?: string }) => {
     onEnd(ev.error ?? "error");
