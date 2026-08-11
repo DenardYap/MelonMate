@@ -51,6 +51,29 @@ describe("Apple Health sync", () => {
     expect(isAppleHealthConnected()).toBe(true);
   });
 
+  it("combines closely spaced step and standing milestones into one popup", async () => {
+    healthPlugin.readDailyActivity
+      .mockResolvedValueOnce({ steps: 1_500, standMinutes: 10 })
+      .mockResolvedValueOnce({ steps: 3_500, standMinutes: 30 });
+
+    await connectAndSyncAppleHealth("2026-08-09");
+    const firstRewardId = useHealthRewardQueue.getState().pending[0].id;
+    await connectAndSyncAppleHealth("2026-08-09");
+
+    expect(useStore.getState().game["p-me"].xp).toBe(32);
+    expect(useHealthRewardQueue.getState().pending).toHaveLength(1);
+    expect(useHealthRewardQueue.getState().pending[0]).toMatchObject({
+      id: firstRewardId,
+      steps: 3_500,
+      standMinutes: 30,
+      stepXp: 20,
+      standXp: 12,
+      stepMilestones: 3,
+      standMilestones: 3,
+      totalXp: 32,
+    });
+  });
+
   it("keeps the connected state and returns an actionable error when reading fails", async () => {
     healthPlugin.readDailyActivity.mockRejectedValueOnce(new Error("HealthKit query failed"));
 

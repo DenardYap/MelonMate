@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  hasNativeThemeAudio,
+  pauseNativeTheme,
+  playNativeTheme,
+  setNativeThemeVolume,
+  stopNativeTheme,
+} from "./nativeThemeAudio";
+
 export type SoundEffect =
   | "click"
   | "plant"
@@ -164,6 +172,15 @@ export function syncBackgroundMusic(now = new Date()) {
     backgroundSource = theme.source;
   }
 
+  if (hasNativeThemeAudio()) {
+    const filename = theme.source.split("/").at(-1);
+    if (!filename) return;
+    void playNativeTheme(filename, musicVolume()).catch(() => {
+      // Native playback errors are logged by the plugin and music stays optional.
+    });
+    return;
+  }
+
   const context = getBackgroundAudioContext();
   if (!context) return;
   updateBackgroundVolume();
@@ -242,15 +259,24 @@ function stopEffects() {
 }
 
 function updateBackgroundVolume() {
+  if (hasNativeThemeAudio()) {
+    void setNativeThemeVolume(musicVolume()).catch(() => {});
+    return;
+  }
   if (backgroundContext && backgroundGain) {
     backgroundGain.gain.setValueAtTime(
-      Math.min(1, preferences.volume * MUSIC_VOLUME_MULTIPLIER),
+      musicVolume(),
       backgroundContext.currentTime,
     );
   }
 }
 
 function stopBackgroundMusic(reset: boolean) {
+  if (hasNativeThemeAudio()) {
+    void stopNativeTheme().catch(() => {});
+    if (reset) backgroundSource = null;
+    return;
+  }
   if (backgroundNode) {
     backgroundNode.stop();
     backgroundNode.disconnect();
@@ -265,9 +291,17 @@ function stopBackgroundMusic(reset: boolean) {
 }
 
 function suspendBackgroundMusic() {
+  if (hasNativeThemeAudio()) {
+    void pauseNativeTheme().catch(() => {});
+    return;
+  }
   if (backgroundContext?.state === "running") {
     void backgroundContext.suspend().catch(() => {});
   }
+}
+
+function musicVolume() {
+  return Math.min(1, preferences.volume * MUSIC_VOLUME_MULTIPLIER);
 }
 
 type AudioContextConstructor = new () => AudioContext;

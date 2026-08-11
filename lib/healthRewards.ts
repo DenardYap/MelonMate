@@ -20,12 +20,32 @@ let rewardSequence = 0;
 
 export const useHealthRewardQueue = create<HealthRewardQueueState>((set) => ({
   pending: [],
-  enqueue: (reward) => set((state) => ({
-    pending: [
-      ...state.pending,
-      { ...reward, id: `${reward.date}:${Date.now()}:${++rewardSequence}` },
-    ],
-  })),
+  enqueue: (reward) => set((state) => {
+    const existingIndex = state.pending.findIndex((pendingReward) => pendingReward.date === reward.date);
+    if (existingIndex < 0) {
+      return {
+        pending: [
+          ...state.pending,
+          { ...reward, id: `${reward.date}:${Date.now()}:${++rewardSequence}` },
+        ],
+      };
+    }
+
+    return {
+      pending: state.pending.map((pendingReward, index) => index === existingIndex
+        ? {
+          ...pendingReward,
+          steps: Math.max(pendingReward.steps, reward.steps),
+          standMinutes: Math.max(pendingReward.standMinutes, reward.standMinutes),
+          stepXp: pendingReward.stepXp + reward.stepXp,
+          standXp: pendingReward.standXp + reward.standXp,
+          stepMilestones: pendingReward.stepMilestones + reward.stepMilestones,
+          standMilestones: pendingReward.standMilestones + reward.standMilestones,
+          totalXp: pendingReward.totalXp + reward.totalXp,
+        }
+        : pendingReward),
+    };
+  }),
   dismiss: (id) => set((state) => ({
     pending: state.pending.filter((reward) => reward.id !== id),
   })),
