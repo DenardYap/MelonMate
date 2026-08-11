@@ -167,7 +167,7 @@ export function syncBackgroundMusic(now = new Date()) {
   const context = getBackgroundAudioContext();
   if (!context) return;
   updateBackgroundVolume();
-  if (context.state === "suspended") void context.resume().catch(() => {
+  if (context.state !== "running" && context.state !== "closed") void context.resume().catch(() => {
     // Browsers can block autoplay. The provider retries from the next user gesture.
   });
   if (!backgroundNode && backgroundLoadingSource !== theme.source) {
@@ -205,9 +205,10 @@ function createPlayer(source: string) {
 }
 
 function configureAudioSession() {
-  // Theme music is app ambience, not primary media. Keeping it ambient avoids
-  // taking over Now Playing while transient effects can mix with other apps.
-  setAudioSessionType(preferences.musicEnabled ? "ambient" : "transient");
+  // The theme uses Web Audio rather than a media element, so playback mode can
+  // remain audible on iOS without registering transport controls in Now Playing.
+  // With the theme muted, effects stay transient and mix with other apps.
+  setAudioSessionType(preferences.musicEnabled ? "playback" : "transient");
   clearMediaSession();
 }
 
@@ -305,6 +306,7 @@ async function loadAndStartBackgroundMusic(context: AudioContext, source: string
     node.connect(backgroundGain);
     node.start();
     backgroundNode = node;
+    clearMediaSession();
   } catch {
     // Music is optional; a failed asset should never affect app usage.
   } finally {

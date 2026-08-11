@@ -46,6 +46,6 @@ describe("time-of-day background themes", () => {
     expect(audioSession.type).toBe("play-and-record");
 
     endVoiceCaptureSoundscape();
-    expect(audioSession.type).toBe("ambient");
+    expect(audioSession.type).toBe("playback");
   });
 });
