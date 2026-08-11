@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Melon Morning",
+    "slug": "01-melon-morning",
+    "bpm": 96,
+    "durationSeconds": 41.20002267573696,
+    "file": "01-melon-morning.mp3"
+  },
+  {
+    "title": "Garden Bounce",
+    "slug": "02-garden-bounce",
+    "bpm": 112,
+    "durationSeconds": 35.385714285714286,
+    "file": "02-garden-bounce.mp3"
+  },
+  {
+    "title": "Firefly Supper",
+    "slug": "03-firefly-supper",
+    "bpm": 88,
+    "durationSeconds": 45.136371882086166,
+    "file": "03-firefly-supper.mp3"
+  }
+]

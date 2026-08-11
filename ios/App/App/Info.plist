@@ -42,10 +42,14 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>MelonMate uses the camera to scan food barcodes and estimate meals from photos.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>MelonMate reads your daily steps and Apple stand time to update your activity progress and award XP.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>MelonMate requests Health access only to sync your activity progress and does not write data to Apple Health.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>MelonMate uses the microphone when you choose voice food logging.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

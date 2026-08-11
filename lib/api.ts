@@ -28,12 +28,17 @@ export function nativeApiUnavailableMessage(lang: "en" | "zh", feature: "text" |
 /** Resolve a hosted Next.js API route from both the website and native bundle. */
 export function apiUrl(path: string): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const origin = (process.env.NEXT_PUBLIC_API_ORIGIN || "").replace(/\/$/, "");
-  if (origin) return `${origin}${normalizedPath}`;
-  if (process.env.NEXT_PUBLIC_CAPACITOR_BUILD === "1") {
+  if (process.env.NEXT_PUBLIC_CAPACITOR_BUILD !== "1") return normalizedPath;
+
+  const origin = (process.env.NEXT_PUBLIC_API_ORIGIN || "").trim();
+  if (!origin) throw new NativeApiOriginMissingError();
+  try {
+    const url = new URL(normalizedPath, `${origin.replace(/\/$/, "")}/`);
+    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("unsupported protocol");
+    return url.toString();
+  } catch {
     throw new NativeApiOriginMissingError();
   }
-  return normalizedPath;
 }
 
 export function apiFetch(path: string, init?: RequestInit): Promise<Response> {

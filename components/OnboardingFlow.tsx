@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandMark, AppIcon, FoodGlyph } from "./icons";
 import { GlassCard } from "./ui";
 import { IngredientRestrictionEditor } from "./IngredientRestrictionEditor";
@@ -53,6 +53,8 @@ const CUISINES = [
 ] as const;
 
 export default function OnboardingFlow({ edit = false, onClose }: { edit?: boolean; onClose?: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
   const store = useStore();
   const saved = useActiveProfile();
   const [step, setStep] = useState(0);
@@ -120,6 +122,53 @@ export default function OnboardingFlow({ edit = false, onClose }: { edit?: boole
     else store.skipOnboarding();
   };
 
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusFrame = requestAnimationFrame(() => {
+      dialogRef.current?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled])")?.focus();
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && edit) {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) ?? []
+      ).filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = originalOverflow;
+      previousFocus?.focus();
+    };
+  }, [edit]);
+
   const finish = () => {
     const suggestedIds = recipeSuggestions.map((recipe) => recipe.id);
     store.completeOnboarding({
@@ -155,6 +204,7 @@ export default function OnboardingFlow({ edit = false, onClose }: { edit?: boole
 
   return (
     <div
+      ref={dialogRef}
       className="onboarding-shell"
       role="dialog"
       aria-modal="true"

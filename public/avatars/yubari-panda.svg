@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Yubari Panda</title><desc id="desc">A panda holding a bright orange Yubari melon.</desc>
+  <rect width="256" height="256" rx="56" fill="#F8E7DD"/><circle cx="72" cy="73" r="29" fill="#3E4340" stroke="#4B443D" stroke-width="8"/><circle cx="184" cy="73" r="29" fill="#3E4340" stroke="#4B443D" stroke-width="8"/>
+  <ellipse cx="128" cy="125" rx="76" ry="78" fill="#FAF6E8" stroke="#4B443D" stroke-width="8"/><ellipse cx="96" cy="118" rx="21" ry="27" fill="#3E4340" transform="rotate(22 96 118)"/><ellipse cx="160" cy="118" rx="21" ry="27" fill="#3E4340" transform="rotate(-22 160 118)"/>
+  <circle cx="101" cy="118" r="7" fill="#FFF"/><circle cx="155" cy="118" r="7" fill="#FFF"/><ellipse cx="128" cy="148" rx="10" ry="8" fill="#3E4340"/><path d="M128 156c-7 10-16 10-24 3M128 156c7 10 16 10 24 3" fill="none" stroke="#3E4340" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="128" cy="199" r="46" fill="#EF9553" stroke="#4B443D" stroke-width="8"/><g stroke="#F8C489" stroke-width="4" opacity=".9"><path d="m95 185 66 28M99 169l66 29M160 170l-64 35M170 187l-57 32"/></g>
+  <path d="M128 157c-1-14 5-23 16-29M144 140c16-7 29-2 35 9-12 12-26 12-37 5" fill="#79A461" stroke="#4B443D" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -58,6 +58,8 @@ export type FoodCat =
 export interface FoodItem {
   id: string;
   name: BiText;
+  /** Alternate, regional, or transliterated names accepted by catalog search. */
+  aliases?: string[];
   emoji: string;
   /** macros per 100 g (or per 100 ml for liquids) */
   per100: Macros;
@@ -67,6 +69,12 @@ export interface FoodItem {
   cat: FoodCat;
   /** Nutrition provenance for bundled reference foods. */
   source?: { name: string; id?: string };
+  /** Context shown when an ingredient is normally used in tiny amounts. */
+  usageNote?: BiText;
+  /** True when the bundled macros are a generic estimate rather than a lab value. */
+  nutritionEstimate?: boolean;
+  /** True for additives whose nutrition is negligible at the provided 1 g logging amount. */
+  traceIngredient?: boolean;
   barcode?: string;
   custom?: boolean;
 }
@@ -78,6 +86,9 @@ export interface LogEntry {
   name: BiText;
   emoji?: string;
   grams?: number;
+  /** The amount the person logged in the saved item's own unit. */
+  amount?: number;
+  amountUnit?: NutritionUnit;
   macros: Macros;
   src?: "food" | "recipe" | "manual" | "text" | "voice" | "barcode" | "photo";
   refId?: string;
@@ -94,6 +105,21 @@ export interface Ingredient {
 
 export type RecipeCat = "asian" | "western" | "pasta" | "breakfast" | "veg" | "custom";
 
+export type NutritionUnit = "serving" | "g" | "ml" | "oz" | "fl_oz" | "cup" | "scoop" | "piece";
+
+export interface RecipeNutritionBasis {
+  /** Macros in `perServing` describe this amount, e.g. 1 serving or 100 g. */
+  amount: number;
+  unit: NutritionUnit;
+}
+
+export interface RecipeRoutine {
+  /** JavaScript weekday numbers: Sunday = 0 through Saturday = 6. */
+  days: number[];
+  /** Optional meal used to rank this item in the food logger. */
+  meal?: MealSlot;
+}
+
 export interface Recipe {
   id: string;
   name: BiText;
@@ -103,6 +129,10 @@ export interface Recipe {
   difficulty: 1 | 2 | 3;
   servings: number;
   perServing: Macros;
+  /** Defaults to 1 serving for recipes saved before flexible units existed. */
+  nutritionBasis?: RecipeNutritionBasis;
+  /** Optional recurring schedule used for timely quick-log suggestions. */
+  routine?: RecipeRoutine;
   ingredients: Ingredient[];
   /** Optional ordered cooking method, used by AI-drafted and custom recipes. */
   steps?: BiText[];
@@ -176,7 +206,7 @@ export interface WorkoutPlan {
   note?: BiText;
   weeks: WorkoutWeek[];
   /** Recommendation metadata; the workout itself is suitable for every gender. */
-  daysPerWeek?: 3 | 4 | 5 | 6;
+  daysPerWeek?: number;
   focus?: TrainingFocus;
   goals?: FitnessGoal[];
   intensity?: "light" | "moderate" | "focused" | "intense";
@@ -231,6 +261,8 @@ export interface Profile {
   id: string;
   name: string;
   emoji: string;
+  /** A safe built-in avatar path or compact locally selected raster data URL. */
+  photoDataUrl?: string;
   goals: Goals;
   /** Personal hydration target; older saved profiles fall back to 8 cups. */
   waterGoal?: number;
@@ -390,12 +422,22 @@ export interface FriendWorkoutPlanSnapshot {
   unit: WeightUnit;
 }
 
+/** Content this device has chosen to expose to one specific friend. */
+export interface FriendSharingSettings {
+  shareMealPlan: boolean;
+  shareWorkoutPlan: boolean;
+  /** The specific plan shared with this friend. Falls back to the active plan for legacy settings. */
+  workoutPlanId?: string;
+  sharedRecipeIds: string[];
+}
+
 /** What a member publishes for friends to see. */
 export interface MemberSnapshot {
-  version?: 2 | 3 | 4;
+  version?: 2 | 3 | 4 | 5 | 6;
   id: string; // profileId.deviceId
   name: string;
   emoji: string;
+  photoDataUrl?: string;
   level: number;
   xp: number;
   streak: number;

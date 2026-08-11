@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Emerald Dragon</title><desc id="desc">A friendly emerald dragon with melon rind horns.</desc>
+  <rect width="256" height="256" rx="56" fill="#DFF1E7"/><path d="m74 101-31-31 43 2M182 101l31-31-43 2" fill="#B5D889" stroke="#3E5848" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M55 143c0-58 31-100 73-100s73 42 73 100c0 54-29 88-73 88s-73-34-73-88z" fill="#63B88A" stroke="#3E5848" stroke-width="8"/>
+  <path d="M91 64 104 28l24 28 24-28 13 36" fill="#E2F0A5" stroke="#3E5848" stroke-width="8" stroke-linejoin="round"/>
+  <ellipse cx="101" cy="128" rx="8" ry="10" fill="#30483C"/><ellipse cx="155" cy="128" rx="8" ry="10" fill="#30483C"/><ellipse cx="128" cy="164" rx="46" ry="39" fill="#9FD5A2"/>
+  <circle cx="113" cy="157" r="5" fill="#45614F"/><circle cx="143" cy="157" r="5" fill="#45614F"/><path d="M108 178c13 10 27 10 40 0" fill="none" stroke="#45614F" stroke-width="6" stroke-linecap="round"/>
+  <path d="M66 131 36 112l9 38-23 17 38 8M190 131l30-19-9 38 23 17-38 8" fill="#79C499" stroke="#3E5848" stroke-width="7" stroke-linejoin="round"/>
+</svg>

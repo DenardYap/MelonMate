@@ -34,9 +34,14 @@ export default function TabBar() {
         <AppIcon name="plus" size={20} strokeWidth={2.5} />
         <span>{lang === "zh" ? "記錄飲食" : "Log food"}</span>
       </Link>
-      <nav className="tabbar glass-strong">
+      <nav className="tabbar glass-strong" aria-label={lang === "zh" ? "主要導覽" : "Main navigation"}>
         {tabs.map((t) => (
-          <Link key={t.key} href={t.href} className={`tab-item press ${isOn(t.href) ? "on" : ""}`}>
+          <Link
+            key={t.key}
+            href={t.href}
+            className={`tab-item press ${isOn(t.href) ? "on" : ""}`}
+            aria-current={isOn(t.href) ? "page" : undefined}
+          >
             {t.key === "me" ? (
               <LevelProgressRing
                 xp={game.xp}

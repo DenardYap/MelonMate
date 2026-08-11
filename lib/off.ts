@@ -6,7 +6,7 @@ export async function lookupBarcode(code: string): Promise<FoodItem | null> {
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const res = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_en,product_name_zh,brands,nutriments,serving_quantity`,
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_en,product_name_zh,brands,nutriments,serving_size,serving_quantity`,
       { signal: ctrl.signal, headers: { "Accept-Language": "en-US,en;q=0.9" } }
     );
     if (!res.ok) return null;
@@ -17,6 +17,7 @@ export async function lookupBarcode(code: string): Promise<FoodItem | null> {
         product_name_en?: string;
         product_name_zh?: string;
         brands?: string;
+        serving_size?: string;
         serving_quantity?: number | string;
         nutriments?: Record<string, number>;
       };
@@ -60,7 +61,13 @@ export async function lookupBarcode(code: string): Promise<FoodItem | null> {
       per100,
       serving:
         servingG && servingG > 0
-          ? { label: { en: "1 serving", zh: "1 份" }, grams: servingG }
+          ? {
+              label: {
+                en: cleanServingLabel(p.serving_size) || "1 serving",
+                zh: cleanServingLabel(p.serving_size) || "1 份",
+              },
+              grams: servingG,
+            }
           : undefined,
       barcode: code,
       custom: true,
@@ -70,6 +77,10 @@ export async function lookupBarcode(code: string): Promise<FoodItem | null> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function cleanServingLabel(value: string | undefined): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 80) : "";
 }
 
 function round1(x: number): number {

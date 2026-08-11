@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Santa Melon Deer</title><desc id="desc">A gentle deer crowned with Santa Claus melon antlers.</desc>
+  <rect width="256" height="256" rx="56" fill="#F4EBDD"/><path d="M87 92C58 70 55 42 65 24M67 50 46 38M70 65 48 67M169 92c29-22 32-50 22-68M189 50l21-12M186 65l22 2" fill="none" stroke="#705139" stroke-width="9" stroke-linecap="round"/>
+  <path d="m71 107-16-47c32 2 52 13 61 35M185 107l16-47c-32 2-52 13-61 35" fill="#B88B5E" stroke="#5B4635" stroke-width="8" stroke-linejoin="round"/>
+  <ellipse cx="128" cy="144" rx="72" ry="83" fill="#C69868" stroke="#5B4635" stroke-width="8"/><path d="M91 112c8 7 16 7 24 0M141 112c8 7 16 7 24 0" fill="none" stroke="#45382F" stroke-width="7" stroke-linecap="round"/>
+  <ellipse cx="128" cy="153" rx="31" ry="35" fill="#E6BF8D"/><ellipse cx="128" cy="144" rx="11" ry="8" fill="#45382F"/><path d="M128 153c-8 11-18 11-27 3M128 153c8 11 18 11 27 3" fill="none" stroke="#45382F" stroke-width="5" stroke-linecap="round"/>
+  <path d="M79 203c28 15 70 15 98 0" fill="none" stroke="#D8E49D" stroke-width="15" stroke-linecap="round"/><path d="M91 199c25 8 49 8 74 0" fill="none" stroke="#86AA64" stroke-width="5" stroke-linecap="round"/>
+</svg>

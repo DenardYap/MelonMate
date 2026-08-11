@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Ruby Otter</title><desc id="desc">A playful otter hugging a ruby melon slice.</desc>
+  <rect width="256" height="256" rx="56" fill="#E1F1ED"/><path d="M20 215c29-16 52-13 72 4 23 20 48 19 72-1 22-18 45-19 72-5" fill="none" stroke="#78C7C4" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="79" cy="91" r="28" fill="#9A6E4E" stroke="#4F4439" stroke-width="8"/><circle cx="177" cy="91" r="28" fill="#9A6E4E" stroke="#4F4439" stroke-width="8"/>
+  <ellipse cx="128" cy="137" rx="73" ry="84" fill="#A87855" stroke="#4F4439" stroke-width="8"/><ellipse cx="128" cy="153" rx="43" ry="46" fill="#D3AC82"/><circle cx="105" cy="130" r="7" fill="#3F3832"/><circle cx="151" cy="130" r="7" fill="#3F3832"/>
+  <ellipse cx="128" cy="150" rx="9" ry="7" fill="#3F3832"/><path d="M128 157c-7 10-16 10-24 3M128 157c7 10 16 10 24 3" fill="none" stroke="#3F3832" stroke-width="5" stroke-linecap="round"/>
+  <path d="M76 202c12-43 35-66 69-75 4 42-9 77-41 105z" fill="#E85F67" stroke="#4F4439" stroke-width="8" stroke-linejoin="round"/><path d="M76 202c8 12 17 22 28 30 32-28 45-63 41-105-9 33-32 58-69 75z" fill="#9BCB72"/><path d="M86 199c5 7 11 13 18 18 21-21 31-45 30-73" fill="none" stroke="#F7E7B0" stroke-width="8" stroke-linecap="round"/>
+</svg>

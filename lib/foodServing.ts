@@ -7,6 +7,16 @@ export interface ResolvedFoodServing {
   macros: Macros;
 }
 
+export const SERVING_STEP = 0.5;
+export const MIN_SERVINGS = 0.5;
+export const MAX_SERVINGS = 20;
+
+/** Move a review-card serving count in consistent half-serving steps. */
+export function stepServingCount(current: number, direction: -1 | 1): number {
+  const safeCurrent = Number.isFinite(current) ? current : 1;
+  return Math.min(MAX_SERVINGS, Math.max(MIN_SERVINGS, Math.round((safeCurrent + direction * SERVING_STEP) * 2) / 2));
+}
+
 /** Resolves the catalog's default portion from its per-100 g nutrition. */
 export function resolveFoodServing(food: FoodItem, lang: Lang): ResolvedFoodServing {
   const grams = food.serving?.grams ?? 100;

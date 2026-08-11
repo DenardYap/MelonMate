@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Chamoe Bee</title><desc id="desc">A striped Korean melon bee with translucent wings.</desc>
+  <rect width="256" height="256" rx="56" fill="#F2F4D8"/><circle cx="44" cy="49" r="19" fill="#FFF" opacity=".7"/><circle cx="211" cy="200" r="27" fill="#D9E5A8" opacity=".55"/>
+  <path d="M96 103C57 64 28 84 40 121c9 27 35 30 64 5M160 103c39-39 68-19 56 18-9 27-35 30-64 5" fill="#DDF0E6" stroke="#5C5634" stroke-width="7" stroke-linejoin="round" opacity=".9"/>
+  <ellipse cx="128" cy="143" rx="67" ry="82" fill="#F0C745" stroke="#5C5634" stroke-width="8"/>
+  <path d="M83 94c29 14 61 14 90 0M68 129c39 17 81 17 120 0M66 166c41 19 83 19 124 0M80 200c32 13 64 13 96 0" fill="none" stroke="#FFF3B1" stroke-width="10" stroke-linecap="round"/>
+  <path d="M100 72 84 48M156 72l16-24" fill="none" stroke="#5C5634" stroke-width="6" stroke-linecap="round"/><circle cx="82" cy="45" r="7" fill="#8FB060"/><circle cx="174" cy="45" r="7" fill="#8FB060"/>
+  <circle cx="104" cy="128" r="7" fill="#48432E"/><circle cx="152" cy="128" r="7" fill="#48432E"/><path d="M111 150c10 10 24 10 34 0" fill="none" stroke="#48432E" stroke-width="6" stroke-linecap="round"/>
+</svg>

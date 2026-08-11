@@ -77,7 +77,7 @@ describe("buildNativeCampaignNotifications", () => {
     )).toHaveLength(0);
   });
 
-  it("schedules one localized harvest alert per growing plot at its current ready time", () => {
+  it("schedules a localized harvest alert for a lone growing plot", () => {
     const now = new Date(2026, 7, 9, 8, 0);
     const readyAt = now.getTime() + 10 * 60_000;
     const notifications = buildNativeCampaignNotifications(
@@ -102,5 +102,60 @@ describe("buildNativeCampaignNotifications", () => {
     });
     expect(notifications[0].at.getTime()).toBe(readyAt);
     expect(isAutomatedCampaignNotificationId(notifications[0].id)).toBe(true);
+  });
+
+  it("groups harvests within three minutes into one alert after every melon is ready", () => {
+    const now = new Date(2026, 7, 9, 8, 0);
+    const firstReadyAt = now.getTime() + 10 * 60_000;
+    const lastReadyAt = firstReadyAt + 3 * 60_000;
+    const plots = Array.from({ length: 10 }, (_, id) => ({
+      id,
+      variety: id % 2 === 0 ? "honeydew" as const : "cantaloupe" as const,
+      growth: 0,
+      plantedAt: now.getTime(),
+      readyAt: id === 9 ? lastReadyAt : firstReadyAt,
+    }));
+
+    const notifications = buildNativeCampaignNotifications(
+      { ...allCampaigns, mealReminders: false, streakReminders: false },
+      {
+        lang: "en",
+        logs: [],
+        calorieTarget: 2_000,
+        streak: 0,
+        plots,
+        now,
+      }
+    );
+
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      title: "10 melons are ready to harvest",
+      extra: { campaign: "harvest", path: "/garden?source=harvest-reminder" },
+    });
+    expect(notifications[0].at.getTime()).toBe(lastReadyAt);
+  });
+
+  it("keeps harvest groups more than three minutes apart as separate alerts", () => {
+    const now = new Date(2026, 7, 9, 8, 0);
+    const firstReadyAt = now.getTime() + 10 * 60_000;
+    const secondReadyAt = firstReadyAt + 3 * 60_000 + 1;
+    const notifications = buildNativeCampaignNotifications(
+      { ...allCampaigns, mealReminders: false, streakReminders: false },
+      {
+        lang: "en",
+        logs: [],
+        calorieTarget: 2_000,
+        streak: 0,
+        plots: [
+          { id: 2, variety: "honeydew", growth: 0, readyAt: firstReadyAt },
+          { id: 3, variety: "cantaloupe", growth: 0, readyAt: secondReadyAt },
+        ],
+        now,
+      }
+    );
+
+    expect(notifications).toHaveLength(2);
+    expect(notifications.map((item) => item.at.getTime())).toEqual([firstReadyAt, secondReadyAt]);
   });
 });

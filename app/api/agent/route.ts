@@ -8,6 +8,11 @@ import type {
   AgentWorkoutExercisePatch,
 } from "@/lib/agent";
 import { getAgentPersona, type AgentPersona } from "@/lib/agentPersona";
+import {
+  sanitizeProvidedCandidates,
+  searchCurrentRecipeCandidates,
+  type FoodCandidate,
+} from "@/lib/server/foodCandidateSearch";
 
 export const runtime = "nodejs";
 
@@ -216,9 +221,10 @@ export async function POST(request: Request) {
   let lang: "en" | "zh" = "en";
   let context = "{}";
   let persona = getAgentPersona("honeydew");
+  let currentRecipes: FoodCandidate[] = [];
 
   try {
-    const body = (await request.json()) as { messages?: unknown; context?: unknown; lang?: unknown; theme?: unknown };
+    const body = (await request.json()) as { messages?: unknown; context?: unknown; lang?: unknown; theme?: unknown; recipeCatalog?: unknown };
     lang = body.lang === "zh" ? "zh" : "en";
     persona = getAgentPersona(typeof body.theme === "string" ? body.theme : "honeydew");
     messages = Array.isArray(body.messages)
@@ -235,6 +241,8 @@ export async function POST(request: Request) {
           .slice(-12)
       : [];
     context = JSON.stringify(body.context ?? {}).slice(0, 60_000);
+    currentRecipes = sanitizeProvidedCandidates(body.recipeCatalog)
+      .filter((candidate) => candidate.kind === "recipe");
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
@@ -242,6 +250,11 @@ export async function POST(request: Request) {
   if (!messages.length || messages[messages.length - 1]?.role !== "user") {
     return NextResponse.json({ error: "Send Honey a message first." }, { status: 400 });
   }
+  const recipeMatches = searchCurrentRecipeCandidates(
+    [messages[messages.length - 1]?.content ?? ""],
+    currentRecipes,
+    12
+  );
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -255,7 +268,7 @@ export async function POST(request: Request) {
       reasoning: { effort: "low" },
       max_output_tokens: 1800,
       parallel_tool_calls: true,
-      instructions: buildInstructions(lang, context, persona),
+      instructions: buildInstructions(lang, context, persona, recipeMatches),
       input: messages,
       tools: TOOLS,
       tool_choice: "auto",
@@ -307,7 +320,12 @@ export async function POST(request: Request) {
   return NextResponse.json({ reply, actions });
 }
 
-function buildInstructions(lang: "en" | "zh", context: string, persona: AgentPersona): string {
+function buildInstructions(
+  lang: "en" | "zh",
+  context: string,
+  persona: AgentPersona,
+  recipeMatches: FoodCandidate[]
+): string {
   return `You are ${persona.name}, MelonMate's warm, capable ${persona.melon.en} personal assistant. You help with food logging, practical recipes, daily nutrition targets, and workout-plan edits. Be concise, encouraging, and specific without sounding childish. Reply in ${lang === "zh" ? "Traditional Chinese" : "English"}.
 
 Important behavior:
@@ -319,9 +337,13 @@ Important behavior:
 - Do not diagnose or prescribe. For unusually aggressive calorie targets or symptoms, encourage appropriate professional guidance.
 - For a requested recipe, satisfy stated time, diet, allergies, servings, and macros. Draft a complete usable recipe and call draft_recipe.
 - For normal food logging, use the supplied food library when it matches; otherwise make a reasonable U.S. estimate and identify the assumption.
+- Current recipes were searched separately for the latest message. Prefer a genuine match from CURRENT RECIPE MATCHES and scale its exact saved nutrition instead of inventing a generic estimate.
 
 APP CONTEXT JSON:
-${context}`;
+${context}
+
+CURRENT RECIPE MATCHES:
+${JSON.stringify(recipeMatches)}`;
 }
 
 function actionFromToolCall(name: string, payload: unknown): AgentAction | null {

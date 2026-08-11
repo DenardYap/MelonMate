@@ -46,6 +46,21 @@ const OFF_FIELDS = [
 const OFF_USER_AGENT = process.env.OPEN_FOOD_FACTS_USER_AGENT || "MelonMate/1.0 (https://melon-mate.vercel.app)";
 const SEARCH_CACHE = new Map<string, { expiresAt: number; candidates: FoodCandidate[] }>();
 
+/** Explicit product search for the food logger. This is intentionally not used
+ * as typeahead because Open Food Facts applies a low search rate limit. */
+export async function searchOpenFoodProducts(rawQuery: string, k = 12): Promise<FoodCandidate[]> {
+  const query = cleanQuery(rawQuery);
+  if (!query) return [];
+  const limit = Math.min(20, Math.max(1, Math.round(k)));
+  const matches = await searchOpenFoodFacts(query, limit);
+  return matches
+    .map((candidate) => ({ candidate, score: fuzzyScore(query, `${candidate.name} ${candidate.brand ?? ""}`) }))
+    .filter((match) => match.score >= 48)
+    .sort((a, b) => b.score - a.score || a.candidate.name.localeCompare(b.candidate.name))
+    .slice(0, limit)
+    .map(({ candidate }) => candidate);
+}
+
 /** Search local foods/recipes and Open Food Facts, returning the closest k usable candidates. */
 export async function searchFoodCandidates(
   rawQueries: string[],
@@ -92,6 +107,34 @@ export async function searchFoodCandidates(
       return true;
     })
     .slice(0, limit)
+    .map(({ candidate }) => candidate);
+}
+
+/** Search only the current recipe list supplied by this device. Kept separate so
+ * image and chat agents can inspect personal matches before general foods. */
+export function searchCurrentRecipeCandidates(
+  rawQueries: string[],
+  providedCandidates: FoodCandidate[] = [],
+  k = 12
+): FoodCandidate[] {
+  const queries = [...new Set(rawQueries.map(cleanQuery).filter(Boolean))].slice(0, 12);
+  const recipes = providedCandidates.filter((candidate) => candidate.kind === "recipe");
+  if (!queries.length || !recipes.length) return [];
+
+  const seen = new Set<string>();
+  return queries
+    .flatMap((query) => recipes.map((candidate) => ({
+      candidate,
+      score: fuzzyScore(query, `${candidate.name} ${(candidate.ingredients ?? []).join(" ")}`),
+    })))
+    .filter((match) => match.score >= 48)
+    .sort((a, b) => b.score - a.score)
+    .filter(({ candidate }) => {
+      if (seen.has(candidate.id)) return false;
+      seen.add(candidate.id);
+      return true;
+    })
+    .slice(0, Math.min(30, Math.max(1, Math.round(k))))
     .map(({ candidate }) => candidate);
 }
 

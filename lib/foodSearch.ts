@@ -76,13 +76,15 @@ export function searchFoodCatalog(
   for (const item of foods) {
     const en = scoreText(query, item.name.en);
     const zh = scoreText(query, item.name.zh);
-    const score = Math.max(en, zh);
+    let aliasScore = 0;
+    for (const alias of item.aliases ?? []) aliasScore = Math.max(aliasScore, scoreText(query, alias));
+    const score = Math.max(en, zh, aliasScore);
     if (score > 0) {
       results.push({
         kind: "food",
         item,
         score: score + (item.custom ? 8 : 0),
-        matchedOn: item.custom ? "My ingredient" : "Food library",
+        matchedOn: item.custom ? "My ingredient" : item.source?.name ?? "Food library",
       });
     }
   }
@@ -111,7 +113,21 @@ export function searchFoodCatalog(
     }
   }
 
-  return results
-    .sort((a, b) => b.score - a.score || a.item.name.en.localeCompare(b.item.name.en))
-    .slice(0, Math.max(1, limit));
+  const sorted = results
+    .sort((a, b) => b.score - a.score || a.item.name.en.localeCompare(b.item.name.en));
+
+  // Different source datasets sometimes use the same visible English label with a
+  // different translation or source ID (for example, several rows simply named
+  // "Apple"). After relevance sorting, keep the best record for that label. A
+  // custom item wins because its score bonus places it first.
+  const seenLabels = new Set<string>();
+  const distinct: FoodSearchResult[] = [];
+  for (const result of sorted) {
+    const key = `${result.kind}|${normalize(result.item.name.en) || normalize(result.item.name.zh)}`;
+    if (seenLabels.has(key)) continue;
+    seenLabels.add(key);
+    distinct.push(result);
+    if (distinct.length >= Math.max(1, limit)) break;
+  }
+  return distinct;
 }

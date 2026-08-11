@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DAILY_XP_REWARD,
   combinedXp,
+  healthRewardBetweenTiers,
   isDailyXpEligible,
   levelFromXp,
   levelProgressFromXp,
@@ -31,17 +32,30 @@ describe("daily XP", () => {
 });
 
 describe("Apple Health XP milestones", () => {
-  it("grows each 3,000-step reward by roughly 35 percent", () => {
-    expect([1, 2, 3, 4, 5].map(xpForStepTier)).toEqual([20, 27, 36, 49, 66]);
-    expect(stepTierFromCount(8_999)).toBe(2);
-    expect(stepTierFromCount(9_000)).toBe(3);
-    expect(stepXpBetweenTiers(0, 3)).toBe(83);
+  it("splits each growing 3,000-step reward across 1,000-step milestones", () => {
+    expect([1, 2, 3, 4, 5, 6].map(xpForStepTier)).toEqual([7, 6, 7, 9, 9, 9]);
+    expect(stepTierFromCount(8_999)).toBe(8);
+    expect(stepTierFromCount(9_000)).toBe(9);
+    expect(stepXpBetweenTiers(0, 9)).toBe(83);
   });
 
-  it("awards standing XP in 30-minute increments", () => {
-    expect(standTierFromMinutes(59)).toBe(1);
-    expect(standTierFromMinutes(60)).toBe(2);
-    expect(standXpBetweenTiers(0, 2)).toBe(24);
+  it("awards proportionately scaled standing XP in 10-minute increments", () => {
+    expect(standTierFromMinutes(59)).toBe(5);
+    expect(standTierFromMinutes(60)).toBe(6);
+    expect(standXpBetweenTiers(0, 6)).toBe(24);
+  });
+
+  it("reports a step reward breakdown for a newly crossed 1,000-step milestone", () => {
+    expect(healthRewardBetweenTiers(
+      { stepTier: 0, standTier: 0 },
+      { stepTier: 1, standTier: 0 }
+    )).toEqual({
+      stepXp: 7,
+      standXp: 0,
+      stepMilestones: 1,
+      standMilestones: 0,
+      totalXp: 7,
+    });
   });
 });
 

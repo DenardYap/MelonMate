@@ -15,6 +15,7 @@ import type {
   MealSlot,
   MemberSnapshot,
   FriendMealPlanSnapshot,
+  FriendSharingSettings,
   Profile,
   Recipe,
   SessionExercise,
@@ -32,13 +33,12 @@ import {
   combinedXp,
   DAILY_XP_REWARD,
   FOOD_LOG_XP_REWARD,
+  healthRewardBetweenTiers,
   isDailyXpEligible,
   levelFromXp,
   MAX_DAILY_REWARDED_FOOD_LOGS,
   standTierFromMinutes,
-  standXpBetweenTiers,
   stepTierFromCount,
-  stepXpBetweenTiers,
 } from "./game";
 import { useGardenStore } from "./gardenStore";
 import { isThemeUnlocked } from "./themes";
@@ -121,6 +121,8 @@ export interface Store {
   // shared workspace (friends sync)
   ws: {
     code: string | null;
+    /** Every one-to-one invite this device created or joined. `code` is the newest invite. */
+    codes: string[];
     deviceId: string;
     lastSync: number | null;
     error: string | null;
@@ -129,6 +131,9 @@ export interface Store {
   sharedRev: number;
   sharedDirty: boolean;
   friends: Record<string, MemberSnapshot>;
+  /** Connection code and outbound sharing preferences, keyed by friend member id. */
+  friendCodes: Record<string, string>;
+  friendSharing: Record<string, FriendSharingSettings>;
 
   // actions
   setLang: (l: Lang) => void;
@@ -151,6 +156,8 @@ export interface Store {
   selectRecipe: (id: string) => void;
   unselectRecipe: (id: string) => void;
   toggleSharedRecipe: (id: string) => void;
+  updateFriendSharing: (friendId: string, patch: Partial<FriendSharingSettings>) => void;
+  toggleFriendSharedRecipe: (friendId: string, recipeId: string) => void;
   importFriendRecipe: (friendId: string, recipe: Recipe) => string;
   importFriendMealPlan: (
     friendId: string,
@@ -173,6 +180,8 @@ export interface Store {
   addGroceriesBulk: (items: Omit<GroceryItem, "id">[]) => void;
 
   updatePlan: (planId: string, mut: (p: WorkoutPlan) => WorkoutPlan) => void;
+  addPlan: (plan: WorkoutPlan) => void;
+  deletePlan: (planId: string) => void;
   addCustomExercise: (exercise: CustomExercise) => void;
 
   startSession: (s: Omit<WorkoutSession, "id" | "startedAt" | "prs">) => string;
@@ -193,6 +202,29 @@ export interface Store {
 
   importAll: (data: Partial<Store>) => void;
   resetAll: () => void;
+}
+
+export function migrateHealthXpClaimTiers(state: Partial<Store>): Partial<Store> {
+  return {
+    ...state,
+    game: Object.fromEntries(
+      Object.entries(state.game ?? {}).map(([profileId, game]) => [
+        profileId,
+        {
+          ...game,
+          healthXpClaims: Object.fromEntries(
+            Object.entries(game.healthXpClaims ?? {}).map(([date, claim]) => [
+              date,
+              {
+                stepTier: claim.stepTier * 3,
+                standTier: claim.standTier * 3,
+              },
+            ])
+          ),
+        },
+      ])
+    ),
+  };
 }
 
 export const useStore = create<Store>()(
@@ -221,10 +253,12 @@ export const useStore = create<Store>()(
 
       game: {},
 
-      ws: { code: null, deviceId: newId(), lastSync: null, error: null, syncing: false },
+      ws: { code: null, codes: [], deviceId: newId(), lastSync: null, error: null, syncing: false },
       sharedRev: 0,
       sharedDirty: false,
       friends: {},
+      friendCodes: {},
+      friendSharing: {},
 
       setLang: (l) => set({ lang: l }),
       setTheme: (theme) =>
@@ -410,6 +444,44 @@ export const useStore = create<Store>()(
           sharedDirty: true,
         })),
 
+      updateFriendSharing: (friendId, patch) =>
+        set((s) => {
+          const current = s.friendSharing[friendId] ?? {
+            shareMealPlan: false,
+            shareWorkoutPlan: false,
+            sharedRecipeIds: [],
+          };
+          return {
+            friendSharing: {
+              ...s.friendSharing,
+              [friendId]: { ...current, ...patch },
+            },
+            sharedDirty: true,
+          };
+        }),
+
+      toggleFriendSharedRecipe: (friendId, recipeId) =>
+        set((s) => {
+          const current = s.friendSharing[friendId] ?? {
+            shareMealPlan: false,
+            shareWorkoutPlan: false,
+            sharedRecipeIds: [],
+          };
+          const selected = current.sharedRecipeIds.includes(recipeId);
+          return {
+            friendSharing: {
+              ...s.friendSharing,
+              [friendId]: {
+                ...current,
+                sharedRecipeIds: selected
+                  ? current.sharedRecipeIds.filter((id) => id !== recipeId)
+                  : [recipeId, ...current.sharedRecipeIds],
+              },
+            },
+            sharedDirty: true,
+          };
+        }),
+
       importFriendRecipe: (friendId, recipe) => {
         const copiedId = friendCopyId(friendId, "recipe", recipe.id);
         set((s) => {
@@ -578,6 +650,34 @@ export const useStore = create<Store>()(
           sharedDirty: true,
         })),
 
+      addPlan: (plan) =>
+        set((s) => ({
+          plans: [structuredClone(plan), ...s.plans],
+          sharedDirty: true,
+        })),
+
+      deletePlan: (planId) =>
+        set((s) => {
+          const deletingActivePlan = s.profiles.some(
+            (profile) => profile.id === s.activeProfileId && profile.planId === planId
+          );
+          return {
+            plans: s.plans.filter((plan) => plan.id !== planId),
+            profiles: s.profiles.map((profile) =>
+              profile.planId === planId ? { ...profile, planId: "" } : profile
+            ),
+            friendSharing: Object.fromEntries(
+              Object.entries(s.friendSharing).map(([friendId, settings]) => [
+                friendId,
+                settings.workoutPlanId === planId || (deletingActivePlan && !settings.workoutPlanId)
+                  ? { ...settings, shareWorkoutPlan: false, workoutPlanId: undefined }
+                  : settings,
+              ])
+            ),
+            sharedDirty: true,
+          };
+        }),
+
       addCustomExercise: (exercise) =>
         set((s) => {
           const exists = s.customExercises.some(
@@ -695,8 +795,7 @@ export const useStore = create<Store>()(
           const prior = claims[snapshot.date] ?? { stepTier: 0, standTier: 0 };
           const stepTier = stepTierFromCount(snapshot.steps);
           const standTier = standTierFromMinutes(snapshot.standMinutes);
-          awardedXp = stepXpBetweenTiers(prior.stepTier, stepTier)
-            + standXpBetweenTiers(prior.standTier, standTier);
+          awardedXp = healthRewardBetweenTiers(prior, { stepTier, standTier }).totalXp;
           claims[snapshot.date] = {
             stepTier: Math.max(prior.stepTier, stepTier),
             standTier: Math.max(prior.standTier, standTier),
@@ -801,15 +900,17 @@ export const useStore = create<Store>()(
           water: {},
           health: {},
           game: {},
-          ws: { code: null, deviceId: newId(), lastSync: null, error: null, syncing: false },
+          ws: { code: null, codes: [], deviceId: newId(), lastSync: null, error: null, syncing: false },
           sharedRev: 0,
           sharedDirty: false,
           friends: {},
+          friendCodes: {},
+          friendSharing: {},
         })),
     }),
     {
       name: "melonmate-v1",
-      version: 12,
+      version: 14,
       migrate: (persisted, version) => {
         let state = version < 11
           ? migrateLegacyCalorieData(persisted as Partial<Store>)
@@ -885,6 +986,29 @@ export const useStore = create<Store>()(
           state = {
             ...state,
             planner: repairLegacyRecipeYieldMultipliers(state.planner ?? {}, state.recipes ?? []),
+          };
+        }
+        if (version < 13) state = migrateHealthXpClaimTiers(state);
+        if (version < 14) {
+          const legacyCode = state.ws?.code ?? null;
+          const activeProfile = state.profiles?.find((profile) => profile.id === state.activeProfileId) ?? state.profiles?.[0];
+          const existingFriends = state.friends ?? {};
+          state = {
+            ...state,
+            ws: state.ws ? {
+              ...state.ws,
+              codes: legacyCode ? [legacyCode] : [],
+            } : state.ws,
+            friendCodes: Object.fromEntries(
+              legacyCode ? Object.keys(existingFriends).map((friendId) => [friendId, legacyCode]) : []
+            ),
+            friendSharing: Object.fromEntries(
+              Object.keys(existingFriends).map((friendId) => [friendId, {
+                shareMealPlan: Boolean(activeProfile?.shareMealPlan),
+                shareWorkoutPlan: Boolean(activeProfile?.shareWorkoutPlan),
+                sharedRecipeIds: [...(activeProfile?.sharedRecipeIds ?? [])],
+              }])
+            ),
           };
         }
         return state;

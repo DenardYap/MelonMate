@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Golden Capy</title><desc id="desc">A calm capybara soaking with a golden melon on its head.</desc>
+  <rect width="256" height="256" rx="56" fill="#E5F1DF"/><path d="M18 207c30-16 53-13 73 4 23 20 48 19 72-1 22-18 45-19 74-4" fill="none" stroke="#82BFA1" stroke-width="14" stroke-linecap="round"/>
+  <ellipse cx="128" cy="145" rx="82" ry="78" fill="#AC7D56" stroke="#55483B" stroke-width="8"/><circle cx="73" cy="108" r="24" fill="#AC7D56" stroke="#55483B" stroke-width="8"/><circle cx="183" cy="108" r="24" fill="#AC7D56" stroke="#55483B" stroke-width="8"/>
+  <circle cx="100" cy="140" r="7" fill="#403933"/><circle cx="156" cy="140" r="7" fill="#403933"/><ellipse cx="128" cy="163" rx="31" ry="24" fill="#D0A77C"/><ellipse cx="128" cy="156" rx="9" ry="7" fill="#403933"/><path d="M128 164v10M116 174h24" stroke="#403933" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="128" cy="71" rx="43" ry="29" fill="#F0C957" stroke="#55483B" stroke-width="7"/><path d="M94 66c23 10 46 10 69 0M104 47c-4 17-3 32 4 47M145 47c4 17 3 32-4 47" fill="none" stroke="#FFF1A7" stroke-width="5" stroke-linecap="round"/>
+  <path d="M128 42c-1-13 5-21 15-27M143 27c15-7 28-2 34 8-11 11-25 12-35 5" fill="#7FA564" stroke="#55483B" stroke-width="5" stroke-linecap="round"/>
+</svg>

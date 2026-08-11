@@ -12,7 +12,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
-    private func configureAudioSession() {
+    static func configureAudioSessionForMixing() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
@@ -20,6 +20,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         } catch {
             print("Unable to activate app audio: \(error.localizedDescription)")
         }
+    }
+
+    private func configureAudioSession() {
+        AppDelegate.configureAudioSessionForMixing()
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -37,7 +41,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // WebKit and media plugins can replace the shared category while the app
+        // is inactive. Restore non-interrupting UI audio on every activation.
+        configureAudioSession()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Moon Bunny</title><desc id="desc">A lavender bunny peeking through a crescent moon melon.</desc>
+  <rect width="256" height="256" rx="56" fill="#E9E6FA"/><circle cx="49" cy="54" r="5" fill="#FFF"/><circle cx="207" cy="74" r="7" fill="#FFF"/><path d="m197 34 4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#FFF4B8"/>
+  <path d="M78 115C57 77 55 35 76 29c20-6 35 38 36 73M178 115c21-38 23-80 2-86-20-6-35 38-36 73" fill="#CABFF0" stroke="#51496B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M82 94c-8-22-8-43-2-50M174 94c8-22 8-43 2-50" fill="none" stroke="#F4D6DF" stroke-width="10" stroke-linecap="round"/>
+  <ellipse cx="128" cy="142" rx="68" ry="65" fill="#D7CEF5" stroke="#51496B" stroke-width="8"/>
+  <ellipse cx="104" cy="137" rx="7" ry="9" fill="#48415D"/><ellipse cx="152" cy="137" rx="7" ry="9" fill="#48415D"/>
+  <path d="m121 154 7 6 7-6M128 160v9M128 169c-8 8-16 8-23 1M128 169c8 8 16 8 23 1" fill="none" stroke="#48415D" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="90" cy="159" rx="12" ry="7" fill="#ECAEC3" opacity=".65"/><ellipse cx="166" cy="159" rx="12" ry="7" fill="#ECAEC3" opacity=".65"/>
+  <path d="M68 133c-6 64 44 102 96 84 35-12 56-46 48-83-11 31-39 51-72 49-38-2-64-22-72-50z" fill="#F6D56E" stroke="#51496B" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M81 166c13 28 42 43 73 37" fill="none" stroke="#FFF1AE" stroke-width="8" stroke-linecap="round"/>
+</svg>

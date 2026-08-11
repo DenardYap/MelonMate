@@ -24,6 +24,7 @@ const config: CapacitorConfig = {
     LocalNotifications: {
       smallIcon: "ic_stat_melonmate",
       iconColor: "#6d9d52",
+      presentationOptions: ["badge", "sound", "banner", "list"],
     },
     StatusBar: {
       style: "LIGHT",

@@ -3,15 +3,16 @@ export const FOOD_LOG_XP_REWARD = 5;
 export const MAX_DAILY_REWARDED_FOOD_LOGS = 6;
 export const DAILY_XP_REWARD = 200;
 
-export const STEP_INCREMENT = 3_000;
-export const STEP_DAILY_TIER_CAP = 10;
+export const STEP_INCREMENT = 1_000;
+export const STEP_DAILY_TIER_CAP = 30;
 export const STEP_XP_BASE = 20;
 export const STEP_XP_GROWTH = 1.35;
 export const STEP_XP_PER_TIER_CAP = 150;
+const STEP_REWARD_SPLIT = 3;
 
-export const STAND_MINUTES_INCREMENT = 30;
-export const STAND_DAILY_TIER_CAP = 8;
-export const STAND_XP_PER_TIER = 12;
+export const STAND_MINUTES_INCREMENT = 10;
+export const STAND_DAILY_TIER_CAP = 24;
+export const STAND_XP_PER_TIER = 4;
 
 /** Healthy-day XP and farm-earned XP now contribute to one user total. */
 export function combinedXp(healthyDayXp: number, farmEarnedXp: number): number {
@@ -49,13 +50,20 @@ export function stepTierFromCount(steps: number): number {
   return Math.min(STEP_DAILY_TIER_CAP, Math.floor(Math.max(0, steps) / STEP_INCREMENT));
 }
 
-/** The reward for crossing one 3,000-step milestone. */
+/**
+ * The reward for crossing one 1,000-step milestone. Each former 3,000-step
+ * reward is split across three tiers so the XP curve stays proportionate.
+ */
 export function xpForStepTier(tier: number): number {
   if (tier < 1) return 0;
-  return Math.min(
+  const wholeTier = Math.ceil(tier / STEP_REWARD_SPLIT);
+  const wholeTierReward = Math.min(
     STEP_XP_PER_TIER_CAP,
-    Math.round(STEP_XP_BASE * STEP_XP_GROWTH ** (tier - 1))
+    Math.round(STEP_XP_BASE * STEP_XP_GROWTH ** (wholeTier - 1))
   );
+  const splitPosition = (tier - 1) % STEP_REWARD_SPLIT;
+  return Math.round(wholeTierReward * (splitPosition + 1) / STEP_REWARD_SPLIT)
+    - Math.round(wholeTierReward * splitPosition / STEP_REWARD_SPLIT);
 }
 
 export function stepXpBetweenTiers(previousTier: number, currentTier: number): number {
@@ -77,6 +85,38 @@ export function standXpBetweenTiers(previousTier: number, currentTier: number): 
   const from = Math.max(0, Math.min(STAND_DAILY_TIER_CAP, Math.floor(previousTier)));
   const to = Math.max(from, Math.min(STAND_DAILY_TIER_CAP, Math.floor(currentTier)));
   return (to - from) * STAND_XP_PER_TIER;
+}
+
+export interface HealthMilestoneTiers {
+  stepTier: number;
+  standTier: number;
+}
+
+export interface HealthRewardBreakdown {
+  stepXp: number;
+  standXp: number;
+  stepMilestones: number;
+  standMilestones: number;
+  totalXp: number;
+}
+
+export function healthRewardBetweenTiers(
+  previous: HealthMilestoneTiers,
+  current: HealthMilestoneTiers
+): HealthRewardBreakdown {
+  const previousStepTier = Math.max(0, Math.min(STEP_DAILY_TIER_CAP, Math.floor(previous.stepTier)));
+  const currentStepTier = Math.max(previousStepTier, Math.min(STEP_DAILY_TIER_CAP, Math.floor(current.stepTier)));
+  const previousStandTier = Math.max(0, Math.min(STAND_DAILY_TIER_CAP, Math.floor(previous.standTier)));
+  const currentStandTier = Math.max(previousStandTier, Math.min(STAND_DAILY_TIER_CAP, Math.floor(current.standTier)));
+  const stepXp = stepXpBetweenTiers(previousStepTier, currentStepTier);
+  const standXp = standXpBetweenTiers(previousStandTier, currentStandTier);
+  return {
+    stepXp,
+    standXp,
+    stepMilestones: currentStepTier - previousStepTier,
+    standMilestones: currentStandTier - previousStandTier,
+    totalXp: stepXp + standXp,
+  };
 }
 
 /** A day qualifies after 3+ logged items without exceeding the calorie cap. */

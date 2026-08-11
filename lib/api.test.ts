@@ -18,11 +18,25 @@ afterEach(() => {
 });
 
 describe("native API routing", () => {
+  it("keeps website API calls on the current origin", () => {
+    process.env.NEXT_PUBLIC_API_ORIGIN = "https://api.example.com/";
+    delete process.env.NEXT_PUBLIC_CAPACITOR_BUILD;
+
+    expect(apiUrl("api/food-transcribe")).toBe("/api/food-transcribe");
+  });
+
   it("uses the configured hosted API origin", () => {
     process.env.NEXT_PUBLIC_API_ORIGIN = "https://api.example.com/";
     process.env.NEXT_PUBLIC_CAPACITOR_BUILD = "1";
 
     expect(apiUrl("api/food-text-estimate")).toBe("https://api.example.com/api/food-text-estimate");
+  });
+
+  it("rejects a malformed hosted origin in a native build", () => {
+    process.env.NEXT_PUBLIC_API_ORIGIN = "melon-mate.vercel.app";
+    process.env.NEXT_PUBLIC_CAPACITOR_BUILD = "1";
+
+    expect(() => apiUrl("api/food-transcribe")).toThrow(NativeApiOriginMissingError);
   });
 
   it("throws a recognizable configuration error in an unconfigured native build", () => {

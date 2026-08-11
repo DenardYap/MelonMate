@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Honeydew Frog</title><desc id="desc">A mint green frog resting in a honeydew rind.</desc>
+  <rect width="256" height="256" rx="56" fill="#DFF2DF"/><circle cx="48" cy="48" r="20" fill="#BFE2B4"/><circle cx="212" cy="202" r="29" fill="#B8DDC1" opacity=".65"/>
+  <circle cx="85" cy="91" r="31" fill="#8CCB84" stroke="#40583E" stroke-width="8"/><circle cx="171" cy="91" r="31" fill="#8CCB84" stroke="#40583E" stroke-width="8"/>
+  <ellipse cx="128" cy="143" rx="82" ry="75" fill="#91D08B" stroke="#40583E" stroke-width="8"/><circle cx="86" cy="91" r="10" fill="#354B35"/><circle cx="170" cy="91" r="10" fill="#354B35"/><circle cx="82" cy="86" r="3" fill="#FFF"/><circle cx="166" cy="86" r="3" fill="#FFF"/>
+  <path d="M94 145c20 20 48 20 68 0" fill="none" stroke="#40583E" stroke-width="8" stroke-linecap="round"/><ellipse cx="73" cy="139" rx="13" ry="7" fill="#F0A4A0" opacity=".65"/><ellipse cx="183" cy="139" rx="13" ry="7" fill="#F0A4A0" opacity=".65"/>
+  <path d="M47 174c25 38 137 48 162 0-17 52-48 67-81 67s-64-15-81-67z" fill="#DDF1B0" stroke="#40583E" stroke-width="8" stroke-linejoin="round"/><path d="M62 183c37 19 95 20 132 0" fill="none" stroke="#8FB76E" stroke-width="10" stroke-linecap="round"/>
+</svg>

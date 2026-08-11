@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { connectAndSyncAppleHealth } from "@/lib/appleHealth";
+import { connectAndSyncAppleHealth, isAppleHealthConnected } from "@/lib/appleHealth";
 import {
   enablePushNotifications,
   isNativeApp,
   notificationState,
-  sendPushTestNotification,
   setAutomatedCampaign,
   successHaptic,
 } from "@/lib/nativeApp";
@@ -18,17 +17,19 @@ import { AppIcon } from "@/components/icons";
 export default function NativeAppSettings() {
   const lang = useStore((state) => state.lang);
   const [native, setNative] = useState(false);
+  const [healthConnected, setHealthConnected] = useState(false);
   const [permission, setPermission] = useState<string>("prompt");
   const [campaigns, setCampaigns] = useState<NativeCampaignPreferences>({
     mealReminders: false,
     streakReminders: false,
     harvestReminders: false,
   });
-  const [busy, setBusy] = useState<"health" | "push" | "pushTest" | CampaignPreferenceKey | null>(null);
+  const [busy, setBusy] = useState<"health" | "push" | CampaignPreferenceKey | null>(null);
 
   useEffect(() => {
     const available = isNativeApp();
     setNative(available);
+    setHealthConnected(isAppleHealthConnected());
     if (available) {
       void notificationState().then((state) => {
         setPermission(state.permission);
@@ -46,12 +47,15 @@ export default function NativeAppSettings() {
       if (result.status === "synced") {
         await successHaptic();
         toast(result.xp > 0 ? `Apple Health · +${result.xp} XP` : (lang === "zh" ? "Apple 健康已同步" : "Apple Health is up to date"), "heart");
+      } else if (result.status === "error") {
+        toast(lang === "zh" ? "無法讀取 Apple 健康，請再試一次" : "Couldn’t read Apple Health. Please try again.", "warning");
       } else {
         toast(lang === "zh" ? "無法取得健康資料權限" : "Health permission was not available", "warning");
       }
     } catch {
       toast(lang === "zh" ? "Apple 健康同步失敗" : "Apple Health sync failed", "warning");
     } finally {
+      setHealthConnected(isAppleHealthConnected());
       setBusy(null);
     }
   };
@@ -78,27 +82,17 @@ export default function NativeAppSettings() {
     }
   };
 
-  const testPush = async () => {
-    setBusy("pushTest");
-    try {
-      await sendPushTestNotification();
-      toast(lang === "zh" ? "測試推播已送出" : "Test push sent", "checkCircle");
-    } catch {
-      toast(lang === "zh" ? "測試推播失敗，請稍後再試" : "Test push failed — please try again", "warning");
-    } finally {
-      setBusy(null);
-    }
-  };
-
   return (
     <GlassCard className="px-4 py-2 mb-4">
-      <button type="button" className="row row-button press" onClick={() => void syncHealth()} disabled={busy !== null}>
-        <div className="flex-1">
-          <div className="font-semibold icon-label"><AppIcon name="heart" size={18} /> Apple Health</div>
-          <div className="t-cap mt-1">{lang === "zh" ? "同步步數與站立時間" : "Sync steps and standing time"}</div>
-        </div>
-        <span className="chip">{busy === "health" ? "…" : (lang === "zh" ? "同步" : "Sync")}</span>
-      </button>
+      {!healthConnected && (
+        <button type="button" className="row row-button press" onClick={() => void syncHealth()} disabled={busy !== null}>
+          <div className="flex-1">
+            <div className="font-semibold icon-label"><AppIcon name="heart" size={18} /> Apple Health</div>
+            <div className="t-cap mt-1">{lang === "zh" ? "連接後自動同步步數與站立時間" : "Connect once to sync steps and standing automatically"}</div>
+          </div>
+          <span className="chip">{busy === "health" ? "…" : (lang === "zh" ? "連接" : "Connect")}</span>
+        </button>
+      )}
       <button type="button" className="row row-button press" onClick={() => void enablePush()} disabled={busy !== null || permission === "granted"}>
         <div className="flex-1">
           <div className="font-semibold icon-label"><AppIcon name="bell" size={18} /> {lang === "zh" ? "推播通知" : "Push notifications"}</div>
@@ -106,15 +100,6 @@ export default function NativeAppSettings() {
         </div>
         <span className="chip">{permission === "granted" ? <AppIcon name="check" size={15} /> : (busy === "push" ? "…" : (lang === "zh" ? "開啟" : "Enable"))}</span>
       </button>
-      {permission === "granted" && (
-        <button type="button" className="row row-button press" onClick={() => void testPush()} disabled={busy !== null}>
-          <div className="flex-1">
-            <div className="font-semibold icon-label"><AppIcon name="bell" size={18} /> {lang === "zh" ? "測試遠端推播" : "Test remote push"}</div>
-            <div className="t-cap mt-1">{lang === "zh" ? "透過 Vercel 與 Apple 推播服務傳送" : "Sends through Vercel and Apple Push Notification service"}</div>
-          </div>
-          <span className="chip">{busy === "pushTest" ? "…" : (lang === "zh" ? "測試" : "Test")}</span>
-        </button>
-      )}
       <button
         type="button"
         className="row row-button press"
@@ -150,7 +135,7 @@ export default function NativeAppSettings() {
       >
         <div className="flex-1">
           <div className="font-semibold icon-label"><AppIcon name="fruit" size={18} /> {lang === "zh" ? "採收提醒" : "Harvest reminders"}</div>
-          <div className="t-cap mt-1">{lang === "zh" ? "每顆瓜成熟時立即通知" : "Alerts exactly when each growing melon is ready"}</div>
+          <div className="t-cap mt-1">{lang === "zh" ? "3 分鐘內成熟的瓜會合併通知" : "Melons ready within 3 minutes share one alert"}</div>
         </div>
         <span className={`chip ${campaigns.harvestReminders ? "chip-on" : ""}`}>{campaigns.harvestReminders ? (lang === "zh" ? "開" : "On") : (lang === "zh" ? "關" : "Off")}</span>
       </button>

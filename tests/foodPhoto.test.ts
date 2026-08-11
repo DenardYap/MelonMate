@@ -101,4 +101,25 @@ describe("food photo estimates", () => {
       "Apple: Matched Apple from MelonMate food library",
     ]);
   });
+
+  it("does not invent a gram weight when a nutrition label only gives a count", () => {
+    const result = sanitizeFoodPhotoEstimate({
+      description: "Nutrition Facts for a packaged snack.",
+      items: [{
+        ...estimate,
+        name: "Packaged snack",
+        portion_description: "3 pieces",
+        estimated_grams: null,
+        cal: 160,
+        protein_g: 3,
+        carbs_g: 22,
+        fat_g: 7,
+        assumptions: ["Read from the per-serving column; 4 servings per container"],
+      }],
+    });
+
+    expect(result.items[0].estimated_grams).toBeNull();
+    expect(result.items[0].portion_description).toBe("3 pieces");
+    expect(result.items[0].cal).toBe(160);
+  });
 });

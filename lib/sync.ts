@@ -12,10 +12,10 @@ import { apiFetch } from "./api";
 /**
  * Client sync engine for friend progress.
  *
- * One invite code represents a friend circle. Every phone publishes only its
- * own progress snapshot and reads everyone else's snapshot. Detailed food logs,
- * groceries, goals, and other private device data never sync. Plans and recipes
- * are included only when the owner explicitly opts in.
+ * Each invite code represents one friend connection. A device may create or
+ * join many codes, publishes a tailored snapshot into each connection, and
+ * merges those friends into one list. Detailed food logs, groceries, goals,
+ * and other private device data never sync.
  */
 
 export function normalizeCode(raw: string): string | null {
@@ -27,7 +27,12 @@ export function memberIdFor(profileId: string, deviceId: string): string {
   return `${profileId}.${deviceId.slice(0, 8)}`;
 }
 
-export function buildMemberSnapshot(): MemberSnapshot {
+export function connectionCodes(ws: { code: string | null; codes?: string[] }): string[] {
+  return [...new Set([...(ws.codes ?? []), ...(ws.code ? [ws.code] : [])])];
+}
+
+/** `friendId: null` shares progress only; `undefined` preserves legacy global sharing. */
+export function buildMemberSnapshot(friendId?: string | null): MemberSnapshot {
   const s = useStore.getState();
   const profile = s.profiles.find((p) => p.id === s.activeProfileId) ?? s.profiles[0];
   const game = s.game[profile.id];
@@ -63,7 +68,16 @@ export function buildMemberSnapshot(): MemberSnapshot {
     )
   );
   const mealRecipes = s.recipes.filter((recipe) => plannedRecipeIds.has(recipe.id));
-  const sharedRecipeIds = new Set(profile.sharedRecipeIds ?? []);
+  const sharing = friendId
+    ? s.friendSharing[friendId] ?? { shareMealPlan: false, shareWorkoutPlan: false, sharedRecipeIds: [] }
+    : friendId === undefined
+      ? {
+          shareMealPlan: Boolean(profile.shareMealPlan),
+          shareWorkoutPlan: Boolean(profile.shareWorkoutPlan),
+          sharedRecipeIds: profile.sharedRecipeIds ?? [],
+        }
+      : { shareMealPlan: false, shareWorkoutPlan: false, sharedRecipeIds: [] };
+  const sharedRecipeIds = new Set(sharing.sharedRecipeIds);
   const sharedRecipes = s.recipes.filter((recipe) => sharedRecipeIds.has(recipe.id));
 
   const completedSessions = (s.sessions[profile.id] ?? [])
@@ -78,14 +92,17 @@ export function buildMemberSnapshot(): MemberSnapshot {
     ),
     prs: session.prs,
   });
-  const workoutPlan = s.plans.find((plan) => plan.id === profile.planId);
+  const workoutPlan = s.plans.find(
+    (plan) => plan.id === (sharing.workoutPlanId ?? profile.planId)
+  );
   const workoutSummaries = completedSessions.map(sessionSummary);
 
   return {
-    version: 4,
+    version: 6,
     id: memberIdFor(profile.id, s.ws.deviceId),
     name: profile.name,
     emoji: profile.emoji,
+    photoDataUrl: profile.photoDataUrl,
     level,
     xp,
     streak: game?.streak ?? 0,
@@ -112,11 +129,11 @@ export function buildMemberSnapshot(): MemberSnapshot {
       totalHarvests: farm.totalHarvests,
       lastTended: farm.lastTended,
     },
-    mealPlan: profile.shareMealPlan
+    mealPlan: sharing.shareMealPlan
       ? { days: mealDays, recipes: mealRecipes }
       : undefined,
     sharedRecipes: sharedRecipes.length ? sharedRecipes : undefined,
-    workoutPlan: profile.shareWorkoutPlan && workoutPlan
+    workoutPlan: sharing.shareWorkoutPlan && workoutPlan
       ? { plan: workoutPlan, unit: profile.unit }
       : undefined,
     workouts: {
@@ -172,56 +189,94 @@ async function createApi(member: MemberSnapshot): Promise<{ code: string; doc: W
 /** Pull + merge + push. Safe to call repeatedly. */
 export async function syncNow(): Promise<void> {
   const s = useStore.getState();
-  const code = s.ws.code;
-  if (!code || s.ws.syncing) return;
+  const codes = connectionCodes(s.ws);
+  if (!codes.length || s.ws.syncing) return;
   s.setWs({ syncing: true });
-  try {
-    const remote = await api(code);
+  const selfId = memberIdFor(s.activeProfileId, s.ws.deviceId);
+  const previousFriends = s.friends;
+  const nextFriends = { ...previousFriends };
+  const nextFriendCodes = { ...s.friendCodes };
+  let latestRev = s.sharedRev;
+  let firstError: string | null = null;
+  let successes = 0;
 
-    const updated = await api(code, {
-      method: "PUT",
-      body: JSON.stringify({ member: buildMemberSnapshot() }),
-    });
-    const st = useStore.getState();
-    st.applyMembers(updated.members);
-    useStore.setState({ sharedRev: remote.rev, sharedDirty: false });
-    st.setWs({ lastSync: Date.now(), error: null, syncing: false });
-  } catch (e) {
-    useStore.getState().setWs({
-      error: e instanceof Error ? e.message : "sync-failed",
-      syncing: false,
+  await Promise.all(codes.map(async (code) => {
+    try {
+      const knownFriendIds = Object.entries(s.friendCodes)
+        .filter(([, friendCode]) => friendCode === code)
+        .map(([friendId]) => friendId);
+      const targetFriendId = knownFriendIds.length === 1 ? knownFriendIds[0] : knownFriendIds.length > 1 ? undefined : null;
+      const updated = await api(code, {
+        method: "PUT",
+        body: JSON.stringify({ member: buildMemberSnapshot(targetFriendId) }),
+      });
+      latestRev = Math.max(latestRev, updated.rev);
+      successes += 1;
+      for (const member of Object.values(updated.members)) {
+        if (member.id === selfId) continue;
+        const current = nextFriends[member.id];
+        if (!current || member.updatedAt >= current.updatedAt) nextFriends[member.id] = member;
+        nextFriendCodes[member.id] = code;
+      }
+    } catch (error) {
+      firstError ??= error instanceof Error ? error.message : "sync-failed";
+    }
+  }));
+
+  const st = useStore.getState();
+  if (successes) {
+    useStore.setState({
+      friends: nextFriends,
+      friendCodes: nextFriendCodes,
+      sharedRev: latestRev,
+      sharedDirty: false,
     });
   }
+  st.setWs({
+    lastSync: successes ? Date.now() : st.ws.lastSync,
+    error: firstError,
+    syncing: false,
+  });
 }
 
-/** Create a fresh friend circle and publish this phone's progress. */
+/** Create a fresh one-to-one invite without replacing existing friends. */
 export async function createWorkspace(): Promise<string> {
   const s = useStore.getState();
-  const { code, doc } = await createApi(buildMemberSnapshot());
-  s.setWs({ code, lastSync: Date.now(), error: null });
+  const { code, doc } = await createApi(buildMemberSnapshot(null));
+  const codes = [...new Set([...connectionCodes(s.ws), code])];
+  s.setWs({ code, codes, lastSync: Date.now(), error: null });
   useStore.setState({ sharedRev: doc.rev, sharedDirty: false });
-  s.applyMembers(doc.members);
   return code;
 }
 
-/** Join a friend's circle without changing any private data on this phone. */
+/** Join another one-to-one invite without replacing existing connections. */
 export async function joinWorkspace(rawCode: string): Promise<void> {
   const code = normalizeCode(rawCode);
   if (!code) throw new Error("bad-code");
   const s = useStore.getState();
   const doc = await api(code, {
     method: "PUT",
-    body: JSON.stringify({ member: buildMemberSnapshot() }),
+    body: JSON.stringify({ member: buildMemberSnapshot(null) }),
   });
-  s.setWs({ code, lastSync: Date.now(), error: null });
-  useStore.setState({ sharedRev: doc.rev, sharedDirty: false });
-  s.applyMembers(doc.members);
+  const selfId = memberIdFor(s.activeProfileId, s.ws.deviceId);
+  const incoming = Object.fromEntries(Object.entries(doc.members).filter(([id]) => id !== selfId));
+  const friendCodes = {
+    ...s.friendCodes,
+    ...Object.fromEntries(Object.keys(incoming).map((friendId) => [friendId, code])),
+  };
+  s.setWs({ code, codes: [...new Set([...connectionCodes(s.ws), code])], lastSync: Date.now(), error: null });
+  useStore.setState({
+    friends: { ...s.friends, ...incoming },
+    friendCodes,
+    sharedRev: doc.rev,
+    sharedDirty: false,
+  });
 }
 
 export function leaveWorkspace(): void {
   const s = useStore.getState();
-  s.setWs({ code: null, lastSync: null, error: null, syncing: false });
-  useStore.setState({ friends: {}, sharedRev: 0, sharedDirty: false });
+  s.setWs({ code: null, codes: [], lastSync: null, error: null, syncing: false });
+  useStore.setState({ friends: {}, friendCodes: {}, friendSharing: {}, sharedRev: 0, sharedDirty: false });
 }
 
 /** Human label for a sync error. */

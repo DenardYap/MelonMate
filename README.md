@@ -105,6 +105,7 @@ In a TestFlight build, the simpler end-to-end check is **Me → Test remote push
 - Friend sync publishes a small progress snapshot (streak, level, garden, daily calorie/protein progress, and latest workout summary). It never syncs private logs, recipes, groceries, plans, goals, or settings.
 - **Backup / move data:** Me → Export backup (JSON file) → Import on the other device. Do this weekly.
 - Nutrition per 100 g and U.S.-dollar prices in the built-in library are practical estimates. Barcode scans pull label data from Open Food Facts; AI photo results always require portion confirmation before logging.
+- Voice food logging sends the recorded clip to the hosted API for OpenAI transcription, then sends the transcript through the same catalog-first food resolver. Recordings are not stored by this app.
 
 ## What's inside
 
@@ -121,11 +122,11 @@ In a TestFlight build, the simpler end-to-end check is **Me → Test remote push
 - "兩顆蛋 一碗飯" → 2 eggs + 1 bowl of rice
 - "chicken breast 200 grams"
 - "早餐 酪梨吐司" → logs avocado toast to breakfast
-- Works in 中文 or English — pick the mic language on the voice screen.
+- Works in 中文, English, or mixed speech — the transcription service detects both automatically.
 
 ## Tech
 
-Next.js 16 · React 19 · Capacitor 8 · Swift/HealthKit · APNs · Tailwind CSS v4 · zustand (persisted) · @zxing/browser (barcode) · Web Speech API (voice) · Open Food Facts (barcode nutrition) · OpenAI Responses API (food-photo estimates) · optional Redis-compatible friend sync.
+Next.js 16 · React 19 · Capacitor 8 · Swift/HealthKit · APNs · Tailwind CSS v4 · zustand (persisted) · @zxing/browser (barcode) · MediaRecorder + OpenAI Transcription API (Web Speech fallback) · Open Food Facts (barcode nutrition) · OpenAI Responses API (food estimates) · optional Redis-compatible friend sync.
 
 ## iPhone Lock Screen quick log
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Melon Sprite</title><desc id="desc">A tiny leaf-eared mouse carrying a melon seed wand.</desc>
+  <rect width="256" height="256" rx="56" fill="#E6F2DF"/><path d="m33 52 5 12 12 5-12 5-5 12-5-12-12-5 12-5zM215 177l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#FFF1A1"/>
+  <path d="M82 93C51 70 48 42 62 27c27 12 38 35 32 66M174 93c31-23 34-51 20-66-27 12-38 35-32 66" fill="#88B970" stroke="#48563D" stroke-width="8" stroke-linejoin="round"/>
+  <ellipse cx="128" cy="143" rx="70" ry="79" fill="#D6C6A5" stroke="#48563D" stroke-width="8"/><circle cx="105" cy="135" r="7" fill="#3E4137"/><circle cx="151" cy="135" r="7" fill="#3E4137"/><path d="m120 153 8 6 8-6-8-5z" fill="#D88079"/>
+  <path d="M128 160c-8 10-17 10-25 3M128 160c8 10 17 10 25 3" fill="none" stroke="#3E4137" stroke-width="5" stroke-linecap="round"/><path d="M89 157H55M91 168l-31 9M167 157h34M165 168l31 9" stroke="#687066" stroke-width="4" stroke-linecap="round"/>
+  <path d="M77 210c31 15 71 15 102 0" fill="none" stroke="#96BE6F" stroke-width="13" stroke-linecap="round"/><path d="m185 205 24-90" stroke="#64503B" stroke-width="7" stroke-linecap="round"/><ellipse cx="213" cy="105" rx="9" ry="17" fill="#3E4937" transform="rotate(20 213 105)"/>
+</svg>

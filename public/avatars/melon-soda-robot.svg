@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Melon Soda Bot</title><desc id="desc">A fizzy melon soda robot with a straw antenna.</desc>
+  <rect width="256" height="256" rx="56" fill="#E2F2ED"/><circle cx="42" cy="61" r="8" fill="#FFF" opacity=".8"/><circle cx="211" cy="93" r="13" fill="#FFF" opacity=".7"/><circle cx="190" cy="48" r="6" fill="#FFF"/>
+  <path d="M128 62V30h28V13" fill="none" stroke="#40564F" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="128" cy="62" r="10" fill="#EE7B77" stroke="#40564F" stroke-width="6"/>
+  <rect x="47" y="61" width="162" height="164" rx="42" fill="#7CC7A1" stroke="#40564F" stroke-width="8"/><rect x="66" y="82" width="124" height="95" rx="30" fill="#DFF2B4" stroke="#40564F" stroke-width="7"/>
+  <circle cx="101" cy="123" r="11" fill="#344B43"/><circle cx="155" cy="123" r="11" fill="#344B43"/><circle cx="97" cy="119" r="3" fill="#FFF"/><circle cx="151" cy="119" r="3" fill="#FFF"/><path d="M107 147c12 10 30 10 42 0" fill="none" stroke="#344B43" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="83" cy="199" r="10" fill="#F1D268"/><circle cx="128" cy="199" r="10" fill="#F0817E"/><circle cx="173" cy="199" r="10" fill="#C8E6EE"/>
+  <path d="M46 121H23v64h24M210 121h23v64h-23" fill="#91D1AE" stroke="#40564F" stroke-width="8" stroke-linejoin="round"/>
+</svg>

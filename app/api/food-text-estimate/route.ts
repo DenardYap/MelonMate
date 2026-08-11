@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   sanitizeProvidedCandidates,
+  searchCurrentRecipeCandidates,
   searchFoodCandidates,
   type FoodCandidate,
 } from "@/lib/server/foodCandidateSearch";
@@ -46,11 +47,14 @@ export async function POST(request: Request) {
   let text = "";
   let lang: "en" | "zh" = "en";
   let providedCandidates: FoodCandidate[] = [];
+  let currentRecipes: FoodCandidate[] = [];
   try {
-    const body = (await request.json()) as { text?: unknown; lang?: unknown; catalog?: unknown };
+    const body = (await request.json()) as { text?: unknown; lang?: unknown; catalog?: unknown; recipeCatalog?: unknown };
     text = typeof body.text === "string" ? body.text.trim().slice(0, 500) : "";
     lang = body.lang === "zh" ? "zh" : "en";
     providedCandidates = sanitizeProvidedCandidates(body.catalog);
+    currentRecipes = sanitizeProvidedCandidates(body.recipeCatalog ?? body.catalog)
+      .filter((candidate) => candidate.kind === "recipe");
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
@@ -68,12 +72,12 @@ export async function POST(request: Request) {
       store: false,
       reasoning: { effort: "low" },
       max_output_tokens: 500,
-      instructions: `Identify each distinct food or drink in the note and call search_food_candidates once. Create one concise product-name query per item. Keep useful brand or preparation words, but remove quantities, filler words, and meal-time phrases. Do not estimate nutrition yet.`,
+      instructions: `Identify each distinct food or drink in the note and call search_current_recipes once. Create one concise name query per item so the app can separately search the user's current recipe list before the general food catalog. Keep useful brand or preparation words, but remove quantities, filler words, and meal-time phrases. Do not estimate nutrition yet.`,
       input: [{ role: "user", content: [{ type: "input_text", text }] }],
       tools: [{
         type: "function",
-        name: "search_food_candidates",
-        description: "Fuzzy-search MelonMate foods, saved recipes, recipe ingredients, and Open Food Facts products.",
+        name: "search_current_recipes",
+        description: "Search the user's current saved recipe list for potential matches before searching general foods.",
         strict: true,
         parameters: {
           type: "object",
@@ -89,7 +93,7 @@ export async function POST(request: Request) {
           required: ["queries"],
         },
       }],
-      tool_choice: { type: "function", name: "search_food_candidates" },
+      tool_choice: { type: "function", name: "search_current_recipes" },
     }),
   });
 
@@ -101,7 +105,7 @@ export async function POST(request: Request) {
     console.error("OpenAI food search planning failed", searchPlanResponse.status, searchPlanData.error?.message);
     return NextResponse.json({ error: "That food note could not be analyzed. Try again." }, { status: 502 });
   }
-  const searchCall = searchPlanData.output?.find((item) => item.type === "function_call" && item.name === "search_food_candidates");
+  const searchCall = searchPlanData.output?.find((item) => item.type === "function_call" && item.name === "search_current_recipes");
   let queries = [text];
   if (searchCall?.arguments) {
     try {
@@ -112,7 +116,10 @@ export async function POST(request: Request) {
       // The original note remains a safe retrieval query.
     }
   }
-  const candidates = await searchFoodCandidates(queries, providedCandidates, 30);
+  const recipeMatches = searchCurrentRecipeCandidates(queries, currentRecipes, 12);
+  const generalMatches = await searchFoodCandidates(queries, providedCandidates, 30);
+  const recipeIds = new Set(recipeMatches.map((candidate) => candidate.id));
+  const candidates = [...recipeMatches, ...generalMatches.filter((candidate) => !recipeIds.has(candidate.id))].slice(0, 30);
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -137,7 +144,7 @@ Return one item for each distinct food the user mentioned, including multiple fo
         role: "user",
         content: [{
           type: "input_text",
-          text: `FOOD NOTE:\n${text}\n\nSEARCH QUERIES USED:\n${JSON.stringify(queries)}\n\nTOP ${candidates.length} FUZZY-SEARCH CANDIDATES (maximum k=30):\n${JSON.stringify(candidates)}`,
+          text: `FOOD NOTE:\n${text}\n\nSEARCH QUERIES USED:\n${JSON.stringify(queries)}\n\nCURRENT RECIPE LIST MATCHES (${recipeMatches.length}):\n${JSON.stringify(recipeMatches)}\n\nGENERAL FOOD CANDIDATES (${candidates.length - recipeMatches.length} additional):\n${JSON.stringify(candidates.filter((candidate) => !recipeIds.has(candidate.id)))}`,
         }],
       }],
       tools: [

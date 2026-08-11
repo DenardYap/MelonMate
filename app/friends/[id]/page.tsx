@@ -4,11 +4,13 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppIcon, FoodGlyph, MealGlyph } from "@/components/icons";
+import ProfileAvatar from "@/components/ProfileAvatar";
 import { GlassCard, Segmented, Sheet, toast } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { cropProgress, cropStageImage, cropVisualStage, varietyById } from "@/lib/garden";
 import { fmtNum } from "@/lib/nutrition";
 import { useStore } from "@/lib/store";
+import { syncNow } from "@/lib/sync";
 import type { Lang, MealSlot, MemberSnapshot, Recipe } from "@/lib/types";
 
 type FriendTab = "overview" | "meals" | "training" | "farm";
@@ -133,7 +135,7 @@ const COPY = {
     emptyCollection: "還沒有收成。",
     legacy: "朋友更新並同步 App 後，這項資料就會顯示。",
     missing: "找不到朋友",
-    missingHint: "請回到朋友頁重新整理，或請對方再次加入朋友圈。",
+    missingHint: "請回到朋友頁重新整理，或請對方再次加入你的朋友連線。",
     backFriends: "回到朋友",
     privateNote: "你只能複製朋友選擇分享的內容。對方的飲食明細、每組訓練記錄、體重與飲水仍保持私人。",
   },
@@ -144,7 +146,7 @@ export default function FriendProfilePage() {
   return <FriendProfile friendId={params.id} />;
 }
 
-function FriendProfile({ friendId }: { friendId: string }) {
+export function FriendProfile({ friendId }: { friendId: string }) {
   const router = useRouter();
   const lang = useStore((state) => state.lang);
   const friend = useStore((state) => state.friends[friendId]);
@@ -215,7 +217,13 @@ function FriendHero({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
   const levelProgress = Math.min(1, earnedThisLevel / neededThisLevel);
   return (
     <GlassCard strong className="friend-profile-hero">
-      <div className="friend-profile-avatar"><AppIcon name="user" size={34} /></div>
+      <ProfileAvatar
+        className="friend-profile-avatar"
+        name={friend.name}
+        photoDataUrl={friend.photoDataUrl}
+        iconSize={34}
+        eager
+      />
       <div className="min-w-0 flex-1">
         <h1>{friend.name}</h1>
         <div className="friend-level-line">
@@ -249,6 +257,8 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
         <MiniStat icon="fruit" label={copy.harvests} value={friend.farm?.totalHarvests ?? friend.melons} />
         <MiniStat icon="gym" label={copy.workouts} value={friend.workouts?.completed ?? (friend.lastWorkout ? 1 : 0)} />
       </div>
+
+      <FriendSharingPanel friend={friend} lang={lang} />
 
       <SectionTitle icon="goal" text={copy.today} />
       <GlassCard className="p-4 mb-4">
@@ -284,6 +294,126 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
         )) : <div className="friend-empty-copy">{copy.noRecentTraining}</div>}
       </GlassCard>
     </div>
+  );
+}
+
+function FriendSharingPanel({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
+  const settings = useStore((state) => state.friendSharing[friend.id]) ?? {
+    shareMealPlan: false,
+    shareWorkoutPlan: false,
+    sharedRecipeIds: [],
+  };
+  const recipes = useStore((state) => state.recipes);
+  const profile = useStore((state) => state.profiles.find((item) => item.id === state.activeProfileId));
+  const updateFriendSharing = useStore((state) => state.updateFriendSharing);
+  const toggleFriendSharedRecipe = useStore((state) => state.toggleFriendSharedRecipe);
+  const [recipesOpen, setRecipesOpen] = useState(false);
+  const selectedRecipeIds = new Set(profile?.selectedRecipeIds ?? []);
+  const shareableRecipes = recipes.filter((recipe) => recipe.custom || selectedRecipeIds.has(recipe.id));
+
+  const update = (patch: Partial<typeof settings>, message: string) => {
+    updateFriendSharing(friend.id, patch);
+    toast(message, "upload");
+    void syncNow();
+  };
+
+  const toggleRecipe = (recipeId: string) => {
+    toggleFriendSharedRecipe(friend.id, recipeId);
+    void syncNow();
+  };
+
+  return (
+    <>
+      <SectionTitle icon="upload" text={lang === "zh" ? `分享給 ${friend.name}` : `Share with ${friend.name}`} />
+      <GlassCard className="friend-sharing-card mb-4">
+        <div className="friend-sharing-head">
+          <span className="icon-tile"><AppIcon name="lock" size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold">{lang === "zh" ? "你決定朋友能看到什麼" : "You control what this friend can see"}</div>
+            <div className="t-cap">{lang === "zh" ? "進度、等級和農場會分享；私人紀錄不會分享。" : "Progress, level, and farm are shared. Private logs stay private."}</div>
+          </div>
+        </div>
+        <FriendShareRow
+          icon="calendar"
+          label={lang === "zh" ? "未來 7 天餐點計畫" : "Upcoming 7-day meal plan"}
+          hint={lang === "zh" ? "包括計畫中使用的食譜" : "Includes recipes used by the plan"}
+          checked={settings.shareMealPlan}
+          onChange={() => update(
+            { shareMealPlan: !settings.shareMealPlan },
+            lang === "zh" ? "餐點計畫分享設定已更新" : "Meal-plan sharing updated"
+          )}
+        />
+        <FriendShareRow
+          icon="gym"
+          label={lang === "zh" ? "目前訓練計畫" : "Active workout plan"}
+          hint={lang === "zh" ? "每組訓練紀錄仍為私人資料" : "Set-by-set history stays private"}
+          checked={settings.shareWorkoutPlan}
+          onChange={() => update(
+            settings.shareWorkoutPlan
+              ? { shareWorkoutPlan: false, workoutPlanId: undefined }
+              : { shareWorkoutPlan: true, workoutPlanId: profile?.planId },
+            lang === "zh" ? "訓練計畫分享設定已更新" : "Workout-plan sharing updated"
+          )}
+        />
+        <button className="friend-share-row press" onClick={() => setRecipesOpen(true)}>
+          <AppIcon name="kitchen" size={18} />
+          <span className="min-w-0 flex-1">
+            <b>{lang === "zh" ? "食譜" : "Recipes"}</b>
+            <small>{lang === "zh" ? "選擇要分享給這位朋友的食譜" : "Choose recipes for this friend"}</small>
+          </span>
+          <span className="chip">{settings.sharedRecipeIds.length}</span>
+          <AppIcon name="next" size={16} />
+        </button>
+      </GlassCard>
+
+      <Sheet
+        open={recipesOpen}
+        onClose={() => setRecipesOpen(false)}
+        title={<span className="icon-label"><AppIcon name="kitchen" size={19} /> {lang === "zh" ? `分享食譜給 ${friend.name}` : `Recipes for ${friend.name}`}</span>}
+      >
+        <div className="t-sub mb-3">{lang === "zh" ? "朋友會看到你選擇的食譜，並可儲存自己的副本。" : "Your friend can view these recipes and save an editable copy."}</div>
+        <div className="glass glass-sm px-3 py-1">
+          {shareableRecipes.length ? shareableRecipes.map((recipe) => {
+            const checked = settings.sharedRecipeIds.includes(recipe.id);
+            return (
+              <button
+                key={recipe.id}
+                className="friend-share-row press"
+                role="switch"
+                aria-checked={checked}
+                onClick={() => toggleRecipe(recipe.id)}
+              >
+                <FoodGlyph category={recipe.cat} size={18} compact />
+                <span className="min-w-0 flex-1"><b>{recipe.name[lang] || recipe.name.en}</b><small>{recipe.perServing.cal} cal · {recipe.perServing.protein}g {lang === "zh" ? "蛋白質" : "protein"}</small></span>
+                <span className={`friend-share-switch ${checked ? "is-on" : ""}`} aria-hidden="true"><i /></span>
+              </button>
+            );
+          }) : <div className="friend-empty-copy">{lang === "zh" ? "先在餐點頁儲存或建立食譜。" : "Save or create recipes from the Meal page first."}</div>}
+        </div>
+      </Sheet>
+    </>
+  );
+}
+
+function FriendShareRow({
+  icon,
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  icon: Parameters<typeof AppIcon>[0]["name"];
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button className="friend-share-row press" role="switch" aria-checked={checked} onClick={onChange}>
+      <AppIcon name={icon} size={18} />
+      <span className="min-w-0 flex-1"><b>{label}</b><small>{hint}</small></span>
+      <span className={`friend-share-switch ${checked ? "is-on" : ""}`} aria-hidden="true"><i /></span>
+    </button>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   readSoundPreferences,
   resumeSoundscape,
   saveSoundPreferences,
+  syncBackgroundMusic,
   suspendSoundscape,
   type SoundEffect,
   type SoundPreferences,
@@ -46,6 +47,7 @@ export default function SoundProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
+      syncBackgroundMusic();
       if (!(event.target instanceof Element)) return;
       const control = event.target.closest<HTMLElement>("button, a, [role='button'], [role='switch']");
       if (!control || control.dataset.sound === "none") return;
@@ -60,11 +62,18 @@ export default function SoundProvider({ children }: { children: React.ReactNode 
       else resumeSoundscape();
     };
 
+    const onFocus = () => syncBackgroundMusic();
+    const timeCheck = window.setInterval(() => syncBackgroundMusic(), 60_000);
+
     document.addEventListener("click", onClick, true);
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+    syncBackgroundMusic();
     return () => {
+      window.clearInterval(timeCheck);
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 

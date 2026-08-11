@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
-import { syncNow } from "@/lib/sync";
+import { connectionCodes, syncNow } from "@/lib/sync";
 import TabBar from "@/components/TabBar";
 import { ConfettiHost, ToastHost, toast } from "@/components/ui";
 import { BrandMark } from "@/components/icons";
@@ -11,12 +11,13 @@ import { useRouter } from "next/navigation";
 import { initializeNativeApp, isNativeApp } from "@/lib/nativeApp";
 import LevelUpCelebration from "@/components/LevelUpCelebration";
 import AchievementCelebration from "@/components/AchievementCelebration";
+import HealthRewardCelebration from "@/components/HealthRewardCelebration";
 import SoundProvider from "@/components/SoundProvider";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
-  const friendCode = useStore((s) => s.ws.code);
+  const friendCodesKey = useStore((s) => connectionCodes(s.ws).join("|"));
   const theme = useStore((s) => s.theme);
   const lang = useStore((s) => s.lang);
 
@@ -62,11 +63,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   }, [hydrated, lang, router]);
 
   useEffect(() => {
-    if (!hydrated || !friendCode) return;
+    if (!hydrated || !friendCodesKey) return;
     void syncNow();
     const timer = window.setInterval(() => void syncNow(), 60_000);
     return () => window.clearInterval(timer);
-  }, [hydrated, friendCode]);
+  }, [hydrated, friendCodesKey]);
 
   if (!hydrated) {
     return (
@@ -81,6 +82,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       {children}
       <TabBar />
       <Onboarding />
+      <HealthRewardCelebration />
       <LevelUpCelebration />
       <AchievementCelebration />
       <ToastHost />

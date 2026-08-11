@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Snow Melon Seal</title><desc id="desc">A white seal balancing a frosty melon.</desc>
+  <rect width="256" height="256" rx="56" fill="#DFF2F5"/><path d="M22 213c29-15 51-12 70 4 23 20 47 20 72 0 22-18 45-19 70-5" fill="none" stroke="#83CAD5" stroke-width="12" stroke-linecap="round"/>
+  <path d="M45 171c0-46 36-81 83-81s83 35 83 81c0 39-31 61-83 61s-83-22-83-61z" fill="#F7F6EC" stroke="#4D5C5C" stroke-width="8"/>
+  <circle cx="101" cy="151" r="7" fill="#3E4B4B"/><circle cx="155" cy="151" r="7" fill="#3E4B4B"/><path d="m120 168 8 6 8-6-8-5z" fill="#4A5655"/><path d="M128 174c-8 9-17 9-25 3M128 174c8 9 17 9 25 3" fill="none" stroke="#4A5655" stroke-width="5" stroke-linecap="round"/>
+  <path d="M92 169H63M91 180l-27 8M164 169h29M165 180l27 8" stroke="#778685" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="128" cy="75" r="43" fill="#C7E3B0" stroke="#4D5C5C" stroke-width="7"/><path d="M102 44c9 18 10 40 3 62M128 33v84M154 44c-9 18-10 40-3 62" fill="none" stroke="#EDF7DB" stroke-width="7" stroke-linecap="round"/><path d="M128 32c-1-12 4-21 14-27M142 15c15-7 28-2 34 8-11 12-24 13-35 5" fill="#7EA86E" stroke="#4D5C5C" stroke-width="5" stroke-linecap="round"/>
+</svg>

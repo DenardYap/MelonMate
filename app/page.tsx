@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { openSession, todayLogs, useActiveProfile, useGame, useStore } from "@/lib/store";
 import { makeSessionEntries } from "@/lib/store";
 import { MEAL_ORDER, translate, type DictKey } from "@/lib/i18n";
-import { addDays, fmtDateLong, todayStr } from "@/lib/dates";
+import { addDays, fmtDate, fmtDateLong, todayStr } from "@/lib/dates";
 import { fmtNum, mulMacros, sumMacros } from "@/lib/nutrition";
 import { isDailyXpEligible, MIN_DAILY_ITEMS } from "@/lib/game";
 import { GlassCard, MacroBar, Ring, Sheet, Stepper, EmptyState, toast, useCountUp } from "@/components/ui";
+import { LineChart } from "@/components/charts";
 import DailyTargetsSheet from "@/components/DailyTargetsSheet";
 import { AppIcon, FoodGlyph, MealGlyph } from "@/components/icons";
 import type { LogEntry, MealSlot } from "@/lib/types";
-import { connectAndSyncAppleHealth, hasAppleHealthBridge } from "@/lib/appleHealth";
+import { connectAndSyncAppleHealth, hasAppleHealthBridge, isAppleHealthConnected } from "@/lib/appleHealth";
+import { nutritionUnitLabel, nutritionUnitStep } from "@/lib/customRecipes";
 
 export default function TodayPage() {
   const router = useRouter();
@@ -38,9 +40,13 @@ export default function TodayPage() {
   const [editing, setEditing] = useState<LogEntry | null>(null);
   const [targetsSheet, setTargetsSheet] = useState(false);
   const [healthAvailable, setHealthAvailable] = useState(false);
+  const [healthConnected, setHealthConnected] = useState(false);
   const [healthSyncing, setHealthSyncing] = useState(false);
 
-  useEffect(() => setHealthAvailable(hasAppleHealthBridge()), []);
+  useEffect(() => {
+    setHealthAvailable(hasAppleHealthBridge());
+    setHealthConnected(isAppleHealthConnected());
+  }, []);
 
   const healthActivity = store.health?.[profile.id]?.[date];
   const syncAppleHealth = async () => {
@@ -54,6 +60,11 @@ export default function TodayPage() {
             : lang === "zh" ? "Apple 健康已是最新狀態" : "Apple Health is up to date",
           "heart"
         );
+      } else if (result.status === "error") {
+        toast(
+          lang === "zh" ? "無法讀取 Apple 健康，請再試一次" : "Couldn’t read Apple Health. Please try again.",
+          "warning"
+        );
       } else {
         toast(
           result.status === "denied"
@@ -62,7 +73,13 @@ export default function TodayPage() {
           "warning"
         );
       }
+    } catch {
+      toast(
+        lang === "zh" ? "Apple 健康同步失敗，請再試一次" : "Apple Health sync failed. Please try again.",
+        "warning"
+      );
     } finally {
+      setHealthConnected(isAppleHealthConnected());
       setHealthSyncing(false);
     }
   };
@@ -207,6 +224,8 @@ export default function TodayPage() {
         )}
       </GlassCard>
 
+      <WeightTrendCard />
+
       {isToday && healthAvailable && (
         <GlassCard className="px-4 py-3 mb-4">
           <div className="health-card-row">
@@ -216,11 +235,13 @@ export default function TodayPage() {
               <div className="t-cap tabular mt-1">
                 {(healthActivity?.steps ?? 0).toLocaleString()} {lang === "zh" ? "步" : "steps"} · {healthActivity?.standMinutes ?? 0} {lang === "zh" ? "站立分鐘" : "standing min"}
               </div>
-              <div className="t-cap mt-1">{lang === "zh" ? "每 3,000 步與每 30 分鐘站立可獲得經驗" : "Earn XP every 3,000 steps and 30 standing minutes"}</div>
+              <div className="t-cap mt-1">{lang === "zh" ? "每 1,000 步與每 10 分鐘站立可獲得經驗" : "Earn XP every 1,000 steps and 10 standing minutes"}</div>
             </div>
-            <button className="chip press health-card-action" disabled={healthSyncing} onClick={() => void syncAppleHealth()}>
-              {healthSyncing ? (lang === "zh" ? "同步中" : "Syncing") : healthActivity ? (lang === "zh" ? "同步" : "Sync") : (lang === "zh" ? "連接" : "Connect")}
-            </button>
+            {!healthConnected && (
+              <button className="chip press health-card-action" disabled={healthSyncing} onClick={() => void syncAppleHealth()}>
+                {healthSyncing ? (lang === "zh" ? "連接中" : "Connecting") : (lang === "zh" ? "連接" : "Connect")}
+              </button>
+            )}
           </div>
         </GlassCard>
       )}
@@ -287,7 +308,9 @@ export default function TodayPage() {
                         {e.name[lang] || e.name.en}
                       </div>
                       <div className="t-cap tabular">
-                        {e.grams ? `${fmtNum(e.grams)} g · ` : ""}
+                        {e.amount != null && e.amountUnit
+                          ? `${fmtNum(e.amount)} ${nutritionUnitLabel(e.amountUnit, e.amount, lang)} · `
+                          : e.grams ? `${fmtNum(e.grams)} g · ` : ""}
                         P {Math.round(e.macros.protein)} · C {Math.round(e.macros.carbs)} · F {Math.round(e.macros.fat)}
                       </div>
                     </div>
@@ -311,6 +334,143 @@ export default function TodayPage() {
   );
 }
 
+/* ------------------------------------------------ weight trend */
+
+function WeightTrendCard() {
+  const lang = useStore((s) => s.lang);
+  const profile = useActiveProfile();
+  const rawWeights = useStore((s) => s.weights[profile.id]);
+  const logWeight = useStore((s) => s.logWeight);
+  const t = (k: DictKey) => translate(k, lang);
+  const inputId = `weight-${profile.id}`;
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState(false);
+
+  const weights = useMemo(
+    () => [...(rawWeights ?? [])].sort((a, b) => a.date.localeCompare(b.date)).slice(-30),
+    [rawWeights]
+  );
+  const latest = weights.at(-1);
+  const previous = weights.at(-2);
+  const todayWeight = weights.find((entry) => entry.date === todayStr());
+  const change = latest && previous ? latest.value - previous.value : null;
+  const formatWeight = (weight: number) =>
+    new Intl.NumberFormat(lang === "zh" ? "zh-TW" : "en-US", { maximumFractionDigits: 1 }).format(weight);
+
+  const showForm = () => {
+    setValue(String(todayWeight?.value ?? latest?.value ?? ""));
+    setError(false);
+    setOpen(true);
+  };
+
+  const save = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setError(true);
+      return;
+    }
+    logWeight(Math.round(parsed * 10) / 10);
+    setOpen(false);
+    toast(lang === "zh" ? "已記錄今天的體重" : "Today’s weight saved", "checkCircle");
+  };
+
+  return (
+    <>
+      <GlassCard className="p-4 mb-4">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="t-section icon-label">
+            <AppIcon name="chart" size={17} /> {t("weightTrend")} ({profile.unit})
+          </div>
+          <button type="button" className="chip chip-on press icon-label" onClick={showForm}>
+            <AppIcon name={todayWeight ? "edit" : "plus"} size={15} />
+            {todayWeight ? (lang === "zh" ? "更新今天" : "Update today") : t("logWeight")}
+          </button>
+        </div>
+
+        {latest ? (
+          <>
+            <div className="flex items-end gap-2 mb-1">
+              <span className="t-num font-extrabold" style={{ fontSize: 28, lineHeight: 1 }}>
+                {formatWeight(latest.value)}
+              </span>
+              <span className="t-sub font-semibold">{profile.unit}</span>
+              {change != null && (
+                <span className="t-cap tabular" style={{ marginLeft: "auto" }}>
+                  {change > 0 ? "+" : ""}{formatWeight(Math.round(change * 10) / 10)} {profile.unit}
+                  {lang === "zh" ? "（較上次）" : " since last log"}
+                </span>
+              )}
+            </div>
+            <LineChart
+              points={weights.map((entry) => entry.value)}
+              labels={weights.map((entry, index) =>
+                index === 0 || index === weights.length - 1 ? fmtDate(entry.date, lang) : ""
+              )}
+              height={130}
+              color="var(--canta-500)"
+              unit={` ${profile.unit}`}
+              accessibleLabel={`${t("weightTrend")}: ${weights.map((entry) => `${fmtDate(entry.date, lang)} ${entry.value} ${profile.unit}`).join(", ")}`}
+            />
+          </>
+        ) : (
+          <div className="target-section mt-3 text-center">
+            <div className="empty-icon mx-auto"><AppIcon name="weight" size={28} /></div>
+            <div className="font-bold mt-2">
+              {lang === "zh" ? "從今天開始追蹤" : "Start your trend today"}
+            </div>
+            <div className="t-sub mt-1">
+              {lang === "zh" ? "記錄今天的體重後，變化會顯示在這裡。" : "Log today’s weight and your progress will appear here."}
+            </div>
+          </div>
+        )}
+      </GlassCard>
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={<span className="icon-label"><AppIcon name="weight" size={21} /> {t("logWeight")}</span>}
+      >
+        <form className="flex flex-col gap-4 pb-2" onSubmit={save}>
+          <div>
+            <label className="t-sub font-semibold mb-2 block" htmlFor={inputId}>
+              {lang === "zh" ? "今天的體重" : "Today’s weight"}
+            </label>
+            <div className="field-with-unit">
+              <input
+                id={inputId}
+                className="field tabular"
+                type="number"
+                inputMode="decimal"
+                min="0.1"
+                step="0.1"
+                value={value}
+                onChange={(event) => {
+                  setValue(event.target.value);
+                  setError(false);
+                }}
+                placeholder={latest ? String(latest.value) : "—"}
+                aria-invalid={error}
+                aria-describedby={error ? `${inputId}-error` : undefined}
+              />
+              <span>{profile.unit}</span>
+            </div>
+            {error && (
+              <div id={`${inputId}-error`} className="target-error mt-2">
+                {lang === "zh" ? "請輸入有效的體重。" : "Enter a valid weight."}
+              </div>
+            )}
+          </div>
+          <button className="btn btn-primary press w-full" type="submit">
+            {todayWeight ? (lang === "zh" ? "更新體重" : "Update weight") : t("logWeight")}
+          </button>
+        </form>
+      </Sheet>
+    </>
+  );
+}
+
 /* ------------------------------------------------ edit entry sheet */
 
 function EditEntrySheet({ entry, onClose }: { entry: LogEntry | null; onClose: () => void }) {
@@ -325,19 +485,21 @@ function EditEntrySheet({ entry, onClose }: { entry: LogEntry | null; onClose: (
   // sync when opening a new entry
   if (entry && key !== entry.id) {
     setKey(entry.id);
-    setGrams(entry.grams ?? 0);
+    setGrams(entry.amount ?? entry.grams ?? 0);
     setMeal(entry.meal);
   }
 
   if (!entry) return null;
 
-  const scale = entry.grams && grams > 0 ? grams / entry.grams : 1;
+  const originalAmount = entry.amount ?? entry.grams;
+  const scale = originalAmount && grams > 0 ? grams / originalAmount : 1;
 
   const save = () => {
     const m = entry.macros;
     updateLog(entry.id, {
       meal,
-      grams: entry.grams ? grams : undefined,
+      grams: entry.amount == null && entry.grams ? grams : entry.grams,
+      amount: entry.amount != null ? grams : undefined,
       macros: mulMacros(m, scale),
     });
     toast(t("saved"), "checkCircle");
@@ -347,10 +509,17 @@ function EditEntrySheet({ entry, onClose }: { entry: LogEntry | null; onClose: (
   return (
     <Sheet open onClose={onClose} title={<span className="icon-label"><AppIcon name="cutlery" size={21} /> {entry.name[lang] || entry.name.en}</span>}>
       <div className="flex flex-col gap-4 pb-2">
-        {entry.grams != null && (
+        {(entry.amount != null || entry.grams != null) && (
           <div className="entry-amount-row">
             <span className="t-sub font-semibold">{t("amount")}</span>
-            <Stepper value={grams} onChange={setGrams} step={5} bigStep={50} min={5} format={(v) => `${v} g`} />
+            <Stepper
+              value={grams}
+              onChange={setGrams}
+              step={entry.amountUnit ? nutritionUnitStep(entry.amountUnit) : 5}
+              bigStep={entry.amountUnit ? nutritionUnitStep(entry.amountUnit) * 5 : 50}
+              min={entry.amountUnit ? nutritionUnitStep(entry.amountUnit) : 5}
+              format={(v) => entry.amountUnit ? `${v} ${nutritionUnitLabel(entry.amountUnit, v, lang)}` : `${v} g`}
+            />
           </div>
         )}
         <div>

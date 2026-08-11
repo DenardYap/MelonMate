@@ -4,7 +4,8 @@ export interface FoodPhotoEstimateItem {
   name: string;
   emoji: string;
   portion_description: string;
-  estimated_grams: number;
+  /** Printed/estimated serving weight. Null when a label gives only a count or volume. */
+  estimated_grams: number | null;
   /** Catalog/Open Food Facts id when a retrieved candidate was selected. */
   ref_id: string | null;
   cal: number;
@@ -51,7 +52,9 @@ export function sanitizeFoodPhotoEstimate(estimate: FoodPhotoModelEstimate): Foo
     name: String(item.name).trim().slice(0, 100) || "Food",
     emoji: String(item.emoji || "🍽️").trim().slice(0, 8),
     portion_description: String(item.portion_description).trim().slice(0, 180) || "Visible portion",
-    estimated_grams: Math.max(1, Math.round(Number(item.estimated_grams) || 1)),
+    estimated_grams: item.estimated_grams == null
+      ? null
+      : Math.max(1, Math.round(Number(item.estimated_grams) || 1)),
     ref_id: item.ref_id ? String(item.ref_id).slice(0, 120) : null,
     cal: Math.round(safe(item.cal, 0)),
     protein_g: safe(item.protein_g),

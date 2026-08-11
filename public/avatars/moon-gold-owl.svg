@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Moon Gold Owl</title><desc id="desc">A golden owl perched inside a melon crescent.</desc>
+  <rect width="256" height="256" rx="56" fill="#EAE8F6"/><path d="m42 47 4 11 11 4-11 4-4 11-4-11-11-4 11-4zM208 82l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#FFF5B1"/>
+  <path d="M59 83 91 52l37 26 37-26 32 31-8 107c-25 33-97 33-122 0z" fill="#D9AB48" stroke="#534B35" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="96" cy="119" r="31" fill="#F8E29A"/><circle cx="160" cy="119" r="31" fill="#F8E29A"/><circle cx="96" cy="119" r="11" fill="#403B30"/><circle cx="160" cy="119" r="11" fill="#403B30"/><circle cx="92" cy="115" r="3" fill="#FFF"/><circle cx="156" cy="115" r="3" fill="#FFF"/>
+  <path d="m117 145 11-12 11 12-11 9z" fill="#E7884A" stroke="#534B35" stroke-width="5" stroke-linejoin="round"/><path d="M88 174c22 15 58 15 80 0" fill="none" stroke="#F4D377" stroke-width="10" stroke-linecap="round"/>
+  <path d="M64 106c-18 68 28 116 86 112 39-3 68-29 72-67-21 29-49 43-82 38-41-6-69-35-76-83z" fill="#F6D76D" stroke="#534B35" stroke-width="8" stroke-linejoin="round"/>
+</svg>

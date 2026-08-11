@@ -7,14 +7,15 @@ import { addDays, fmtDate, todayStr, weekDates, weekdayLabel } from "@/lib/dates
 import { fmtNum, mulMacros } from "@/lib/nutrition";
 import { defaultMealByTime } from "@/lib/voice";
 import { EmptyState, GlassCard, Segmented, Sheet, Stepper, toast } from "@/components/ui";
-import { AppIcon, FoodGlyph, MealGlyph } from "@/components/icons";
-import type { GroceryItem, Ingredient, MealSlot, Recipe, RecipeCat } from "@/lib/types";
+import { AppIcon, FoodGlyph, MealGlyph, SavedFoodGlyph, SELECTABLE_ICONS } from "@/components/icons";
+import type { GroceryItem, Ingredient, MealSlot, NutritionUnit, Recipe, RecipeCat } from "@/lib/types";
 import { recommendRecipes, selectedRecipesForProfile } from "@/lib/onboarding";
 import { mealPlanMealCount, type MealPlanApplyMode } from "@/lib/mealPlans";
 import { filterRecipes, paginateRecipes } from "@/lib/recipeDiscovery";
 import { syncNow } from "@/lib/sync";
 import { restrictionsFromProfile } from "@/lib/ingredientRestrictions";
 import { IngredientRestrictionEditor } from "@/components/IngredientRestrictionEditor";
+import { caloriesFromMacros, NUTRITION_UNITS, nutritionBasis, nutritionUnitLabel } from "@/lib/customRecipes";
 
 type Tab = "recipes" | "planner" | "groceries";
 
@@ -177,7 +178,7 @@ function RecipesTab() {
             <div className="grid grid-cols-2 gap-3">
               {list.map((r) => (
                 <GlassCard key={r.id} className="recipe-card press" onClick={() => setSel(r)}>
-                  <FoodGlyph category={r.cat} size={18} compact />
+                  <SavedFoodGlyph icon={r.custom ? r.emoji : undefined} category={r.cat} size={18} compact />
                   <div className="recipe-card-title font-bold mt-2">{r.name[lang]}</div>
                   <div className="recipe-card-meta t-cap tabular">
                     <span>{fmtNum(r.perServing.cal)} {t("cal")}</span>
@@ -375,18 +376,21 @@ function RecipeDetailSheet({
   const addGroceriesBulk = useStore((s) => s.addGroceriesBulk);
   const planMeal = useStore((s) => s.planMeal);
   const unselectRecipe = useStore((s) => s.unselectRecipe);
-  const toggleSharedRecipe = useStore((s) => s.toggleSharedRecipe);
-  const friendCircleCode = useStore((s) => s.ws.code);
-  const profile = useActiveProfile();
+  const friendsById = useStore((s) => s.friends);
+  const friendSharing = useStore((s) => s.friendSharing);
+  const toggleFriendSharedRecipe = useStore((s) => s.toggleFriendSharedRecipe);
   const t = (k: DictKey) => translate(k, lang);
+  const friends = useMemo(() => Object.values(friendsById), [friendsById]);
 
   const [planPick, setPlanPick] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [cookCount, setCookCount] = useState(1);
   const [cookSlot, setCookSlot] = useState<MealSlot>(defaultMealByTime());
 
   if (!recipe) return null;
   const r = recipe;
-  const isShared = (profile.sharedRecipeIds ?? []).includes(r.id);
+  const basis = nutritionBasis(r);
+  const sharedCount = friends.filter((friend) => friendSharing[friend.id]?.sharedRecipeIds.includes(r.id)).length;
 
   const cook = () => {
     const xp = addLog({
@@ -415,7 +419,8 @@ function RecipeDetailSheet({
   };
 
   return (
-    <Sheet open onClose={onClose} title={<span className="icon-label"><FoodGlyph category={r.cat} size={18} compact /> {r.name[lang]}</span>}>
+    <>
+    <Sheet open onClose={onClose} title={<span className="icon-label"><SavedFoodGlyph icon={r.custom ? r.emoji : undefined} category={r.cat} size={18} compact /> {r.name[lang]}</span>}>
       <div className="flex flex-col gap-4 pb-2">
         <div className="flex gap-2 flex-wrap">
           <span className="chip icon-label"><AppIcon name="timer" size={15} /> {r.minutes} {t("minutes")}</span>
@@ -423,7 +428,7 @@ function RecipeDetailSheet({
         </div>
         <div className="t-sub tabular">
           {fmtNum(r.perServing.cal)} {t("cal")} · {t("protein")} {Math.round(r.perServing.protein)}g · {t("carbs")}{" "}
-          {Math.round(r.perServing.carbs)}g · {t("fat")} {Math.round(r.perServing.fat)}g <span className="t-cap">/ {t("perServing")}</span>
+          {Math.round(r.perServing.carbs)}g · {t("fat")} {Math.round(r.perServing.fat)}g <span className="t-cap">/ {basis.amount} {nutritionUnitLabel(basis.unit, basis.amount, lang)}</span>
         </div>
 
         <div>
@@ -481,24 +486,16 @@ function RecipeDetailSheet({
             </button>
           </div>
           <button
-            className={`btn press ${isShared ? "chip-on" : ""}`}
-            aria-pressed={isShared}
+            className={`btn press ${sharedCount ? "chip-on" : ""}`}
             onClick={() => {
-              if (!friendCircleCode) {
-                toast(lang === "zh" ? "請先到「我」建立朋友圈" : "Create a Friend Circle from Me first", "friends");
+              if (!friends.length) {
+                toast(lang === "zh" ? "請先在「我」加入朋友" : "Add a friend from Me first", "friends");
                 return;
               }
-              toggleSharedRecipe(r.id);
-              toast(
-                isShared
-                  ? (lang === "zh" ? "已停止分享此食譜" : "Recipe removed from sharing")
-                  : (lang === "zh" ? "已與朋友圈分享食譜" : "Recipe shared with your circle"),
-                "upload"
-              );
-              void syncNow();
+              setShareOpen(true);
             }}
           >
-            <span className="icon-label"><AppIcon name="upload" size={17} /> {isShared ? (lang === "zh" ? "已與朋友圈分享" : "Shared with friends") : (lang === "zh" ? "與朋友分享食譜" : "Share recipe with friends")}</span>
+            <span className="icon-label"><AppIcon name="upload" size={17} /> {lang === "zh" ? "分享給朋友" : "Share with friends"}{sharedCount ? ` · ${sharedCount}` : ""}</span>
           </button>
           <button className="btn btn-ghost press" onClick={() => onEdit(r)}>
             <span className="icon-label"><AppIcon name="edit" size={17} /> {t("edit")}</span>
@@ -529,6 +526,31 @@ function RecipeDetailSheet({
         />
       )}
     </Sheet>
+    <Sheet open={shareOpen} onClose={() => setShareOpen(false)} title={<span className="icon-label"><AppIcon name="friends" size={19} /> {lang === "zh" ? "選擇朋友" : "Choose friends"}</span>}>
+      <div className="t-sub mb-3">{lang === "zh" ? "只有你選擇的朋友能在你的個人檔案中看到此食譜。" : "Only selected friends will see this recipe from your profile."}</div>
+      <div className="glass glass-sm px-3 py-1">
+        {friends.map((friend) => {
+          const checked = Boolean(friendSharing[friend.id]?.sharedRecipeIds.includes(r.id));
+          return (
+            <button
+              key={friend.id}
+              className="friend-share-row press"
+              role="switch"
+              aria-checked={checked}
+              onClick={() => {
+                toggleFriendSharedRecipe(friend.id, r.id);
+                void syncNow();
+              }}
+            >
+              <span className="profile-icon"><AppIcon name="user" size={18} /></span>
+              <span className="min-w-0 flex-1"><b>{friend.name}</b><small>{lang === "zh" ? `等級 ${friend.level}` : `Level ${friend.level}`}</small></span>
+              <span className={`friend-share-switch ${checked ? "is-on" : ""}`} aria-hidden="true"><i /></span>
+            </button>
+          );
+        })}
+      </div>
+    </Sheet>
+    </>
   );
 }
 
@@ -582,7 +604,7 @@ function RecipeFormSheet({
 
   const blank = {
     name: "",
-    emoji: "🍲",
+    emoji: "",
     cat: "custom" as RecipeCat,
     minutes: 20,
     difficulty: 1 as 1 | 2 | 3,
@@ -591,13 +613,23 @@ function RecipeFormSheet({
     p: "",
     c: "",
     f: "",
+    basisAmount: "1",
+    basisUnit: "serving" as NutritionUnit,
+    routineDays: [] as number[],
+    routineMeal: "" as MealSlot | "",
     ings: [] as { name: string; amount: string }[],
   };
   const [form, setForm] = useState(blank);
   const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [calEdited, setCalEdited] = useState(false);
+  const [iconOpen, setIconOpen] = useState(false);
+  const [iconQuery, setIconQuery] = useState("");
 
   if (open && initial && loadedId !== initial.id) {
+    const basis = nutritionBasis(initial);
+    const calculated = caloriesFromMacros(initial.perServing);
     setLoadedId(initial.id);
+    setCalEdited(Math.abs(initial.perServing.cal - calculated) >= 1);
     setForm({
       name: initial.name[lang] || initial.name.en,
       emoji: initial.emoji,
@@ -609,6 +641,10 @@ function RecipeFormSheet({
       p: String(initial.perServing.protein),
       c: String(initial.perServing.carbs),
       f: String(initial.perServing.fat),
+      basisAmount: String(basis.amount),
+      basisUnit: basis.unit,
+      routineDays: initial.routine?.days ?? [],
+      routineMeal: initial.routine?.meal ?? "",
       ings: initial.ingredients.map((i) => ({ name: i.name[lang] || i.name.en, amount: i.amount[lang] || i.amount.en })),
     });
   }
@@ -618,6 +654,11 @@ function RecipeFormSheet({
   }
 
   const setF = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  const autoCal = caloriesFromMacros({ protein: Number(form.p) || 0, carbs: Number(form.c) || 0, fat: Number(form.f) || 0 });
+  const iconResults = SELECTABLE_ICONS.filter((icon) => {
+    const query = iconQuery.trim().toLowerCase();
+    return !query || `${icon.label} ${icon.name} ${icon.keywords}`.toLowerCase().includes(query);
+  });
 
   const save = () => {
     if (!form.name.trim()) return;
@@ -629,17 +670,19 @@ function RecipeFormSheet({
       }));
     const data = {
       name: { en: form.name, zh: form.name },
-      emoji: form.emoji || "🍲",
+      emoji: form.emoji,
       cat: form.cat,
       minutes: form.minutes,
       difficulty: form.difficulty,
       servings: form.servings,
       perServing: {
-        cal: Number(form.cal) || 0,
+        cal: calEdited ? Number(form.cal) || 0 : autoCal,
         protein: Number(form.p) || 0,
         carbs: Number(form.c) || 0,
         fat: Number(form.f) || 0,
       },
+      nutritionBasis: { amount: Math.max(0.01, Number(form.basisAmount) || 1), unit: form.basisUnit },
+      routine: form.routineDays.length ? { days: form.routineDays, meal: form.routineMeal || undefined } : undefined,
       ingredients,
       tags: [],
       custom: true,
@@ -651,6 +694,9 @@ function RecipeFormSheet({
     }
     toast(t("saved"), "checkCircle");
     setForm(blank);
+    setCalEdited(false);
+    setIconOpen(false);
+    setIconQuery("");
     setLoadedId(null);
     onClose();
   };
@@ -659,6 +705,32 @@ function RecipeFormSheet({
     <Sheet open={open} onClose={onClose} title={<span className="icon-label"><AppIcon name={initial ? "edit" : "plus"} size={20} /> {initial ? t("edit") : t("newRecipe")}</span>}>
       <div className="flex flex-col gap-3 pb-2">
         <input className="field" placeholder={t("recipeName")} value={form.name} onChange={(e) => setF({ name: e.target.value })} />
+
+        <div>
+          <div className="t-cap mb-1">{lang === "zh" ? "圖示（選填）" : "Icon (optional)"}</div>
+          <div className="recipe-icon-choice">
+            <button type="button" className="recipe-icon-choice-main press" onClick={() => setIconOpen((value) => !value)}>
+              <span>{form.emoji ? <AppIcon name={form.emoji as Parameters<typeof AppIcon>[0]["name"]} size={21} /> : <AppIcon name="plus" size={19} />}</span>
+              <b>{form.emoji ? SELECTABLE_ICONS.find((icon) => icon.name === form.emoji)?.label ?? form.emoji : (lang === "zh" ? "選擇圖示" : "Choose an icon")}</b>
+            </button>
+            {form.emoji && <button type="button" className="ibtn press" onClick={() => setF({ emoji: "" })} aria-label={lang === "zh" ? "移除圖示" : "Remove icon"}><AppIcon name="close" size={15} /></button>}
+          </div>
+          {iconOpen && (
+            <div className="recipe-icon-picker mt-2">
+              <div className="food-composer recipe-icon-search">
+                <AppIcon name="search" size={17} />
+                <input value={iconQuery} onChange={(event) => setIconQuery(event.target.value)} placeholder={lang === "zh" ? "搜尋圖示" : "Search icons"} aria-label={lang === "zh" ? "搜尋圖示" : "Search icons"} />
+              </div>
+              <div className="recipe-icon-grid">
+                {iconResults.map((icon) => (
+                  <button key={icon.name} type="button" className={`press ${form.emoji === icon.name ? "is-selected" : ""}`} title={icon.label} onClick={() => { setF({ emoji: icon.name }); setIconOpen(false); }}>
+                    <AppIcon name={icon.name} size={20} /><small>{icon.label}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="flex gap-2 overflow-x-auto hide-scroll pb-1">
           {CAT_KEYS.filter((c) => c.v !== "all").map(({ v, k }) => (
@@ -689,13 +761,49 @@ function RecipeFormSheet({
           </div>
         </div>
 
-        <div className="t-section">{t("perServing")}</div>
+        <div className="t-section">{lang === "zh" ? "營養基準" : "Nutrition basis"}</div>
         <div className="grid grid-cols-2 gap-2">
-          <input className="field" inputMode="numeric" placeholder={t("cal")} value={form.cal} onChange={(e) => setF({ cal: e.target.value })} />
+          <div>
+            <div className="t-cap mb-1">{lang === "zh" ? "數量" : "Amount"}</div>
+            <input className="field" type="number" inputMode="decimal" min="0.01" step="0.1" value={form.basisAmount} onChange={(e) => setF({ basisAmount: e.target.value })} />
+          </div>
+          <div>
+            <div className="t-cap mb-1">{lang === "zh" ? "單位" : "Unit"}</div>
+            <select className="field" value={form.basisUnit} onChange={(e) => setF({ basisUnit: e.target.value as NutritionUnit })}>
+              {NUTRITION_UNITS.map((unit) => <option key={unit} value={unit}>{nutritionUnitLabel(unit, 2, lang)}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="t-cap">{lang === "zh" ? "例如：1 份，或 100 克。記錄時可輸入 1.5 份、150 克等。" : "For example, 1 serving or 100 g. When logging, you can enter 1.5 servings, 150 g, and so on."}</div>
+        <div className="grid grid-cols-2 gap-2">
           <input className="field" inputMode="decimal" placeholder={`${t("protein")} g`} value={form.p} onChange={(e) => setF({ p: e.target.value })} />
           <input className="field" inputMode="decimal" placeholder={`${t("carbs")} g`} value={form.c} onChange={(e) => setF({ c: e.target.value })} />
           <input className="field" inputMode="decimal" placeholder={`${t("fat")} g`} value={form.f} onChange={(e) => setF({ f: e.target.value })} />
+          <div className="field-with-action">
+            <input className="field" inputMode="numeric" placeholder={t("cal")} value={calEdited ? form.cal : String(autoCal)} onChange={(e) => { setF({ cal: e.target.value }); setCalEdited(true); }} />
+            {calEdited && <button type="button" className="field-action press" onClick={() => { setF({ cal: String(autoCal) }); setCalEdited(false); }}>{lang === "zh" ? "自動" : "Auto"}</button>}
+          </div>
         </div>
+        <div className="t-cap">{lang === "zh" ? "熱量是最後一欄，會依三大營養素自動計算，也可以直接修改。" : "Calories are the last field and auto-calculate from the macros; you can still override them."}</div>
+
+        <div className="t-section">{lang === "zh" ? "固定頻率（選填）" : "Regular cadence (optional)"}</div>
+        <div className="routine-day-grid">
+          {[
+            { day: 0, en: "Sun", zh: "日" }, { day: 1, en: "Mon", zh: "一" }, { day: 2, en: "Tue", zh: "二" },
+            { day: 3, en: "Wed", zh: "三" }, { day: 4, en: "Thu", zh: "四" }, { day: 5, en: "Fri", zh: "五" },
+            { day: 6, en: "Sat", zh: "六" },
+          ].map((item) => (
+            <button key={item.day} type="button" aria-pressed={form.routineDays.includes(item.day)} className={`press ${form.routineDays.includes(item.day) ? "is-selected" : ""}`} onClick={() => setF({ routineDays: form.routineDays.includes(item.day) ? form.routineDays.filter((day) => day !== item.day) : [...form.routineDays, item.day].sort() })}>
+              {lang === "zh" ? item.zh : item.en}
+            </button>
+          ))}
+        </div>
+        {form.routineDays.length > 0 && (
+          <select className="field" value={form.routineMeal} onChange={(event) => setF({ routineMeal: event.target.value as MealSlot | "" })}>
+            <option value="">{lang === "zh" ? "任何餐期" : "Any meal"}</option>
+            {MEAL_ORDER.map((slot) => <option key={slot} value={slot}>{translate(slot as DictKey, lang)}</option>)}
+          </select>
+        )}
 
         <div className="t-section">{t("ingredients")}</div>
         {form.ings.map((i, idx) => (

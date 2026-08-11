@@ -56,15 +56,42 @@ export function Sheet({
 }) {
   const [mounted, setMounted] = useState(false);
   const titleId = React.useId();
+  const sheetRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     if (!open) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const orig = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        sheetRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) ?? []
+      ).filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     const focusFrame = requestAnimationFrame(() => closeRef.current?.focus());
@@ -74,12 +101,12 @@ export function Sheet({
       document.body.style.overflow = orig;
       previousFocus?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!mounted || !open) return null;
   return createPortal(
     <>
       <div className="sheet-dim" onClick={onClose} aria-hidden="true" />
-      <section className="sheet glass-strong" role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}>
+      <section ref={sheetRef} className="sheet glass-strong" role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}>
         <div className="sheet-grab" />
         <div className="sheet-header">
           {title && <div id={titleId} className="t-title min-w-0">{title}</div>}

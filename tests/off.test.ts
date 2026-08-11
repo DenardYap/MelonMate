@@ -13,6 +13,7 @@ describe("U.S. barcode lookup", () => {
             status: 1,
             product: {
               product_name_en: "Sparkling Water",
+              serving_size: "1 can (355 ml)",
               serving_quantity: 355,
               nutriments: {
                 "energy-kcal_100g": 0,
@@ -32,7 +33,7 @@ describe("U.S. barcode lookup", () => {
     expect(food).toMatchObject({
       id: "bc-049000042566",
       name: { en: "Sparkling Water" },
-      serving: { grams: 355 },
+      serving: { label: { en: "1 can (355 ml)" }, grams: 355 },
       per100: { cal: 0, sodiumMg: 4 },
     });
   });

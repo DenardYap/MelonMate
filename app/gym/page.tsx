@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { lastSetsFor, makeSessionEntries, openSession, useActiveProfile, useStore } from "@/lib/store";
+import { lastSetsFor, makeSessionEntries, newId, openSession, useActiveProfile, useStore } from "@/lib/store";
 import { translate, type DictKey } from "@/lib/i18n";
 import { fmtDate, fmtDuration, todayStr } from "@/lib/dates";
 import { exKey, fmtNum } from "@/lib/nutrition";
@@ -12,7 +12,8 @@ import { BarChart, LineChart } from "@/components/charts";
 import { AppIcon } from "@/components/icons";
 import { ExercisePickerSheet } from "@/components/ExercisePickerSheet";
 import { exerciseProgressSeries } from "@/lib/workouts";
-import type { ExerciseSpec, WorkoutPlan, WorkoutSession } from "@/lib/types";
+import { syncNow } from "@/lib/sync";
+import type { ExerciseSpec, WorkoutPlan, WorkoutSession, WorkoutWeek } from "@/lib/types";
 import { recommendWorkoutPlans } from "@/lib/onboarding";
 
 type Tab = "train" | "plans" | "progress";
@@ -29,6 +30,29 @@ function displayPlanName(plan: WorkoutPlan, lang: "en" | "zh", profileName: stri
     .replace(/\s*\d+\s*(weeks?|週)$/i, "")
     .replace(/\s*\d+[- ]day$/i, "")
     .trim();
+}
+
+function blankWeek(daysPerWeek: number): WorkoutWeek {
+  return {
+    days: Array.from({ length: daysPerWeek }, (_, index) => ({
+      id: `day-${newId()}`,
+      name: { en: `Day ${index + 1}`, zh: `第 ${index + 1} 天` },
+      exercises: [],
+    })),
+  };
+}
+
+function cloneWeek(week: WorkoutWeek): WorkoutWeek {
+  return {
+    days: week.days.map((day) => ({
+      ...structuredClone(day),
+      id: `day-${newId()}`,
+      exercises: day.exercises.map((exercise) => ({
+        ...structuredClone(exercise),
+        id: `x-${newId()}`,
+      })),
+    })),
+  };
 }
 
 export default function GymPage() {
@@ -207,6 +231,7 @@ function PlansTab() {
   const profile = useActiveProfile();
   const t = (k: DictKey) => translate(k, lang);
   const [openPlanId, setOpenPlanId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const plan = store.plans.find((p) => p.id === openPlanId);
   const recommendedIds = new Set(recommendWorkoutPlans(profile, store.plans, 3).map((item) => item.id));
@@ -216,6 +241,24 @@ function PlansTab() {
 
   return (
     <div className="a-fadeUp flex flex-col gap-3">
+      <div className="plan-list-head">
+        <div>
+          <div className="t-section">{lang === "zh" ? "我的訓練計畫" : "My workout plans"}</div>
+          <div className="t-cap">{store.plans.length} {lang === "zh" ? "個計畫" : store.plans.length === 1 ? "plan" : "plans"}</div>
+        </div>
+        <button className="btn btn-primary press plan-new-btn" onClick={() => setCreating(true)}>
+          <AppIcon name="plus" size={17} />{lang === "zh" ? "新增計畫" : "New plan"}
+        </button>
+      </div>
+      {orderedPlans.length === 0 && (
+        <GlassCard>
+          <EmptyState
+            icon="gym"
+            title={lang === "zh" ? "建立你的第一個計畫" : "Build your first plan"}
+            hint={lang === "zh" ? "設定週數，再依照自己的方式加入訓練動作。" : "Choose a duration, then add exercises week by week."}
+          />
+        </GlassCard>
+      )}
       {orderedPlans.map((p) => {
         const planName = displayPlanName(p, lang, profile.name);
         return (
@@ -247,42 +290,129 @@ function PlansTab() {
         </GlassCard>
         );
       })}
+      {creating && (
+        <PlanCreateSheet
+          onClose={() => setCreating(false)}
+          onCreated={(planId) => {
+            setCreating(false);
+            setOpenPlanId(planId);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function PlanCreateSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (planId: string) => void }) {
+  const lang = useStore((state) => state.lang);
+  const addPlan = useStore((state) => state.addPlan);
+  const [name, setName] = useState(lang === "zh" ? "我的訓練計畫" : "My workout plan");
+  const [weeks, setWeeks] = useState("4");
+  const [daysPerWeek, setDaysPerWeek] = useState("4");
+
+  const createPlan = () => {
+    const finalName = name.trim();
+    if (!finalName) return;
+    const weekCount = Math.max(1, Math.min(52, Number(weeks) || 4));
+    const dayCount = Math.max(1, Math.min(7, Number(daysPerWeek) || 4));
+    const firstWeek = blankWeek(dayCount);
+    const plan: WorkoutPlan = {
+      id: `plan-${newId()}`,
+      name: { en: finalName, zh: finalName },
+      weeks: Array.from({ length: weekCount }, (_, index) => index === 0 ? firstWeek : cloneWeek(firstWeek)),
+      daysPerWeek: dayCount,
+    };
+    addPlan(plan);
+    toast(lang === "zh" ? "計畫已建立" : "Plan created", "checkCircle");
+    onCreated(plan.id);
+  };
+
+  return (
+    <Sheet open onClose={onClose} title={<span className="icon-label"><AppIcon name="plus" />{lang === "zh" ? "新增訓練計畫" : "New workout plan"}</span>}>
+      <div className="flex flex-col gap-3 pb-2">
+        <label>
+          <span className="t-cap mb-1 block">{lang === "zh" ? "計畫名稱" : "Plan name"}</span>
+          <input className="field" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label>
+            <span className="t-cap mb-1 block">{lang === "zh" ? "週數" : "Number of weeks"}</span>
+            <input className="field" type="number" inputMode="numeric" min={1} max={52} value={weeks} onChange={(event) => setWeeks(event.target.value)} />
+          </label>
+          <label>
+            <span className="t-cap mb-1 block">{lang === "zh" ? "每週天數" : "Days per week"}</span>
+            <input className="field" type="number" inputMode="numeric" min={1} max={7} value={daysPerWeek} onChange={(event) => setDaysPerWeek(event.target.value)} />
+          </label>
+        </div>
+        <div className="preset-banner t-sub">
+          {lang === "zh" ? "每一週都可以獨立修改，也可以隨時從其他週複製內容。" : "Every week stays editable, and you can copy any previous week whenever you need it."}
+        </div>
+        <button className="btn btn-primary press w-full" disabled={!name.trim()} onClick={createPlan}>
+          <AppIcon name="check" />{lang === "zh" ? "建立計畫" : "Create plan"}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
 function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void }) {
   const lang = useStore((s) => s.lang);
-  const updatePlan = useStore((s) => s.updatePlan);
+  const store = useStore();
   const profile = useActiveProfile();
   const t = (k: DictKey) => translate(k, lang);
   const [weekIdx, setWeekIdx] = useState(0);
   const [editEx, setEditEx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
   const [addTo, setAddTo] = useState<number | null>(null);
+  const [editDay, setEditDay] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const week = plan.weeks[weekIdx];
+  const activeWeekIdx = Math.min(weekIdx, Math.max(0, plan.weeks.length - 1));
+  const week = plan.weeks[activeWeekIdx];
 
   const mutate = (fn: (p: WorkoutPlan) => void) =>
-    updatePlan(plan.id, (p) => {
+    store.updatePlan(plan.id, (p) => {
       fn(p);
       return p;
     });
 
-  const copyWeek = () => {
+  const copyWeekFrom = (sourceIdx: number) => {
     mutate((p) => {
-      const clone = structuredClone(p.weeks[weekIdx]);
-      if (weekIdx + 1 < p.weeks.length) p.weeks[weekIdx + 1] = clone;
-      else p.weeks.push(clone);
+      p.weeks[activeWeekIdx] = cloneWeek(p.weeks[sourceIdx]);
     });
+    setCopyOpen(false);
     toast(t("weekCopied"), "copy");
   };
 
+  if (!week) return null;
+
   return (
     <div className="a-fadeUp">
-      <button className="chip press mb-3 icon-label" onClick={onBack}><AppIcon name="back" size={16} /> {t("back")}</button>
-      <div className="t-title mb-2">{displayPlanName(plan, lang, profile.name)}</div>
+      <div className="plan-editor-nav mb-3">
+        <button className="chip press icon-label" onClick={onBack}><AppIcon name="back" size={16} /> {t("back")}</button>
+        <div className="flex gap-2">
+          <button className="ibtn press plan-editor-icon" onClick={() => setShareOpen(true)} aria-label={lang === "zh" ? "分享計畫" : "Share plan"}>
+            <AppIcon name="upload" size={17} />
+          </button>
+          <button className="ibtn press plan-editor-icon" onClick={() => setSettingsOpen(true)} aria-label={lang === "zh" ? "計畫設定" : "Plan settings"}>
+            <AppIcon name="edit" size={17} />
+          </button>
+        </div>
+      </div>
+      <div className="plan-editor-title-row mb-3">
+        <div className="min-w-0">
+          <div className="t-title">{displayPlanName(plan, lang, profile.name)}</div>
+          <div className="t-cap mt-1">
+            {plan.weeks.length} {lang === "zh" ? "週" : plan.weeks.length === 1 ? "week" : "weeks"}
+            {plan.note?.[lang] ? ` · ${plan.note[lang]}` : ""}
+          </div>
+        </div>
+        {plan.id === profile.planId && <span className="chip chip-on"><AppIcon name="check" size={14} />{lang === "zh" ? "使用中" : "Active"}</span>}
+      </div>
 
-      <div className="flex gap-2 mb-3 overflow-x-auto hide-scroll pb-1">
+      <div className="flex gap-2 mb-2 overflow-x-auto hide-scroll pb-1">
         {plan.weeks.map((_, i) => (
           <button key={i} className={`chip press ${i === weekIdx ? "chip-on" : ""}`} onClick={() => setWeekIdx(i)}>
             W{i + 1}
@@ -290,16 +420,28 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
         ))}
       </div>
 
+      <div className="week-builder-head mb-3">
+        <div>
+          <div className="font-bold">{lang === "zh" ? `第 ${activeWeekIdx + 1} 週` : `Week ${activeWeekIdx + 1}`}</div>
+          <div className="t-cap">{week.days.length} {lang === "zh" ? "個訓練日" : week.days.length === 1 ? "training day" : "training days"}</div>
+        </div>
+        <button className="chip press icon-label" disabled={plan.weeks.length < 2} onClick={() => setCopyOpen(true)}>
+          <AppIcon name="copy" size={15} />{lang === "zh" ? "從其他週複製" : "Copy from…"}
+        </button>
+      </div>
+
       {week.days.map((d, di) => (
         <GlassCard key={`${d.id}-${di}`} className="px-4 py-3 mb-3">
-          <div className="flex items-center justify-between mb-1">
-            <div className="font-bold">{d.name[lang]}</div>
-            <button
-              className="ibtn press"
-              style={{ width: 30, height: 30, fontSize: 15 }}
-              onClick={() => setAddTo(di)}
-              aria-label={`${t("addExercise")} · ${d.name[lang]}`}
-            >
+          <div className="workout-day-head mb-1">
+            <button className="workout-day-title press" onClick={() => setEditDay(di)}>
+              <span className="workout-day-number">{di + 1}</span>
+              <span>
+                <b>{d.name[lang]}</b>
+                <small>{d.exercises.length} {lang === "zh" ? "個動作" : d.exercises.length === 1 ? "exercise" : "exercises"}</small>
+              </span>
+              <AppIcon name="edit" size={15} />
+            </button>
+            <button className="ibtn press plan-editor-icon" onClick={() => setAddTo(di)} aria-label={`${t("addExercise")} · ${d.name[lang]}`}>
               <AppIcon name="plus" size={17} />
             </button>
           </div>
@@ -318,18 +460,32 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
               <AppIcon name="next" size={16} />
             </button>
           ))}
+          {d.exercises.length === 0 && (
+            <button className="empty-exercise-row press" onClick={() => setAddTo(di)}>
+              <AppIcon name="plus" size={16} />{lang === "zh" ? "加入第一個動作" : "Add the first exercise"}
+            </button>
+          )}
         </GlassCard>
       ))}
 
-      <button className="btn press w-full mb-6" onClick={copyWeek}>
-        <AppIcon name="copy" />{t("copyWeek")}
+      <button
+        className="btn press w-full mb-6"
+        onClick={() => mutate((p) => {
+          p.weeks[activeWeekIdx].days.push({
+            id: `day-${newId()}`,
+            name: { en: `Day ${p.weeks[activeWeekIdx].days.length + 1}`, zh: `第 ${p.weeks[activeWeekIdx].days.length + 1} 天` },
+            exercises: [],
+          });
+        })}
+      >
+        <AppIcon name="plus" />{lang === "zh" ? "新增訓練日" : "Add training day"}
       </button>
 
       {/* edit exercise sheet */}
       {editEx && (
         <ExerciseEditSheet
           plan={plan}
-          weekIdx={weekIdx}
+          weekIdx={activeWeekIdx}
           dayIdx={editEx.dayIdx}
           exIdx={editEx.exIdx}
           onClose={() => setEditEx(null)}
@@ -343,14 +499,249 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
           onClose={() => setAddTo(null)}
           onAdd={(spec) => {
             mutate((p) => {
-              p.weeks[weekIdx].days[addTo].exercises.push(spec);
+              p.weeks[activeWeekIdx].days[addTo].exercises.push(spec);
             });
             setAddTo(null);
             toast(t("saved"), "checkCircle");
           }}
         />
       )}
+
+      {editDay != null && (
+        <DayEditSheet
+          plan={plan}
+          weekIdx={activeWeekIdx}
+          dayIdx={editDay}
+          onClose={() => setEditDay(null)}
+        />
+      )}
+
+      {copyOpen && (
+        <CopyWeekSheet
+          plan={plan}
+          targetWeekIdx={activeWeekIdx}
+          onClose={() => setCopyOpen(false)}
+          onCopy={copyWeekFrom}
+        />
+      )}
+
+      {settingsOpen && (
+        <PlanSettingsSheet
+          plan={plan}
+          onClose={() => setSettingsOpen(false)}
+          onWeekCountChange={(count) => setWeekIdx((current) => Math.min(current, count - 1))}
+          onDelete={() => {
+            setSettingsOpen(false);
+            setDeleteOpen(true);
+          }}
+        />
+      )}
+
+      {shareOpen && <SharePlanSheet plan={plan} onClose={() => setShareOpen(false)} />}
+
+      {deleteOpen && (
+        <Sheet open onClose={() => setDeleteOpen(false)} title={<span className="icon-label"><AppIcon name="warning" />{lang === "zh" ? "刪除訓練計畫？" : "Delete workout plan?"}</span>}>
+          <div className="t-sub mb-4">
+            {lang === "zh" ? `「${displayPlanName(plan, lang, profile.name)}」會被刪除。過去的訓練紀錄仍會保留。` : `“${displayPlanName(plan, lang, profile.name)}” will be deleted. Your completed workout history will stay intact.`}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="btn press" onClick={() => setDeleteOpen(false)}>{lang === "zh" ? "取消" : "Cancel"}</button>
+            <button className="btn btn-ghost btn-danger press" onClick={() => {
+              store.deletePlan(plan.id);
+              toast(t("deleted"), "trash");
+              onBack();
+            }}><AppIcon name="trash" />{t("delete")}</button>
+          </div>
+        </Sheet>
+      )}
     </div>
+  );
+}
+
+function PlanSettingsSheet({
+  plan,
+  onClose,
+  onWeekCountChange,
+  onDelete,
+}: {
+  plan: WorkoutPlan;
+  onClose: () => void;
+  onWeekCountChange: (count: number) => void;
+  onDelete: () => void;
+}) {
+  const lang = useStore((state) => state.lang);
+  const updatePlan = useStore((state) => state.updatePlan);
+  const [name, setName] = useState(plan.name[lang]);
+  const [note, setNote] = useState(plan.note?.[lang] ?? "");
+  const [weeks, setWeeks] = useState(String(plan.weeks.length));
+
+  const save = () => {
+    const finalName = name.trim();
+    if (!finalName) return;
+    const weekCount = Math.max(1, Math.min(52, Number(weeks) || plan.weeks.length));
+    updatePlan(plan.id, (next) => {
+      const namesMatched = next.name.en === next.name.zh;
+      next.name = namesMatched ? { en: finalName, zh: finalName } : { ...next.name, [lang]: finalName };
+      const finalNote = note.trim();
+      if (finalNote) {
+        const notesMatched = !next.note || next.note.en === next.note.zh;
+        next.note = notesMatched
+          ? { en: finalNote, zh: finalNote }
+          : { ...(next.note ?? { en: "", zh: "" }), [lang]: finalNote };
+      } else {
+        next.note = undefined;
+      }
+      if (weekCount < next.weeks.length) next.weeks = next.weeks.slice(0, weekCount);
+      while (next.weeks.length < weekCount) {
+        next.weeks.push(cloneWeek(next.weeks[next.weeks.length - 1] ?? blankWeek(next.daysPerWeek ?? 4)));
+      }
+      return next;
+    });
+    onWeekCountChange(weekCount);
+    toast(lang === "zh" ? "計畫已更新" : "Plan updated", "checkCircle");
+    onClose();
+  };
+
+  return (
+    <Sheet open onClose={onClose} title={<span className="icon-label"><AppIcon name="edit" />{lang === "zh" ? "計畫設定" : "Plan settings"}</span>}>
+      <div className="flex flex-col gap-3 pb-2">
+        <label>
+          <span className="t-cap mb-1 block">{lang === "zh" ? "計畫名稱" : "Plan name"}</span>
+          <input className="field" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+        </label>
+        <label>
+          <span className="t-cap mb-1 block">{lang === "zh" ? "備註" : "Note"} · {lang === "zh" ? "選填" : "optional"}</span>
+          <input className="field" value={note} onChange={(event) => setNote(event.target.value)} placeholder={lang === "zh" ? "例如：增肌階段" : "e.g. Hypertrophy block"} />
+        </label>
+        <label>
+          <span className="t-cap mb-1 block">{lang === "zh" ? "計畫週數" : "Plan duration (weeks)"}</span>
+          <input className="field" type="number" inputMode="numeric" min={1} max={52} value={weeks} onChange={(event) => setWeeks(event.target.value)} />
+          <span className="t-cap mt-1 block">{lang === "zh" ? "增加週數時會複製最後一週，之後仍可個別修改。" : "Added weeks start as copies of the last week and remain fully editable."}</span>
+        </label>
+        <button className="btn btn-primary press w-full" disabled={!name.trim()} onClick={save}><AppIcon name="save" />{lang === "zh" ? "儲存變更" : "Save changes"}</button>
+        <button className="btn btn-ghost btn-danger press w-full" onClick={onDelete}><AppIcon name="trash" />{lang === "zh" ? "刪除計畫" : "Delete plan"}</button>
+      </div>
+    </Sheet>
+  );
+}
+
+function CopyWeekSheet({
+  plan,
+  targetWeekIdx,
+  onClose,
+  onCopy,
+}: {
+  plan: WorkoutPlan;
+  targetWeekIdx: number;
+  onClose: () => void;
+  onCopy: (sourceIdx: number) => void;
+}) {
+  const lang = useStore((state) => state.lang);
+  const [sourceIdx, setSourceIdx] = useState(targetWeekIdx === 0 ? 1 : targetWeekIdx - 1);
+  const source = plan.weeks[sourceIdx];
+  return (
+    <Sheet open onClose={onClose} title={<span className="icon-label"><AppIcon name="copy" />{lang === "zh" ? `複製到第 ${targetWeekIdx + 1} 週` : `Copy into week ${targetWeekIdx + 1}`}</span>}>
+      <div className="t-sub mb-3">{lang === "zh" ? "選擇來源週。這會取代目前這一週的內容。" : "Choose a source week. This replaces the current week’s contents."}</div>
+      <div className="week-copy-options mb-4">
+        {plan.weeks.map((week, index) => index === targetWeekIdx ? null : (
+          <button key={index} className={`week-copy-option press ${sourceIdx === index ? "selected" : ""}`} onClick={() => setSourceIdx(index)}>
+            <span><b>{lang === "zh" ? `第 ${index + 1} 週` : `Week ${index + 1}`}</b><small>{week.days.length} {lang === "zh" ? "天" : week.days.length === 1 ? "day" : "days"} · {week.days.reduce((sum, day) => sum + day.exercises.length, 0)} {lang === "zh" ? "個動作" : "exercises"}</small></span>
+            {sourceIdx === index && <AppIcon name="checkCircle" size={20} />}
+          </button>
+        ))}
+      </div>
+      <button className="btn btn-primary press w-full" disabled={!source || sourceIdx === targetWeekIdx} onClick={() => onCopy(sourceIdx)}><AppIcon name="copy" />{lang === "zh" ? "複製這一週" : "Copy this week"}</button>
+    </Sheet>
+  );
+}
+
+function DayEditSheet({ plan, weekIdx, dayIdx, onClose }: { plan: WorkoutPlan; weekIdx: number; dayIdx: number; onClose: () => void }) {
+  const lang = useStore((state) => state.lang);
+  const updatePlan = useStore((state) => state.updatePlan);
+  const day = plan.weeks[weekIdx]?.days[dayIdx];
+  const [name, setName] = useState(day?.name[lang] ?? "");
+  if (!day) return null;
+
+  const save = () => {
+    const finalName = name.trim();
+    if (!finalName) return;
+    updatePlan(plan.id, (next) => {
+      const target = next.weeks[weekIdx].days[dayIdx];
+      target.name = target.name.en === target.name.zh ? { en: finalName, zh: finalName } : { ...target.name, [lang]: finalName };
+      return next;
+    });
+    toast(lang === "zh" ? "訓練日已更新" : "Training day updated", "checkCircle");
+    onClose();
+  };
+
+  const remove = () => {
+    updatePlan(plan.id, (next) => {
+      next.weeks[weekIdx].days.splice(dayIdx, 1);
+      return next;
+    });
+    toast(lang === "zh" ? "訓練日已刪除" : "Training day deleted", "trash");
+    onClose();
+  };
+
+  return (
+    <Sheet open onClose={onClose} title={<span className="icon-label"><AppIcon name="edit" />{lang === "zh" ? "編輯訓練日" : "Edit training day"}</span>}>
+      <div className="flex flex-col gap-3 pb-2">
+        <label>
+          <span className="t-cap mb-1 block">{lang === "zh" ? "訓練日名稱" : "Day name"}</span>
+          <input className="field" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn btn-ghost btn-danger press" disabled={plan.weeks[weekIdx].days.length <= 1} onClick={remove}><AppIcon name="trash" />{lang === "zh" ? "刪除" : "Delete"}</button>
+          <button className="btn btn-primary press" disabled={!name.trim()} onClick={save}><AppIcon name="save" />{lang === "zh" ? "儲存" : "Save"}</button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+function SharePlanSheet({ plan, onClose }: { plan: WorkoutPlan; onClose: () => void }) {
+  const router = useRouter();
+  const lang = useStore((state) => state.lang);
+  const friends = useStore((state) => Object.values(state.friends));
+  const sharing = useStore((state) => state.friendSharing);
+  const updateFriendSharing = useStore((state) => state.updateFriendSharing);
+  const profile = useActiveProfile();
+
+  const toggle = (friendId: string) => {
+    const current = sharing[friendId] ?? { shareMealPlan: false, shareWorkoutPlan: false, sharedRecipeIds: [] };
+    const checked = current.shareWorkoutPlan && (current.workoutPlanId ?? profile.planId) === plan.id;
+    updateFriendSharing(friendId, checked
+      ? { shareWorkoutPlan: false, workoutPlanId: undefined }
+      : { shareWorkoutPlan: true, workoutPlanId: plan.id });
+    toast(checked ? (lang === "zh" ? "已停止分享" : "Sharing stopped") : (lang === "zh" ? "計畫已分享" : "Plan shared"), "upload");
+    void syncNow();
+  };
+
+  return (
+    <Sheet open onClose={onClose} title={<span className="icon-label"><AppIcon name="friends" />{lang === "zh" ? "分享訓練計畫" : "Share workout plan"}</span>}>
+      <div className="t-sub mb-3">{lang === "zh" ? "朋友可以查看並儲存自己的副本。每組訓練紀錄和重量仍為私人資料。" : "Friends can view this plan and save an editable copy. Your set history and body weight stay private."}</div>
+      {friends.length ? (
+        <div className="glass glass-sm px-3 py-1 mb-3">
+          {friends.map((friend) => {
+            const current = sharing[friend.id];
+            const checked = Boolean(current?.shareWorkoutPlan && (current.workoutPlanId ?? profile.planId) === plan.id);
+            return (
+              <button key={friend.id} className="share-plan-friend press" onClick={() => toggle(friend.id)}>
+                <span className="friend-avatar-small">{friend.emoji}</span>
+                <span className="flex-1 min-w-0"><b className="truncate block">{friend.name}</b><small>{checked ? (lang === "zh" ? "可以查看此計畫" : "Can view this plan") : (lang === "zh" ? "未分享" : "Not shared")}</small></span>
+                <span className={`share-check ${checked ? "checked" : ""}`}>{checked && <AppIcon name="check" size={15} />}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="preset-banner text-center mb-3">
+          <div className="font-semibold">{lang === "zh" ? "還沒有朋友" : "No friends yet"}</div>
+          <div className="t-cap mt-1">{lang === "zh" ? "先用邀請碼新增朋友，再回來分享計畫。" : "Add a friend with an invite code, then come back to share."}</div>
+        </div>
+      )}
+      {!friends.length && <button className="btn btn-primary press w-full" onClick={() => router.push("/me")}><AppIcon name="addUser" />{lang === "zh" ? "前往新增朋友" : "Add friends"}</button>}
+    </Sheet>
   );
 }
 

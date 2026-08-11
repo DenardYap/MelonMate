@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Yubari Fox</title><desc id="desc">A bright orange fox with a Yubari melon beret and leafy tail.</desc>
+  <rect width="256" height="256" rx="56" fill="#FBE7DF"/>
+  <path d="M192 162c41-4 52 31 31 55-17 19-47 15-65-1 18-4 30-15 34-30-17 12-33 10-43-2" fill="#F28B59" stroke="#5A4436" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M211 186c-9 17-23 27-42 29" fill="none" stroke="#FFF0DB" stroke-width="12" stroke-linecap="round"/>
+  <path d="m68 91 1-55 49 36M188 91l-1-55-49 36" fill="#F28B59" stroke="#5A4436" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m78 53 22 29M178 53l-22 29" stroke="#F9C6AC" stroke-width="10" stroke-linecap="round"/>
+  <path d="M51 139c0-53 33-88 77-88s77 35 77 88c0 51-31 86-77 86s-77-35-77-86z" fill="#F28B59" stroke="#5A4436" stroke-width="8"/>
+  <path d="M60 135c18 6 35 22 49 48 8 14 30 14 38 0 14-26 31-42 49-48-4 50-30 81-68 81s-64-31-68-81z" fill="#FFF0DB"/>
+  <ellipse cx="100" cy="134" rx="7" ry="10" fill="#45382F"/><ellipse cx="156" cy="134" rx="7" ry="10" fill="#45382F"/>
+  <path d="m120 158 8 7 8-7-8-6z" fill="#45382F"/><path d="M128 165c-7 10-16 11-24 4M128 165c7 10 16 11 24 4" fill="none" stroke="#45382F" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="88" cy="157" rx="11" ry="6" fill="#E97E7A" opacity=".55"/><ellipse cx="168" cy="157" rx="11" ry="6" fill="#E97E7A" opacity=".55"/>
+  <ellipse cx="128" cy="53" rx="43" ry="22" fill="#E99052" stroke="#5A4436" stroke-width="7"/>
+  <path d="M91 53h74M107 39l15 28M139 38l-13 29M158 43l-22 22" fill="none" stroke="#F8C98F" stroke-width="4" opacity=".9"/>
+  <path d="M128 31c-2-13 3-22 14-29M143 13c16-7 29-2 35 9-11 12-25 13-36 5" fill="#79A864" stroke="#5A4436" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -20,6 +20,8 @@ import type { Lang } from "./types";
 
 const SETTINGS_KEY = "melonmate-native-settings-v1";
 const LEGACY_DAILY_REMINDER_ID = 7_001;
+const HEALTH_REWARD_NOTIFICATION_ID_BASE = 400_000_000;
+const HEALTH_AUTO_SYNC_INTERVAL_MS = 60_000;
 
 interface NativeSettings {
   remoteNotifications: boolean;
@@ -40,9 +42,11 @@ let listenerSetup: Promise<void> | null = null;
 let listenerHandles: PluginListenerHandle[] = [];
 let storeUnsubscribers: (() => void)[] = [];
 let campaignRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let healthAutoSyncTimer: ReturnType<typeof setInterval> | null = null;
 let campaignRefreshPromise: Promise<void> = Promise.resolve();
 let sessionPushToken: string | null = null;
 let pushTokenWaiters: ((token: string) => void)[] = [];
+let launchUrlConsumed = false;
 
 export function isNativeApp(): boolean {
   return Capacitor.isNativePlatform();
@@ -194,6 +198,13 @@ async function currentPushToken(): Promise<string> {
   return token;
 }
 
+function runAutomaticHealthSync() {
+  if (!shouldAutoSyncAppleHealth()) return;
+  void connectAndSyncAppleHealth().then((result) => {
+    if (result.status === "synced") context?.onHealthSynced?.(result.xp);
+  }).catch(() => {});
+}
+
 async function ensureNativeListeners() {
   if (!isNativeApp()) return;
   if (listenerSetup) return listenerSetup;
@@ -220,17 +231,14 @@ async function ensureNativeListeners() {
         const settings = readSettings();
         if (settings.remoteNotifications) void PushNotifications.register();
         queueCampaignRefresh(0);
-        if (shouldAutoSyncAppleHealth()) {
-          void connectAndSyncAppleHealth().then((result) => {
-            if (result.status === "synced") context?.onHealthSynced?.(result.xp);
-          }).catch(() => {});
-        }
+        runAutomaticHealthSync();
       }),
     ];
     storeUnsubscribers = [
       useStore.subscribe(() => queueCampaignRefresh()),
       useGardenStore.subscribe(() => queueCampaignRefresh()),
     ];
+    healthAutoSyncTimer ??= setInterval(runAutomaticHealthSync, HEALTH_AUTO_SYNC_INTERVAL_MS);
   })();
   return listenerSetup;
 }
@@ -242,20 +250,22 @@ export async function initializeNativeApp(nextContext: NativeContext): Promise<(
   await StatusBar.setStyle({ style: Style.Light }).catch(() => {});
   await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
 
-  const launch = await App.getLaunchUrl().catch(() => undefined);
-  if (launch?.url) {
-    const path = pathFromAppUrl(launch.url);
-    if (path) nextContext.navigate(path);
+  // Capacitor keeps returning the URL that originally launched this app process.
+  // Providers can initialize again when a setting such as language changes, so
+  // treating that URL as a fresh navigation would replay a stale deep link.
+  if (!launchUrlConsumed) {
+    launchUrlConsumed = true;
+    const launch = await App.getLaunchUrl().catch(() => undefined);
+    if (launch?.url) {
+      const path = pathFromAppUrl(launch.url);
+      if (path) nextContext.navigate(path);
+    }
   }
 
   const settings = readSettings();
   if (settings.remoteNotifications) await PushNotifications.register().catch(() => {});
   await refreshAutomatedNotifications().catch(() => {});
-  if (shouldAutoSyncAppleHealth()) {
-    void connectAndSyncAppleHealth().then((result) => {
-      if (result.status === "synced") nextContext.onHealthSynced?.(result.xp);
-    }).catch(() => {});
-  }
+  runAutomaticHealthSync();
 
   return () => {
     context = null;
@@ -332,6 +342,48 @@ export async function setDailyReminder(enabled: boolean, _lang: Lang): Promise<b
   return setAutomatedCampaign("mealReminders", enabled);
 }
 
+export async function sendHealthRewardNotification(
+  reward: {
+    id: string;
+    totalXp: number;
+    stepXp: number;
+    standXp: number;
+    stepMilestones: number;
+    standMilestones: number;
+  },
+  lang: Lang
+): Promise<boolean> {
+  if (!isNativeApp() || reward.totalXp <= 0) return false;
+  let permission = (await LocalNotifications.checkPermissions()).display;
+  if (permission === "prompt" || permission === "prompt-with-rationale") {
+    permission = (await LocalNotifications.requestPermissions()).display;
+  }
+  if (permission !== "granted") return false;
+
+  const parts = lang === "zh"
+    ? [
+      reward.stepXp > 0 ? `${reward.stepMilestones} 個步數里程碑` : "",
+      reward.standXp > 0 ? `${reward.standMilestones} 個站立里程碑` : "",
+    ].filter(Boolean)
+    : [
+      reward.stepXp > 0 ? `${reward.stepMilestones} step milestone${reward.stepMilestones === 1 ? "" : "s"}` : "",
+      reward.standXp > 0 ? `${reward.standMilestones} standing milestone${reward.standMilestones === 1 ? "" : "s"}` : "",
+    ].filter(Boolean);
+  const numericId = HEALTH_REWARD_NOTIFICATION_ID_BASE
+    + (Array.from(reward.id).reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0) % 100_000_000);
+  await LocalNotifications.schedule({
+    notifications: [{
+      id: numericId,
+      title: lang === "zh" ? `活動獎勵 · +${reward.totalXp} XP` : `Activity reward · +${reward.totalXp} XP`,
+      body: parts.join(lang === "zh" ? "、" : " and "),
+      sound: "default",
+      schedule: { at: new Date(Date.now() + 500) },
+      extra: { path: "/", campaign: "health-reward" },
+    }],
+  });
+  return true;
+}
+
 export async function successHaptic() {
   if (!isNativeApp()) return;
   await Haptics.notification({ type: NotificationType.Success }).catch(() => {});
@@ -340,6 +392,8 @@ export async function successHaptic() {
 export async function disposeNativeListeners() {
   if (campaignRefreshTimer) clearTimeout(campaignRefreshTimer);
   campaignRefreshTimer = null;
+  if (healthAutoSyncTimer) clearInterval(healthAutoSyncTimer);
+  healthAutoSyncTimer = null;
   await Promise.all(listenerHandles.map((handle) => handle.remove().catch(() => {})));
   listenerHandles = [];
   storeUnsubscribers.forEach((unsubscribe) => unsubscribe());

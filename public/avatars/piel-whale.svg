@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Melon Whale</title><desc id="desc">A green striped whale spraying melon-shaped bubbles.</desc>
+  <rect width="256" height="256" rx="56" fill="#DDF1F4"/><circle cx="129" cy="46" r="9" fill="#B6DCA3"/><circle cx="105" cy="31" r="6" fill="#B6DCA3"/><circle cx="151" cy="25" r="5" fill="#B6DCA3"/>
+  <path d="M127 76c-25-32-49-26-54-5 22-2 34 11 36 31M129 76c25-32 49-26 54-5-22-2-34 11-36 31" fill="#79BCA4" stroke="#3F5850" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M32 147c21-51 66-74 120-60 38 10 62 37 69 76-15 50-64 72-117 58-44-12-70-38-72-74z" fill="#70B888" stroke="#3F5850" stroke-width="8"/>
+  <path d="M45 169c44 25 112 31 169 1" fill="none" stroke="#DDF0B1" stroke-width="13" stroke-linecap="round"/><path d="M82 103c-7 32-5 67 7 101M119 90c-5 39-2 81 10 123M159 91c3 39 0 78-10 116" fill="none" stroke="#A8D49A" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="172" cy="138" r="8" fill="#33483F"/><path d="M183 158c10 8 20 7 28-2" fill="none" stroke="#33483F" stroke-width="6" stroke-linecap="round"/><path d="M32 147 13 128c-5 24 1 43 18 57" fill="#70B888" stroke="#3F5850" stroke-width="8" stroke-linejoin="round"/>
+</svg>

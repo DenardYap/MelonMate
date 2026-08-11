@@ -1,5 +1,8 @@
 import type { FoodItem } from "./types";
 import generatedFoodData from "./foods.generated.json";
+import fnddsFoodData from "./foods.fndds.generated.json";
+import { FOOD_ALIAS_OVERLAYS, LONG_TAIL_FOODS } from "./foods.longtail";
+import tfdaFoodData from "./foods.tfda.generated.json";
 
 /**
  * Built-in bilingual food library.
@@ -166,7 +169,84 @@ const GENERATED_FOODS: FoodItem[] = (generatedFoodData as GeneratedFoodTuple[]).
   source: { name: "USDA FoodData Central", id: String(fdcId) },
 }));
 
-export const BUILTIN_FOODS: FoodItem[] = [...CURATED_FOODS, ...GENERATED_FOODS];
+type ExpandedFoodTuple = [
+  string | number, string, string, string, FoodItem["cat"],
+  number, number, number, number, string, string, number,
+  number | null, number | null, number | null, string[] | null,
+];
+
+function expandedFoods(
+  data: ExpandedFoodTuple[],
+  idPrefix: string,
+  sourceName: string
+): FoodItem[] {
+  return data.map(([
+    sourceId, en, zh, emoji, cat, cal, protein, carbs, fat,
+    servingEn, servingZh, servingG, fiber, sugar, sodiumMg, aliases,
+  ]) => ({
+    id: `${idPrefix}-${sourceId}`,
+    name: { en, zh },
+    aliases: aliases ?? undefined,
+    emoji,
+    cat,
+    per100: {
+      cal,
+      protein,
+      carbs,
+      fat,
+      fiber: fiber ?? undefined,
+      sugar: sugar ?? undefined,
+      sodiumMg: sodiumMg ?? undefined,
+    },
+    serving: { label: { en: servingEn, zh: servingZh }, grams: servingG },
+    source: { name: sourceName, id: String(sourceId) },
+  }));
+}
+
+const FNDDS_FOODS = expandedFoods(
+  fnddsFoodData as ExpandedFoodTuple[],
+  "fndds",
+  "USDA FNDDS 2021–2023"
+);
+const TFDA_FOODS = expandedFoods(
+  tfdaFoodData as ExpandedFoodTuple[],
+  "tfda",
+  "Taiwan FDA Food Nutrition Database"
+);
+
+function applyAliasOverlays(foods: FoodItem[]): FoodItem[] {
+  return foods.map((food) => {
+    const overlay = FOOD_ALIAS_OVERLAYS[food.id];
+    if (!overlay) return food;
+    return { ...food, aliases: [...new Set([...(food.aliases ?? []), ...overlay])] };
+  });
+}
+
+function dedupeFoods(foods: FoodItem[]): FoodItem[] {
+  const indexByName = new Map<string, number>();
+  const result: FoodItem[] = [];
+  for (const food of foods) {
+    const key = `${food.name.en.trim().toLowerCase()}|${food.name.zh.trim().toLowerCase()}`;
+    const existingIndex = indexByName.get(key);
+    if (existingIndex == null) {
+      indexByName.set(key, result.length);
+      result.push(food);
+      continue;
+    }
+    const existing = result[existingIndex];
+    const aliases = [...new Set([...(existing.aliases ?? []), ...(food.aliases ?? [])])];
+    if (aliases.length) result[existingIndex] = { ...existing, aliases };
+  }
+  return result;
+}
+
+export const BUILTIN_FOODS: FoodItem[] = dedupeFoods(applyAliasOverlays([
+  ...CURATED_FOODS,
+  ...TFDA_FOODS,
+  ...FNDDS_FOODS,
+  ...GENERATED_FOODS,
+  ...LONG_TAIL_FOODS,
+]));
 
 export function findBuiltinFood(id: string): FoodItem | undefined {
   return BUILTIN_FOODS.find((x) => x.id === id);

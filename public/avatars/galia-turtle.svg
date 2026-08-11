@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Galia Turtle</title>
+  <desc id="desc">A cheerful green turtle carrying a round Galia melon shell.</desc>
+
+  <rect width="256" height="256" rx="56" fill="#EAF3DF"/>
+  <circle cx="40" cy="48" r="13" fill="#D2E9A8"/>
+  <circle cx="218" cy="55" r="8" fill="#F4D985"/>
+  <ellipse cx="130" cy="217" rx="91" ry="13" fill="#C9D9B8" opacity=".65"/>
+
+  <!-- Feet and tail sit behind the shell. -->
+  <path d="M51 150 28 164l27 12" fill="#82BC77" stroke="#40583E" stroke-width="8" stroke-linejoin="round"/>
+  <ellipse cx="83" cy="190" rx="28" ry="20" transform="rotate(-18 83 190)" fill="#82BC77" stroke="#40583E" stroke-width="8"/>
+  <ellipse cx="154" cy="195" rx="29" ry="20" transform="rotate(15 154 195)" fill="#82BC77" stroke="#40583E" stroke-width="8"/>
+
+  <!-- Friendly head and neck. -->
+  <path d="M169 129c11-24 28-34 45-26 20 9 26 34 16 55-9 19-29 28-51 19l-21-9z" fill="#8BC783" stroke="#40583E" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="211" cy="130" r="7" fill="#344833"/>
+  <circle cx="208" cy="127" r="2.5" fill="#FFF"/>
+  <ellipse cx="220" cy="149" rx="9" ry="5" fill="#EEA5A0" opacity=".72"/>
+  <path d="M199 151c8 8 17 8 24 1" fill="none" stroke="#344833" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- A round melon shell makes the turtle silhouette immediately readable. -->
+  <ellipse cx="116" cy="132" rx="78" ry="68" fill="#94C86F" stroke="#40583E" stroke-width="9"/>
+  <ellipse cx="116" cy="132" rx="61" ry="51" fill="#AED67F"/>
+  <g fill="none" stroke="#E1EDB2" stroke-width="6" stroke-linecap="round" opacity=".95">
+    <path d="M72 94c30 21 58 51 86 79"/>
+    <path d="M53 122c33 20 60 45 83 72"/>
+    <path d="M101 69c26 24 50 48 72 77"/>
+    <path d="M161 90c-31 24-58 52-83 86"/>
+    <path d="M179 119c-31 21-55 44-73 73"/>
+    <path d="M131 68c-28 25-52 52-72 82"/>
+  </g>
+  <ellipse cx="116" cy="132" rx="78" ry="68" fill="none" stroke="#40583E" stroke-width="9"/>
+
+  <!-- Melon-leaf sprout. -->
+  <path d="M116 65c1-15 8-25 21-31" fill="none" stroke="#40583E" stroke-width="7" stroke-linecap="round"/>
+  <path d="M136 45c14-11 31-8 39 2-8 15-25 19-40 11" fill="#72A85E" stroke="#40583E" stroke-width="7" stroke-linejoin="round"/>
+</svg>

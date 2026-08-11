@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Melon Roll Snail</title><desc id="desc">A tiny snail carrying a swirled melon roll shell.</desc>
+  <rect width="256" height="256" rx="56" fill="#F3EBDD"/><path d="M29 221h198" stroke="#B5CA83" stroke-width="12" stroke-linecap="round"/>
+  <path d="M87 187c0-35 23-60 59-60h25c30 0 51 19 51 47 0 27-24 46-58 46H67c-21 0-34-11-34-29 0-15 10-26 26-29" fill="#8CC47F" stroke="#4B5940" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M64 165V96M64 111 45 87M64 111l19-24" fill="none" stroke="#4B5940" stroke-width="6" stroke-linecap="round"/><circle cx="44" cy="84" r="7" fill="#F0B862"/><circle cx="84" cy="84" r="7" fill="#F0B862"/>
+  <circle cx="67" cy="163" r="7" fill="#354537"/><path d="M78 180c9 7 18 7 26 0" fill="none" stroke="#354537" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="147" cy="124" r="68" fill="#EAB568" stroke="#4B5940" stroke-width="8"/><path d="M147 83c29 0 46 19 46 42s-17 42-43 42c-22 0-36-13-36-31 0-16 12-27 27-27 13 0 21 7 21 17 0 8-6 14-15 14" fill="none" stroke="#FFF0B6" stroke-width="11" stroke-linecap="round"/>
+  <path d="M147 56c-1-13 5-22 16-28M163 40c16-7 29-2 35 9-12 12-26 12-37 5" fill="#78A15E" stroke="#4B5940" stroke-width="6" stroke-linecap="round"/>
+</svg>

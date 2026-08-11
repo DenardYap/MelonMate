@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Canta Cat</title><desc id="desc">A round cantaloupe cat wearing a leafy green bow.</desc>
+  <rect width="256" height="256" rx="56" fill="#FFF0DA"/><circle cx="43" cy="48" r="19" fill="#F8C988" opacity=".6"/><circle cx="214" cy="207" r="28" fill="#F4B276" opacity=".45"/>
+  <path d="M64 90 50 44c-2-8 7-15 14-10l39 28M192 90l14-46c2-8-7-15-14-10l-39 28" fill="#E8A868" stroke="#604B36" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M58 43 82 70M198 43l-24 27" stroke="#F7D9A9" stroke-width="8" stroke-linecap="round"/>
+  <path d="M50 126c0-47 33-76 78-76s78 29 78 76v26c0 45-34 75-78 75s-78-30-78-75z" fill="#F0B86F" stroke="#604B36" stroke-width="8"/>
+  <g fill="none" stroke="#F9DCB0" stroke-width="5" opacity=".9"><path d="m69 83 118 90M58 114l99 83M97 60l100 80M187 82 69 174M198 116l-91 81M158 60 58 145"/></g>
+  <ellipse cx="99" cy="133" rx="7" ry="9" fill="#4C4034"/><ellipse cx="157" cy="133" rx="7" ry="9" fill="#4C4034"/>
+  <path d="m120 153 8 6 8-6M128 159c-8 11-18 12-27 4M128 159c8 11 18 12 27 4" fill="none" stroke="#4C4034" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M86 153H61M83 166l-24 7M170 153h25M173 166l24 7" fill="none" stroke="#604B36" stroke-width="5" stroke-linecap="round"/>
+  <path d="M128 67c-11-20-29-23-45-14 6 21 23 29 45 20 22 9 39 1 45-20-16-9-34-6-45 14z" fill="#87A95B" stroke="#604B36" stroke-width="7" stroke-linejoin="round"/>
+</svg>

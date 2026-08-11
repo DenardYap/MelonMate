@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Canta Shiba</title><desc id="desc">A smiling Shiba dog wearing a cantaloupe cap.</desc>
+  <rect width="256" height="256" rx="56" fill="#FFF0DD"/><path d="m65 100 2-62 52 40M191 100l-2-62-52 40" fill="#D98E50" stroke="#5A4638" stroke-width="8" stroke-linejoin="round"/><path d="m76 56 25 31M180 56l-25 31" stroke="#F6C59A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M48 137c0-53 34-88 80-88s80 35 80 88c0 54-33 90-80 90s-80-36-80-90z" fill="#DF9455" stroke="#5A4638" stroke-width="8"/>
+  <path d="M57 137c25 4 43 20 55 48 6 13 26 13 32 0 12-28 30-44 55-48-4 53-30 81-71 81s-67-28-71-81z" fill="#FFF1D9"/>
+  <path d="M92 132c7 7 15 7 22 0M142 132c7 7 15 7 22 0" fill="none" stroke="#453A31" stroke-width="7" stroke-linecap="round"/><path d="m119 153 9 7 9-7-9-6z" fill="#453A31"/>
+  <path d="M128 160c-8 11-18 11-27 3M128 160c8 11 18 11 27 3" fill="none" stroke="#453A31" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="128" cy="59" rx="49" ry="25" fill="#F0B56B" stroke="#5A4638" stroke-width="7"/><g stroke="#F8DCB3" stroke-width="4" opacity=".9"><path d="m92 50 70 20M99 38l61 19M162 42 96 69M143 35 91 58"/></g><path d="M128 34c0-14 7-23 19-29M147 17c16-7 30-1 36 10-13 12-27 12-38 4" fill="#83A85C" stroke="#5A4638" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

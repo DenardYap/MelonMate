@@ -73,6 +73,7 @@ function plotGroupCenter(unlockedPlots: number) {
 }
 
 type FarmPanel = "seeds" | "spells" | "progress" | null;
+type FarmResource = "dew" | "xp";
 
 interface MagicSpell {
   id: GardenSpellId;
@@ -111,6 +112,7 @@ export default function GardenPage() {
   const [selected, setSelected] = useState<MelonVarietyId>("honeydew");
   const [justTended, setJustTended] = useState(false);
   const [activePanel, setActivePanel] = useState<FarmPanel>(null);
+  const [resourceGuide, setResourceGuide] = useState<FarmResource | null>(null);
   const [pendingSpellAction, setPendingSpellAction] = useState<PendingSpellAction | null>(null);
   const [zoom, setZoom] = useState<number>(1);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -538,12 +540,25 @@ export default function GardenPage() {
         </div>
         <div className="farm-hud-status">
           <div className="farm-hud-wallets">
-            <span aria-label={garden.dew + " " + copy.dew}>
+            <button
+              type="button"
+              className="farm-dew-wallet farm-resource-trigger press"
+              onClick={() => setResourceGuide("dew")}
+              aria-haspopup="dialog"
+              aria-label={`${garden.dew.toLocaleString()} ${copy.dew}. ${copy.learnAboutDew}`}
+            >
               <AppIcon name="water" size={19} />
-              <span className="farm-wallet-copy"><small>{copy.dew}</small><b>{garden.dew}</b></span>
-            </span>
+              <span className="farm-wallet-copy"><small>{copy.dew}</small><b>{garden.dew.toLocaleString()}</b></span>
+              <AppIcon className="farm-resource-hint" name="idea" size={13} />
+            </button>
           </div>
-          <div className="farm-player-level">
+          <button
+            type="button"
+            className="farm-player-level farm-resource-trigger press"
+            onClick={() => setResourceGuide("xp")}
+            aria-haspopup="dialog"
+            aria-label={`${copy.playerLevel} ${level}. ${game.xp.toLocaleString()} XP. ${copy.learnAboutXp}`}
+          >
             <LevelProgressRing
               xp={game.xp}
               size={64}
@@ -556,7 +571,8 @@ export default function GardenPage() {
               <small>{copy.playerLevel}</small>
               <b>{playerLevelXp} / {playerLevelXpNeeded} XP</b>
             </span>
-          </div>
+            <AppIcon className="farm-resource-hint" name="idea" size={13} />
+          </button>
         </div>
       </header>
 
@@ -826,6 +842,30 @@ export default function GardenPage() {
       )}
 
       <Sheet
+        open={resourceGuide !== null}
+        onClose={() => setResourceGuide(null)}
+        title={
+          <span className="icon-label">
+            <AppIcon name={resourceGuide === "dew" ? "water" : "star"} size={20} />
+            {resourceGuide === "dew" ? copy.whatIsDew : copy.whatIsXp}
+          </span>
+        }
+      >
+        {resourceGuide && (
+          <FarmResourceGuide
+            resource={resourceGuide}
+            lang={lang}
+            dew={garden.dew}
+            xp={game.xp}
+            level={level}
+            earned={playerLevelXp}
+            needed={playerLevelXpNeeded}
+            onClose={() => setResourceGuide(null)}
+          />
+        )}
+      </Sheet>
+
+      <Sheet
         open={Boolean(pendingSpellAction)}
         onClose={() => setPendingSpellAction(null)}
         title={
@@ -866,6 +906,141 @@ export default function GardenPage() {
     </main>
   );
 }
+
+function FarmResourceGuide({
+  resource,
+  lang,
+  dew,
+  xp,
+  level,
+  earned,
+  needed,
+  onClose,
+}: {
+  resource: FarmResource;
+  lang: "en" | "zh";
+  dew: number;
+  xp: number;
+  level: number;
+  earned: number;
+  needed: number;
+  onClose: () => void;
+}) {
+  const isDew = resource === "dew";
+  const guide = isDew
+    ? lang === "zh"
+      ? {
+          eyebrow: "農場貨幣",
+          balance: "你的露珠",
+          summary: "露珠是農場專用的貨幣。種植與收成，讓你的農場循環成長。",
+          earnTitle: "收集露珠",
+          earnBody: "收成成熟的瓜，並領取農場任務與成就獎勵。",
+          useTitle: "用在農場",
+          useBody: "購買種子、解鎖更多田地，以及購買魔法咒語副本。",
+          note: "露珠會被花掉；收成作物可以賺回更多露珠，並同時獲得經驗。",
+          done: "懂了",
+        }
+      : {
+          eyebrow: "FARM CURRENCY",
+          balance: "Your Dew",
+          summary: "Dew is the currency that keeps your farm growing. Plant, harvest, and reinvest it.",
+          earnTitle: "Collect Dew",
+          earnBody: "Harvest ripe melons and claim garden quests and achievement rewards.",
+          useTitle: "Use it on the farm",
+          useBody: "Buy seeds, unlock more fields, and purchase magic spell copies.",
+          note: "Dew is spendable. Harvests earn more Dew back and also award XP.",
+          done: "Got it",
+        }
+    : lang === "zh"
+      ? {
+          eyebrow: "玩家進度",
+          balance: "總經驗",
+          summary: "經驗會提升你的玩家等級，代表你在飲食、活動與農場中的累積進度。",
+          earnTitle: "到處都能賺經驗",
+          earnBody: "記錄食物、走路與站立、收成作物，以及領取農場獎勵。",
+          useTitle: "升級解鎖",
+          useBody: "提升等級可以解鎖新種子、主題與升級獎勵。",
+          note: "經驗不會被花掉；它會永久累積並推進下一個等級。",
+          done: "懂了",
+        }
+      : {
+          eyebrow: "PLAYER PROGRESS",
+          balance: "Total XP",
+          summary: "XP raises your player level and reflects progress across food, activity, and your farm.",
+          earnTitle: "Earn XP everywhere",
+          earnBody: "Log food, walk and stand, harvest crops, and claim garden rewards.",
+          useTitle: "Level up to unlock",
+          useBody: "Higher levels unlock new seeds, themes, and level rewards.",
+          note: "XP is never spent. It permanently accumulates toward your next level.",
+          done: "Got it",
+        };
+
+  return (
+    <div className={`farm-resource-guide is-${resource}`}>
+      <div className="farm-resource-hero" aria-hidden="true">
+        {isDew ? (
+          <>
+            <Image className="farm-resource-seed" src="/garden/honeydew-seed.png" alt="" width={76} height={76} loading="eager" />
+            <span className="farm-resource-orb"><AppIcon name="water" size={43} /></span>
+            <Image className="farm-resource-plant" src="/garden/honeydew-plant.png" alt="" width={100} height={100} loading="eager" />
+            <i className="farm-resource-spark spark-one"><AppIcon name="spark" size={15} /></i>
+            <i className="farm-resource-spark spark-two"><AppIcon name="water" size={12} /></i>
+          </>
+        ) : (
+          <>
+            <LevelProgressRing
+              xp={xp}
+              size={108}
+              stroke={12}
+              className="farm-resource-xp-ring"
+              label={lang === "zh" ? "玩家等級" : "Player level"}
+              shortLabel={lang === "zh" ? "等級" : "LV"}
+            />
+            <i className="farm-resource-spark spark-one"><AppIcon name="star" size={18} /></i>
+            <i className="farm-resource-spark spark-two"><AppIcon name="spark" size={16} /></i>
+            <i className="farm-resource-spark spark-three"><AppIcon name="leaf" size={15} /></i>
+          </>
+        )}
+      </div>
+
+      <div className="farm-resource-balance">
+        <span><small>{guide.eyebrow}</small><b>{guide.balance}</b></span>
+        <strong>
+          <AppIcon name={isDew ? "water" : "star"} size={19} />
+          {isDew ? dew.toLocaleString() : xp.toLocaleString()}
+        </strong>
+      </div>
+
+      <p className="farm-resource-summary">{guide.summary}</p>
+
+      <div className="farm-resource-flow">
+        <article>
+          <span><AppIcon name={isDew ? "leaf" : "stretch"} size={21} /></span>
+          <div><b>{guide.earnTitle}</b><small>{guide.earnBody}</small></div>
+        </article>
+        <AppIcon className="farm-resource-flow-arrow" name="next" size={18} />
+        <article>
+          <span><AppIcon name={isDew ? "magic" : "lock"} size={21} /></span>
+          <div><b>{guide.useTitle}</b><small>{guide.useBody}</small></div>
+        </article>
+      </div>
+
+      {!isDew && (
+        <div className="farm-resource-level-progress">
+          <span>{lang === "zh" ? `等級 ${level}` : `Level ${level}`}</span>
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={needed} aria-valuenow={earned}>
+            <i style={{ width: `${needed > 0 ? Math.min(100, earned / needed * 100) : 0}%` }} />
+          </div>
+          <b>{earned.toLocaleString()} / {needed.toLocaleString()} XP</b>
+        </div>
+      )}
+
+      <div className="farm-resource-note"><AppIcon name="idea" size={18} /><span>{guide.note}</span></div>
+      <button type="button" className="btn btn-primary press w-full" onClick={onClose}>{guide.done}</button>
+    </div>
+  );
+}
+
 function useGardenClock() {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -953,9 +1128,13 @@ const COPY = {
     gardenBadges: "Garden badges",
     earned: "Earned",
     each: "each",
-    dew: "dew",
+    dew: "Dew",
     totalXp: "Total XP",
     playerLevel: "Player level",
+    learnAboutDew: "Tap to learn what Dew does",
+    learnAboutXp: "Tap to learn how XP and levels work",
+    whatIsDew: "What is Dew?",
+    whatIsXp: "How XP works",
     dayStreak: "day streak",
     emptyPlot: "Empty garden plot",
     tapHarvest: "Tap to harvest",
@@ -1039,6 +1218,10 @@ const COPY = {
     dew: "露珠",
     totalXp: "總經驗",
     playerLevel: "玩家等級",
+    learnAboutDew: "點一下了解露珠的用途",
+    learnAboutXp: "點一下了解經驗與等級",
+    whatIsDew: "什麼是露珠？",
+    whatIsXp: "經驗如何運作",
     dayStreak: "天連勝",
     emptyPlot: "空的田地",
     tapHarvest: "點一下收成",

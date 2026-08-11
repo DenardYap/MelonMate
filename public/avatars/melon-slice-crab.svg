@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Melon Crab</title><desc id="desc">A beach crab with a watermelon slice shell.</desc>
+  <rect width="256" height="256" rx="56" fill="#E1F2F1"/><circle cx="204" cy="46" r="23" fill="#FFE49A"/><path d="M22 220c31-15 54-12 74 5 22 18 46 18 69-1 21-18 43-19 69-6" fill="none" stroke="#77C7CC" stroke-width="12" stroke-linecap="round"/>
+  <path d="M52 157c0-43 34-72 76-72s76 29 76 72c0 42-31 65-76 65s-76-23-76-65z" fill="#EC746D" stroke="#4C4C3B" stroke-width="8"/>
+  <path d="M54 165c26 21 55 30 87 25 27-4 48-15 62-31-1 43-31 63-75 63-42 0-72-19-74-57z" fill="#A8D675"/><path d="M64 167c24 15 50 21 77 16 22-3 40-11 54-23" fill="none" stroke="#F6E9AF" stroke-width="10" stroke-linecap="round"/>
+  <path d="M80 101 50 73 30 99l25 18M176 101l30-28 20 26-25 18" fill="#EC746D" stroke="#4C4C3B" stroke-width="8" stroke-linejoin="round"/><circle cx="96" cy="138" r="8" fill="#3A4236"/><circle cx="160" cy="138" r="8" fill="#3A4236"/><path d="M108 159c12 10 28 10 40 0" fill="none" stroke="#3A4236" stroke-width="6" stroke-linecap="round"/>
+  <path d="M68 204 43 229M91 216l-10 22M188 204l25 25M165 216l10 22" stroke="#4C4C3B" stroke-width="7" stroke-linecap="round"/>
+</svg>

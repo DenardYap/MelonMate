@@ -36,6 +36,7 @@ const MEAL_ID_BASE = 100_000_000;
 const STREAK_ID_BASE = 200_000_000;
 const HARVEST_ID_BASE = 300_000_000;
 const CAMPAIGN_ID_LIMIT = 400_000_000;
+const HARVEST_GROUP_WINDOW_MS = 3 * 60_000;
 
 const MEAL_REMINDERS: { meal: Exclude<MealSlot, "snack">; hour: number; minute: number }[] = [
   { meal: "breakfast", hour: 9, minute: 0 },
@@ -147,22 +148,44 @@ export function buildNativeCampaignNotifications(
   }
 
   if (preferences.harvestReminders) {
-    for (const plot of snapshot.plots) {
-      if (!plot.variety) continue;
-      const readyAt = cropReadyAt(plot);
-      if (readyAt == null || readyAt <= now.getTime()) continue;
-      const variety = varietyById(plot.variety);
-      const name = variety.name[snapshot.lang];
+    const upcomingHarvests = snapshot.plots
+      .flatMap((plot) => {
+        if (!plot.variety) return [];
+        const readyAt = cropReadyAt(plot);
+        if (readyAt == null || readyAt <= now.getTime()) return [];
+        return [{ plot, readyAt }];
+      })
+      .sort((left, right) => left.readyAt - right.readyAt || left.plot.id - right.plot.id);
+
+    for (let index = 0; index < upcomingHarvests.length;) {
+      const groupStart = upcomingHarvests[index];
+      const group = [groupStart];
+      index += 1;
+      while (
+        index < upcomingHarvests.length
+        && upcomingHarvests[index].readyAt - groupStart.readyAt <= HARVEST_GROUP_WINDOW_MS
+      ) {
+        group.push(upcomingHarvests[index]);
+        index += 1;
+      }
+
+      const lastHarvest = group[group.length - 1];
+      const count = group.length;
+      const name = varietyById(groupStart.plot.variety!).name[snapshot.lang];
       notifications.push({
-        id: HARVEST_ID_BASE + plot.id,
-        title: snapshot.lang === "zh" ? `${name}可以採收了` : `${name} is ready to harvest`,
+        id: HARVEST_ID_BASE + groupStart.plot.id,
+        title: count === 1
+          ? (snapshot.lang === "zh" ? `${name}可以採收了` : `${name} is ready to harvest`)
+          : (snapshot.lang === "zh" ? `${count} 顆瓜可以採收了` : `${count} melons are ready to harvest`),
         body: snapshot.lang === "zh"
           ? "回到瓜園採收露珠與 XP。"
           : "Return to your garden to collect Dew and XP.",
-        at: new Date(readyAt),
+        at: new Date(lastHarvest.readyAt),
         extra: {
           campaign: "harvest",
-          path: `/garden?plot=${plot.id}&source=harvest-reminder`,
+          path: count === 1
+            ? `/garden?plot=${groupStart.plot.id}&source=harvest-reminder`
+            : "/garden?source=harvest-reminder",
         },
       });
     }

@@ -19,6 +19,16 @@ const GROUPS: RestrictionOption[] = [
   { value: "alliums", label: { en: "Onion & garlic", zh: "蔥蒜類" }, aliases: ["allium", "onions", "garlic", "蔥蒜", "蔥蒜類"], group: true },
 ];
 
+const EQUIVALENT_INGREDIENTS: RestrictionOption[] = [
+  {
+    value: "cilantro",
+    label: { en: "Cilantro", zh: "香菜" },
+    aliases: ["coriander", "coriander leaves", "fresh coriander", "芫荽"],
+  },
+];
+
+const PRESET_OPTIONS = [...GROUPS, ...EQUIVALENT_INGREDIENTS];
+
 const GROUP_TERMS: Record<string, string[]> = {
   nuts: ["peanut", "almond", "cashew", "walnut", "pistachio", "pecan", "hazelnut", "macadamia", "pine nut", "nut butter", "花生", "杏仁", "腰果", "核桃", "開心果", "榛果", "松子"],
   shellfish: ["shrimp", "prawn", "crab", "lobster", "crayfish", "scallop", "clam", "mussel", "oyster", "蝦", "蟹", "龍蝦", "干貝", "蛤", "牡蠣"],
@@ -56,11 +66,13 @@ function phraseMatches(rawHaystack: string, rawNeedle: string): boolean {
 
 function termsForRestriction(restriction: string): string[] {
   const normalized = normalizeRestriction(restriction);
-  const group = GROUPS.find((option) =>
+  const preset = PRESET_OPTIONS.find((option) =>
     [option.value, option.label.en, option.label.zh, ...(option.aliases ?? [])]
       .some((candidate) => normalizeRestriction(candidate) === normalized)
   );
-  return group ? GROUP_TERMS[group.value] : [restriction];
+  if (!preset) return [restriction];
+  if (preset.group) return GROUP_TERMS[preset.value];
+  return [preset.value, preset.label.en, preset.label.zh, ...(preset.aliases ?? [])];
 }
 
 export function recipeMatchesRestrictions(recipe: Recipe, restrictions: string[]): boolean {
@@ -80,8 +92,12 @@ export function restrictionsFromProfile(profile: Pick<Profile, "ingredientRestri
 }
 
 export function buildRestrictionOptions(foods: FoodItem[], recipes: Recipe[]): RestrictionOption[] {
-  const options: RestrictionOption[] = [...GROUPS];
-  const seen = new Set(options.flatMap((option) => [option.label.en, option.label.zh]).map(normalizeRestriction));
+  const options: RestrictionOption[] = [...PRESET_OPTIONS];
+  const seen = new Set(
+    options
+      .flatMap((option) => [option.value, option.label.en, option.label.zh, ...(option.aliases ?? [])])
+      .map(normalizeRestriction)
+  );
 
   const add = (label: BiText) => {
     const en = label.en.trim();

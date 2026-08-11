@@ -66,30 +66,41 @@ public final class MelonMateHealthPlugin: CAPPlugin, CAPBridgedPlugin {
         let group = DispatchGroup()
         var steps = 0.0
         var standMinutes = 0.0
-        var queryError: Error?
+        var stepQueryError: Error?
+        var standQueryError: Error?
+        let resultLock = NSLock()
 
         group.enter()
         sum(type: stepType, unit: .count(), interval: interval) { value, error in
+            resultLock.lock()
             steps = value
-            queryError = queryError ?? error
+            stepQueryError = error
+            resultLock.unlock()
             group.leave()
         }
 
         group.enter()
         sum(type: standType, unit: .minute(), interval: interval) { value, error in
+            resultLock.lock()
             standMinutes = value
-            queryError = queryError ?? error
+            standQueryError = error
+            resultLock.unlock()
             group.leave()
         }
 
         group.notify(queue: .main) {
-            if let queryError {
-                call.reject("Health activity query failed", nil, queryError)
+            if let stepQueryError {
+                call.reject("Step count query failed", "STEP_QUERY_FAILED", stepQueryError)
                 return
+            }
+            // A watch-less device or restricted Apple Stand Time permission
+            // should not prevent the independently available step count from syncing.
+            if let standQueryError {
+                NSLog("MelonMateHealth: Apple Stand Time query failed: %@", standQueryError.localizedDescription)
             }
             call.resolve([
                 "steps": max(0, Int(steps.rounded(.down))),
-                "standMinutes": max(0, Int(standMinutes.rounded(.down)))
+                "standMinutes": standQueryError == nil ? max(0, Int(standMinutes.rounded(.down))) : 0
             ])
         }
     }

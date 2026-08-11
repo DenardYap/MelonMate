@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, todayStr } from "./dates";
 import { DAILY_XP_REWARD, FOOD_LOG_XP_REWARD, MAX_DAILY_REWARDED_FOOD_LOGS } from "./game";
-import { useStore } from "./store";
+import { migrateHealthXpClaimTiers, useStore } from "./store";
 
 const PROFILE = "p-me";
 
@@ -67,5 +67,29 @@ describe("healthy-action XP store", () => {
     expect(useStore.getState().applyHealthActivity({ date: todayStr(), steps: 9_500, standMinutes: 60 })).toBe(0);
     expect(useStore.getState().applyHealthActivity({ date: todayStr(), steps: 12_000, standMinutes: 90 })).toBe(61);
     expect(useStore.getState().game[PROFILE].xp).toBe(168);
+  });
+
+  it("preserves already-claimed Health XP when upgrading to smaller milestones", () => {
+    const migrated = migrateHealthXpClaimTiers({
+      game: {
+        [PROFILE]: {
+          streak: 0,
+          best: 0,
+          melons: 0,
+          golden: 0,
+          xp: 107,
+          lastEval: "2026-08-08",
+          history: {},
+          healthXpClaims: {
+            "2026-08-09": { stepTier: 3, standTier: 2 },
+          },
+        },
+      },
+    });
+
+    expect(migrated.game?.[PROFILE].healthXpClaims?.["2026-08-09"]).toEqual({
+      stepTier: 9,
+      standTier: 6,
+    });
   });
 });

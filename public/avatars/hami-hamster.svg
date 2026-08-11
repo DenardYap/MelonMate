@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Hami Hamster</title><desc id="desc">A chubby hamster with melon seed cheeks.</desc>
+  <rect width="256" height="256" rx="56" fill="#EEF2D9"/><circle cx="72" cy="77" r="31" fill="#C28F5E" stroke="#594838" stroke-width="8"/><circle cx="184" cy="77" r="31" fill="#C28F5E" stroke="#594838" stroke-width="8"/><circle cx="72" cy="77" r="14" fill="#E9BE92"/><circle cx="184" cy="77" r="14" fill="#E9BE92"/>
+  <ellipse cx="128" cy="142" rx="82" ry="88" fill="#C9925E" stroke="#594838" stroke-width="8"/><path d="M75 105c17 13 27 38 28 74 1 25 49 25 50 0 1-36 11-61 28-74-7-26-29-43-53-43s-46 17-53 43z" fill="#F2D4AD"/>
+  <circle cx="103" cy="127" r="7" fill="#45392F"/><circle cx="153" cy="127" r="7" fill="#45392F"/><path d="m120 145 8 6 8-6-8-5z" fill="#DE7F75"/><path d="M128 151c-7 9-15 9-22 3M128 151c7 9 15 9 22 3" fill="none" stroke="#45392F" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="81" cy="153" rx="19" ry="16" fill="#E69A83"/><ellipse cx="175" cy="153" rx="19" ry="16" fill="#E69A83"/><g fill="#594838"><ellipse cx="79" cy="151" rx="3" ry="7" transform="rotate(-28 79 151)"/><ellipse cx="175" cy="151" rx="3" ry="7" transform="rotate(28 175 151)"/></g>
+  <path d="M93 213c22 10 48 10 70 0" fill="none" stroke="#90AD63" stroke-width="11" stroke-linecap="round"/>
+</svg>

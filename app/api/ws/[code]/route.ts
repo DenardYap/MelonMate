@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CODE_RE = /^[A-Z0-9-]{6,32}$/;
-const MAX_MEMBERS = 12;
+const MAX_MEMBERS = 2;
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });

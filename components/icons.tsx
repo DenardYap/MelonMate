@@ -152,6 +152,31 @@ const ICONS = {
 
 export type IconName = keyof typeof ICONS;
 
+export const SELECTABLE_ICONS: { name: IconName; label: string; keywords: string }[] = [
+  { name: "cutlery", label: "Meal", keywords: "food dish restaurant recipe" },
+  { name: "spark", label: "Special", keywords: "favorite custom regular" },
+  { name: "fish", label: "Fish", keywords: "seafood protein salmon" },
+  { name: "egg", label: "Egg", keywords: "breakfast protein" },
+  { name: "bread", label: "Bread", keywords: "toast carbs bakery" },
+  { name: "pizza", label: "Pizza", keywords: "pasta italian meal" },
+  { name: "vegan", label: "Vegetables", keywords: "vegan greens salad plant" },
+  { name: "apple", label: "Fruit", keywords: "apple produce snack" },
+  { name: "coffee", label: "Coffee", keywords: "drink morning cafe" },
+  { name: "drink", label: "Drink", keywords: "glass milk juice beverage" },
+  { name: "water", label: "Water", keywords: "drink hydration liquid" },
+  { name: "chocolate", label: "Treat", keywords: "snack dessert sweet" },
+  { name: "package", label: "Packaged", keywords: "product powder supplement container" },
+  { name: "fridge", label: "Prepared food", keywords: "meal prep leftovers" },
+  { name: "heart", label: "Favorite", keywords: "love healthy" },
+  { name: "fire", label: "Hot", keywords: "spicy cooked grill" },
+  { name: "sun", label: "Morning", keywords: "breakfast daily" },
+  { name: "moon", label: "Evening", keywords: "dinner night" },
+  { name: "leaf", label: "Fresh", keywords: "herbs vegetable healthy" },
+  { name: "fruit", label: "Produce", keywords: "melon fruit" },
+  { name: "goal", label: "Staple", keywords: "routine target regular" },
+  { name: "star", label: "Star", keywords: "favorite signature" },
+];
+
 export function AppIcon({
   name,
   size = 20,
@@ -207,6 +232,25 @@ export function FoodGlyph({
   return (
     <span className={`food-glyph food-glyph-${category} ${compact ? "compact" : ""}`} aria-hidden="true">
       <AppIcon name={FOOD_ICONS[category]} size={size} />
+    </span>
+  );
+}
+
+export function SavedFoodGlyph({
+  icon,
+  category,
+  size = 22,
+  compact = false,
+}: {
+  icon?: string;
+  category: FoodCat | RecipeCat;
+  size?: number;
+  compact?: boolean;
+}) {
+  const fallback = FOOD_ICONS[category];
+  return (
+    <span className={`food-glyph food-glyph-${category} ${compact ? "compact" : ""}`} aria-hidden="true">
+      <AppIcon name={iconFromLegacy(icon, fallback)} size={size} />
     </span>
   );
 }

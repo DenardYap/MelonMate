@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Chamoe Chick</title><desc id="desc">A sunny chick popping out of a striped Korean melon shell.</desc>
+  <rect width="256" height="256" rx="56" fill="#EDF4D7"/><path d="M33 61c26 8 41-6 48-33 16 24 39 27 59 8" fill="none" stroke="#C7D995" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="128" cy="117" r="61" fill="#F7D85B" stroke="#5E542D" stroke-width="8"/><path d="m116 56 13-21 13 22" fill="#F7D85B" stroke="#5E542D" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="105" cy="111" r="7" fill="#4A442B"/><circle cx="151" cy="111" r="7" fill="#4A442B"/>
+  <path d="m116 127 12-8 12 8-12 10z" fill="#E99442" stroke="#5E542D" stroke-width="5" stroke-linejoin="round"/><ellipse cx="91" cy="129" rx="11" ry="6" fill="#F3A987" opacity=".7"/><ellipse cx="165" cy="129" rx="11" ry="6" fill="#F3A987" opacity=".7"/>
+  <path d="M47 155 67 96l23 24 25-24 21 24 25-24 27 27 20-27 11 59c8 44-29 76-81 76s-96-32-91-76z" fill="#E9BC3E" stroke="#5E542D" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M78 143c-8 29-7 52 3 70M112 136c-3 34-2 63 3 88M147 136c4 34 3 63-2 88M180 141c8 29 7 52-3 71" fill="none" stroke="#FFF4B2" stroke-width="9" stroke-linecap="round"/>
+  <path d="M70 217c35 11 78 13 116 0" fill="none" stroke="#D09A2F" stroke-width="7" stroke-linecap="round"/>
+</svg>

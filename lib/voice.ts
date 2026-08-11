@@ -1,6 +1,7 @@
-import type { FoodItem, Lang, Macros, MealSlot, Recipe } from "./types";
+import type { FoodItem, Lang, Macros, MealSlot, NutritionUnit, Recipe } from "./types";
 import { resolveCountedFood } from "./foodServing";
-import { mulMacros, scaleMacros } from "./nutrition";
+import { scaleMacros } from "./nutrition";
+import { macrosForRecipeAmount, nutritionBasis, nutritionUnitLabel } from "./customRecipes";
 
 /** A parsed, loggable candidate from a voice transcript. */
 export interface VoiceHit {
@@ -11,6 +12,8 @@ export interface VoiceHit {
   macros: Macros;
   meal?: MealSlot;
   refId?: string;
+  amount?: number;
+  amountUnit?: NutritionUnit;
   src: "voice";
 }
 
@@ -224,12 +227,20 @@ export function parseVoiceFood(
     const qty = extractQty(seg);
 
     if (bestRecipe && bestRecipeLen >= bestLen) {
-      const servings = qty.count ?? 1;
+      const basis = nutritionBasis(bestRecipe);
+      const amount = basis.unit === "g" && qty.grams != null
+        ? qty.grams
+        : basis.unit === "ml" && qty.ml != null
+          ? qty.ml
+          : qty.count ?? basis.amount;
       hits.push({
         name: bestRecipe.name,
         emoji: bestRecipe.emoji,
-        qtyLabel: `${servings} ${lang === "zh" ? "份" : servings > 1 ? "servings" : "serving"}`,
-        macros: mulMacros(bestRecipe.perServing, servings),
+        qtyLabel: `${amount} ${nutritionUnitLabel(basis.unit, amount, lang)}`,
+        grams: basis.unit === "g" ? amount : undefined,
+        amount,
+        amountUnit: basis.unit,
+        macros: macrosForRecipeAmount(bestRecipe, amount),
         meal,
         refId: bestRecipe.id,
         src: "voice",

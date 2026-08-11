@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useActiveProfile, useGame, useStore } from "@/lib/store";
 import { translate, type DictKey } from "@/lib/i18n";
 import { fmtDate, todayStr } from "@/lib/dates";
 import { fmtNum } from "@/lib/nutrition";
 import {
   createWorkspace,
+  connectionCodes,
   isSetupError,
   joinWorkspace,
   memberIdFor,
@@ -18,13 +19,16 @@ import { LineChart } from "@/components/charts";
 import DailyTargetsSheet from "@/components/DailyTargetsSheet";
 import LockScreenWidget from "@/components/LockScreenWidget";
 import type { MemberSnapshot, ThemeId, WeightUnit } from "@/lib/types";
-import { levelFromXp } from "@/lib/game";
+import { levelFromXp, xpForLevel } from "@/lib/game";
 import { THEME_UNLOCK_LEVEL, THEME_VISUALS } from "@/lib/themes";
 import { AppIcon } from "@/components/icons";
 import OnboardingFlow from "@/components/OnboardingFlow";
 import NativeAppSettings from "@/components/NativeAppSettings";
 import { shareNativeBackup } from "@/lib/nativeBackup";
 import SoundSettings from "@/components/SoundSettings";
+import ProfileAvatar from "@/components/ProfileAvatar";
+import { BUILT_IN_PROFILE_AVATARS, prepareProfilePhoto } from "@/lib/profilePhoto";
+import LevelProgressRing from "@/components/LevelProgressRing";
 
 const THEME_OPTIONS: {
   id: ThemeId;
@@ -52,8 +56,35 @@ export default function MePage() {
 
   const [goalsSheet, setGoalsSheet] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const backupFileRef = useRef<HTMLInputElement>(null);
+  const photoFileRef = useRef<HTMLInputElement>(null);
   const level = levelFromXp(game.xp);
+  const xpToNextLevel = Math.max(0, xpForLevel(level + 1) - game.xp);
+
+  const chooseProfilePhoto = async (file: File) => {
+    try {
+      const photoDataUrl = await prepareProfilePhoto(file);
+      store.updateProfile(profile.id, { photoDataUrl });
+      toast(lang === "zh" ? "個人照片已更新" : "Profile photo updated", "checkCircle");
+      void syncNow();
+    } catch (error) {
+      const tooLarge = error instanceof Error && error.message === "image-too-large";
+      toast(
+        tooLarge
+          ? (lang === "zh" ? "照片太大，請選擇小於 15 MB 的照片。" : "That photo is too large. Choose one under 15 MB.")
+          : (lang === "zh" ? "無法使用這張照片，請選擇其他圖片。" : "That photo could not be used. Choose another image."),
+        "warning"
+      );
+    }
+  };
+
+  const chooseBuiltInAvatar = (photoDataUrl: string) => {
+    store.updateProfile(profile.id, { photoDataUrl });
+    setAvatarPickerOpen(false);
+    toast(lang === "zh" ? "個人照片已更新" : "Profile photo updated", "checkCircle");
+    void syncNow();
+  };
 
   /* weight trend */
   const weights = (store.weights[profile.id] ?? []).slice(-30);
@@ -104,6 +135,116 @@ export default function MePage() {
         <button className="chip press icon-label" onClick={() => setSetupOpen(true)}><AppIcon name="edit" size={15} /> {lang === "zh" ? "個人設定" : "My setup"}</button>
       </header>
 
+      <GlassCard strong className="me-profile-card mb-4">
+        <ProfileAvatar
+          className="me-profile-avatar"
+          name={profile.name}
+          photoDataUrl={profile.photoDataUrl}
+          iconSize={34}
+          eager
+        />
+        <div className="min-w-0 flex-1">
+          <div className="t-title truncate">{profile.name}</div>
+          <div className="t-cap mt-1">{game.xp.toLocaleString()} {t("xp")} {lang === "zh" ? "總計" : "total"}</div>
+        </div>
+        <button
+          type="button"
+          className="chip chip-on press icon-label me-photo-button"
+          onClick={() => setAvatarPickerOpen(true)}
+        >
+          <AppIcon name="camera" size={16} /> {lang === "zh" ? "更換照片" : "Change photo"}
+        </button>
+        <div className="me-xp-level">
+          <LevelProgressRing
+            xp={game.xp}
+            size={58}
+            stroke={7}
+            label={lang === "zh" ? "等級" : "Level"}
+            shortLabel={lang === "zh" ? "等級" : "LV"}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="me-xp-level-heading">
+              <strong>{t("level")} {level}</strong>
+              <span>{game.xp.toLocaleString()} {t("xp")}</span>
+            </div>
+            <div className="t-cap mt-1">
+              {lang === "zh"
+                ? `還差 ${xpToNextLevel.toLocaleString()} XP 升到等級 ${level + 1}`
+                : `${xpToNextLevel.toLocaleString()} XP to Level ${level + 1}`}
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+
+      <input
+        ref={photoFileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void chooseProfilePhoto(file);
+          event.target.value = "";
+        }}
+      />
+
+      <Sheet
+        open={avatarPickerOpen}
+        onClose={() => setAvatarPickerOpen(false)}
+        title={<span className="icon-label"><AppIcon name="user" size={20} /> {lang === "zh" ? "選擇個人照片" : "Choose profile photo"}</span>}
+      >
+        <div className="t-sub mb-3">
+          {lang === "zh" ? "選擇一位甜瓜朋友，或從你的相簿上傳照片。" : "Pick a melon friend, or upload a photo from your library."}
+        </div>
+        <div className="profile-avatar-grid">
+          {BUILT_IN_PROFILE_AVATARS.map((avatar) => {
+            const selected = profile.photoDataUrl === avatar.src;
+            return (
+              <button
+                type="button"
+                key={avatar.id}
+                className={`profile-avatar-choice press ${selected ? "is-selected" : ""}`}
+                aria-pressed={selected}
+                aria-label={avatar.name[lang]}
+                onClick={() => chooseBuiltInAvatar(avatar.src)}
+              >
+                <ProfileAvatar
+                  className="profile-avatar-choice-art"
+                  name={avatar.name[lang]}
+                  photoDataUrl={avatar.src}
+                  iconSize={28}
+                />
+                <span>{avatar.name[lang]}</span>
+                {selected && <i aria-hidden="true"><AppIcon name="check" size={13} strokeWidth={2.6} /></i>}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary press w-full mt-4 icon-label"
+          onClick={() => {
+            photoFileRef.current?.click();
+            setAvatarPickerOpen(false);
+          }}
+        >
+          <AppIcon name="upload" size={18} /> {lang === "zh" ? "從相簿上傳" : "Upload from photo library"}
+        </button>
+        {profile.photoDataUrl && (
+          <button
+            type="button"
+            className="btn btn-ghost press w-full mt-2"
+            onClick={() => {
+              store.updateProfile(profile.id, { photoDataUrl: undefined });
+              setAvatarPickerOpen(false);
+              void syncNow();
+            }}
+          >
+            {lang === "zh" ? "使用預設圖示" : "Use default icon"}
+          </button>
+        )}
+      </Sheet>
+
       <FriendsSection />
 
       <GlassCard className="p-4 mb-4 press" onClick={() => setSetupOpen(true)}>
@@ -122,7 +263,7 @@ export default function MePage() {
       </GlassCard>
 
       {/* weight trend */}
-      {weights.length >= 2 && (
+      {weights.length >= 1 && (
         <GlassCard className="p-4 mb-4">
           <div className="t-section mb-2 icon-label"><AppIcon name="chart" size={17} /> {t("weightTrend")} ({profile.unit})</div>
           <LineChart
@@ -223,7 +364,7 @@ export default function MePage() {
           <div className="flex-1 font-semibold icon-label"><AppIcon name="save" size={18} /> {t("exportData")}</div>
           <AppIcon name="next" size={17} />
         </button>
-        <button type="button" className="row row-button press cursor-pointer" onClick={() => fileRef.current?.click()}>
+        <button type="button" className="row row-button press cursor-pointer" onClick={() => backupFileRef.current?.click()}>
           <div className="flex-1 font-semibold icon-label"><AppIcon name="download" size={18} /> {t("importData")}</div>
           <AppIcon name="next" size={17} />
         </button>
@@ -243,7 +384,7 @@ export default function MePage() {
       <div className="t-cap text-center mb-4 px-6">{t("aboutData")}</div>
 
       <input
-        ref={fileRef}
+        ref={backupFileRef}
         type="file"
         accept="application/json"
         style={{ display: "none" }}
@@ -265,13 +406,13 @@ export default function MePage() {
 /* ------------------------------ friends ------------------------------ */
 
 function FriendsSection() {
-  const router = useRouter();
   const lang = useStore((s) => s.lang);
   const store = useStore();
   const profile = useActiveProfile();
   const t = (k: DictKey) => translate(k, lang);
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -280,9 +421,11 @@ function FriendsSection() {
     .filter((member) => member.id !== selfId)
     .sort((a, b) => b.updatedAt - a.updatedAt);
 
+  const codes = connectionCodes(store.ws);
+
   const copyCode = async () => {
-    if (!store.ws.code) return;
-    await navigator.clipboard.writeText(store.ws.code);
+    if (!inviteCode) return;
+    await navigator.clipboard.writeText(inviteCode);
     toast(t("copied"), "copy");
   };
 
@@ -290,8 +433,9 @@ function FriendsSection() {
     setBusy(true);
     setError(null);
     try {
-      await createWorkspace();
-      toast(t("spaceCreated"), "fruit");
+      const nextCode = await createWorkspace();
+      setInviteCode(nextCode);
+      toast(lang === "zh" ? "朋友邀請已建立" : "Friend invite created", "fruit");
     } catch (e) {
       setError(e instanceof Error ? e.message : "sync-failed");
     } finally {
@@ -319,12 +463,6 @@ function FriendsSection() {
     if (!useStore.getState().ws.error) toast(t("lastSynced"), "↻");
   };
 
-  const updateSharing = (patch: Partial<typeof profile>, message: string) => {
-    store.updateProfile(profile.id, patch);
-    toast(message, "upload");
-    void syncNow();
-  };
-
   return (
     <section className="mb-4">
       <div className="flex items-center justify-between mb-2">
@@ -333,7 +471,7 @@ function FriendsSection() {
           <div className="t-cap">{t("friendsReadOnly")}</div>
         </div>
         <div className="flex gap-2">
-          {store.ws.code && (
+          {codes.length > 0 && (
             <button
               className="ibtn press"
               style={{ width: 34, height: 34 }}
@@ -344,9 +482,7 @@ function FriendsSection() {
               <AppIcon name="refresh" size={18} />
             </button>
           )}
-          {friends.length > 0 && (
-            <button className="chip chip-on press icon-label" onClick={() => setOpen(true)}><AppIcon name="addUser" size={16} /> {t("addFriend")}</button>
-          )}
+          <button className="chip chip-on press icon-label" onClick={() => setOpen(true)}><AppIcon name="addUser" size={16} /> {t("addFriend")}</button>
         </div>
       </div>
 
@@ -354,54 +490,13 @@ function FriendsSection() {
         <GlassCard className="p-5 text-center">
           <div className="empty-icon mx-auto"><AppIcon name="friends" size={34} /></div>
           <div className="font-bold mt-2">{t("noFriendsTitle")}</div>
-          <div className="t-sub mt-1">{store.ws.code ? t("noFriendsYet") : t("noFriendsHint")}</div>
+          <div className="t-sub mt-1">{codes.length ? t("noFriendsYet") : (lang === "zh" ? "建立一組一對一邀請碼，或輸入朋友傳給你的邀請碼。" : "Create a one-to-one invite, or enter a code a friend sent you.")}</div>
           <button className="btn btn-primary press mt-3 icon-label" onClick={() => setOpen(true)}><AppIcon name="addUser" size={17} /> {t("addFriend")}</button>
         </GlassCard>
       ) : (
         <div className="flex flex-col gap-3">
           {friends.map((friend) => <FriendProgressCard key={friend.id} friend={friend} />)}
         </div>
-      )}
-
-      {store.ws.code && (
-        <GlassCard className="friend-sharing-card mt-3">
-          <div className="friend-sharing-head">
-            <span className="icon-tile"><AppIcon name="upload" size={19} /></span>
-            <div className="min-w-0 flex-1">
-              <div className="font-bold">{lang === "zh" ? "與朋友圈分享" : "Share with your circle"}</div>
-              <div className="t-cap">{lang === "zh" ? "只有你選擇的內容會同步；朋友儲存的是自己的副本。" : "Only chosen items sync. Friends save their own editable copy."}</div>
-            </div>
-          </div>
-          <ShareSwitchRow
-            icon="calendar"
-            label={lang === "zh" ? "未來 7 天餐點計畫" : "Upcoming 7-day meal plan"}
-            hint={lang === "zh" ? "包括計畫中使用的食譜" : "Includes recipes used by the plan"}
-            checked={Boolean(profile.shareMealPlan)}
-            onChange={() => updateSharing(
-              { shareMealPlan: !profile.shareMealPlan },
-              lang === "zh" ? "餐點計畫分享設定已更新" : "Meal-plan sharing updated"
-            )}
-          />
-          <ShareSwitchRow
-            icon="gym"
-            label={lang === "zh" ? "目前訓練計畫" : "Active workout plan"}
-            hint={lang === "zh" ? "不包含每組訓練紀錄" : "Set-by-set history stays private"}
-            checked={Boolean(profile.shareWorkoutPlan)}
-            onChange={() => updateSharing(
-              { shareWorkoutPlan: !profile.shareWorkoutPlan },
-              lang === "zh" ? "訓練計畫分享設定已更新" : "Workout-plan sharing updated"
-            )}
-          />
-          <button className="friend-share-row press" onClick={() => router.push("/kitchen")}>
-            <AppIcon name="kitchen" size={18} />
-            <span className="min-w-0 flex-1">
-              <b>{lang === "zh" ? "分享的食譜" : "Shared recipes"}</b>
-              <small>{lang === "zh" ? "從食譜詳細資料選擇分享" : "Choose them from each recipe’s details"}</small>
-            </span>
-            <span className="chip">{profile.sharedRecipeIds?.length ?? 0}</span>
-            <AppIcon name="next" size={16} />
-          </button>
-        </GlassCard>
       )}
 
       {store.ws.error && (
@@ -411,43 +506,53 @@ function FriendsSection() {
       )}
 
       <Sheet open={open} onClose={() => setOpen(false)} title={<span className="icon-label"><AppIcon name="addUser" size={21} /> {t("addFriend")}</span>}>
-        {store.ws.code ? (
-          <div className="pb-2">
-            <div className="t-sub mb-3">{t("shareFriendCodeHint")}</div>
-            <button
-              className="btn press w-full"
-              style={{ fontSize: 18, letterSpacing: 1.5 }}
-              onClick={() => void copyCode()}
-            >
-              {store.ws.code} · {t("copy")}
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3 pb-2">
-            <div className="t-sub">{t("addFriendHint")}</div>
-            <button className="btn btn-primary press w-full" onClick={() => void create()} disabled={busy}>
-              {busy ? t("syncNow") : t("createInvite")}
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="divider flex-1" />
-              <span className="t-cap">{t("or")}</span>
-              <div className="divider flex-1" />
+        <div className="flex flex-col gap-3 pb-2">
+          <div className="t-sub">{lang === "zh" ? "每組邀請碼只連結一位朋友。你可以建立邀請，也可以加入任何朋友傳來的邀請。" : "Each invite connects one friend. Create a code for them, or join any code a friend sends you."}</div>
+          {inviteCode ? (
+            <div className="flex flex-col gap-2">
+              <button
+                className="btn press w-full"
+                style={{ fontSize: 18, letterSpacing: 1.5 }}
+                onClick={() => void copyCode()}
+              >
+                {inviteCode} · {t("copy")}
+              </button>
+              <button className="btn btn-ghost press w-full" onClick={() => void create()} disabled={busy}>
+                {busy ? t("syncNow") : (lang === "zh" ? "為另一位朋友建立新邀請" : "Create an invite for another friend")}
+              </button>
             </div>
-            <input
-              className="field tabular"
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder={t("friendCodePlaceholder")}
-              autoCapitalize="characters"
-            />
-            <button className="btn press w-full" onClick={() => void join()} disabled={busy || !code.trim()}>
-              {t("joinFriend")}
+          ) : (
+            <button className="btn btn-primary press w-full" onClick={() => void create()} disabled={busy}>
+              {busy ? t("syncNow") : (lang === "zh" ? "建立朋友邀請碼" : "Create a friend invite")}
             </button>
+          )}
+          <div className="flex items-center gap-2">
+            <div className="divider flex-1" />
+            <span className="t-cap">{t("or")}</span>
+            <div className="divider flex-1" />
           </div>
-        )}
+          <input
+            className="field tabular"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder={t("friendCodePlaceholder")}
+            autoCapitalize="characters"
+          />
+          <button className="btn press w-full" onClick={() => void join()} disabled={busy || !code.trim()}>
+            {lang === "zh" ? "加入朋友" : "Add friend with code"}
+          </button>
+        </div>
         {error && (
           <div className="t-cap mt-2" style={{ color: "var(--danger)" }}>
-            {isSetupError(error) ? t("syncSetupHint") : error === "bad-code" ? t("badCode") : error === "space-not-found" ? t("spaceNotFound") : t("syncError")}
+            {isSetupError(error)
+              ? t("syncSetupHint")
+              : error === "bad-code"
+                ? t("badCode")
+                : error === "space-not-found"
+                  ? t("spaceNotFound")
+                  : error === "space-full"
+                    ? (lang === "zh" ? "此邀請已由另一位朋友使用。請對方建立新的邀請碼。" : "This invite was already used by another friend. Ask for a new code.")
+                    : t("syncError")}
           </div>
         )}
       </Sheet>
@@ -455,47 +560,21 @@ function FriendsSection() {
   );
 }
 
-function ShareSwitchRow({
-  icon,
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  icon: Parameters<typeof AppIcon>[0]["name"];
-  label: string;
-  hint: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      className="friend-share-row press"
-      role="switch"
-      aria-checked={checked}
-      onClick={onChange}
-    >
-      <AppIcon name={icon} size={18} />
-      <span className="min-w-0 flex-1">
-        <b>{label}</b>
-        <small>{hint}</small>
-      </span>
-      <span className={`friend-share-switch ${checked ? "is-on" : ""}`} aria-hidden="true"><i /></span>
-    </button>
-  );
-}
-
 function FriendProgressCard({ friend }: { friend: MemberSnapshot }) {
-  const router = useRouter();
   const lang = useStore((s) => s.lang);
   const t = (k: DictKey) => translate(k, lang);
   const calProgress = friend.today.calGoal > 0 ? Math.min(1, friend.today.cal / friend.today.calGoal) : 0;
   const proteinProgress = friend.today.proteinGoal > 0 ? Math.min(1, friend.today.protein / friend.today.proteinGoal) : 0;
 
   return (
-    <GlassCard className="p-4" onClick={() => router.push(`/friends/${encodeURIComponent(friend.id)}`)}>
+    <Link className="glass p-4 press friend-progress-card" href={`/friends?id=${encodeURIComponent(friend.id)}`}>
       <div className="flex items-center gap-3 mb-3">
-        <div className="profile-icon"><AppIcon name="user" size={24} /></div>
+        <ProfileAvatar
+          className="profile-icon"
+          name={friend.name}
+          photoDataUrl={friend.photoDataUrl}
+          iconSize={24}
+        />
         <div className="flex-1 min-w-0">
           <div className="font-bold" style={{ fontSize: 16 }}>{friend.name}</div>
           <div className="t-cap">{t("level")} {friend.level} · {friend.xp} {t("xp")}</div>
@@ -549,7 +628,7 @@ function FriendProgressCard({ friend }: { friend: MemberSnapshot }) {
           {friend.lastWorkout.prs > 0 ? <span className="icon-label">· <AppIcon name="medal" size={14} /> {friend.lastWorkout.prs}</span> : ""}
         </div>
       )}
-    </GlassCard>
+    </Link>
   );
 }
 
