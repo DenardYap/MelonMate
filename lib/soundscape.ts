@@ -70,8 +70,15 @@ interface WebAudioSession {
 
 let preferences = DEFAULT_SOUND_PREFERENCES;
 let suspended = false;
-let backgroundPlayer: HTMLAudioElement | null = null;
+let voiceCaptureDepth = 0;
+let suspendedBeforeVoiceCapture = false;
+let backgroundContext: AudioContext | null = null;
+let backgroundGain: GainNode | null = null;
+let backgroundNode: AudioBufferSourceNode | null = null;
 let backgroundSource: string | null = null;
+let backgroundLoadingSource: string | null = null;
+let backgroundLoadToken = 0;
+const backgroundBuffers = new Map<string, AudioBuffer>();
 const activeEffects = new Set<HTMLAudioElement>();
 
 export function getBackgroundThemeForHour(hour: number): BackgroundThemeTrack {
@@ -113,11 +120,36 @@ export function saveSoundPreferences(next: SoundPreferences) {
 export function suspendSoundscape() {
   suspended = true;
   stopEffects();
-  backgroundPlayer?.pause();
+  suspendBackgroundMusic();
 }
 
 export function resumeSoundscape() {
+  if (voiceCaptureDepth > 0) return;
   suspended = false;
+  configureAudioSession();
+  syncBackgroundMusic();
+}
+
+export function beginVoiceCaptureSoundscape() {
+  if (voiceCaptureDepth === 0) {
+    suspendedBeforeVoiceCapture = suspended;
+    suspended = true;
+    stopEffects();
+    suspendBackgroundMusic();
+    setAudioSessionType("play-and-record");
+  }
+  voiceCaptureDepth += 1;
+}
+
+export function endVoiceCaptureSoundscape() {
+  if (voiceCaptureDepth === 0) return;
+  voiceCaptureDepth -= 1;
+  if (voiceCaptureDepth > 0) return;
+
+  const pageIsHidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+  suspended = suspendedBeforeVoiceCapture || pageIsHidden;
+  suspendedBeforeVoiceCapture = false;
+  if (suspended) return;
   configureAudioSession();
   syncBackgroundMusic();
 }
@@ -127,17 +159,22 @@ export function syncBackgroundMusic(now = new Date()) {
   configureAudioSession();
   const theme = getBackgroundThemeForHour(now.getHours());
 
-  if (!backgroundPlayer || backgroundSource !== theme.source) {
+  if (backgroundSource !== theme.source) {
     stopBackgroundMusic(true);
-    backgroundPlayer = createPlayer(theme.source);
-    backgroundPlayer.loop = true;
     backgroundSource = theme.source;
   }
 
+  const context = getBackgroundAudioContext();
+  if (!context) return;
   updateBackgroundVolume();
-  if (backgroundPlayer.paused) void backgroundPlayer.play().catch(() => {
+  if (context.state === "suspended") void context.resume().catch(() => {
     // Browsers can block autoplay. The provider retries from the next user gesture.
   });
+  if (!backgroundNode && backgroundLoadingSource !== theme.source) {
+    const token = ++backgroundLoadToken;
+    backgroundLoadingSource = theme.source;
+    void loadAndStartBackgroundMusic(context, theme.source, token);
+  }
 }
 
 export function playSound(effect: SoundEffect) {
@@ -168,15 +205,30 @@ function createPlayer(source: string) {
 }
 
 function configureAudioSession() {
+  // Theme music is app ambience, not primary media. Keeping it ambient avoids
+  // taking over Now Playing while transient effects can mix with other apps.
+  setAudioSessionType(preferences.musicEnabled ? "ambient" : "transient");
+  clearMediaSession();
+}
+
+function setAudioSessionType(type: WebAudioSession["type"]) {
   if (typeof navigator === "undefined") return;
   const audioSession = (navigator as Navigator & { audioSession?: WebAudioSession }).audioSession;
   if (!audioSession) return;
   try {
-    // Treat effects as non-primary audio when the theme is muted so music from
-    // another app keeps playing. Theme playback remains a primary media session.
-    audioSession.type = preferences.musicEnabled ? "playback" : "transient";
+    audioSession.type = type;
   } catch {
     // Audio Session API support varies by browser and OS version.
+  }
+}
+
+function clearMediaSession() {
+  if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = "none";
+  } catch {
+    // A browser may expose only part of the Media Session API.
   }
 }
 
@@ -189,17 +241,73 @@ function stopEffects() {
 }
 
 function updateBackgroundVolume() {
-  if (backgroundPlayer) {
-    backgroundPlayer.volume = Math.min(1, preferences.volume * MUSIC_VOLUME_MULTIPLIER);
+  if (backgroundContext && backgroundGain) {
+    backgroundGain.gain.setValueAtTime(
+      Math.min(1, preferences.volume * MUSIC_VOLUME_MULTIPLIER),
+      backgroundContext.currentTime,
+    );
   }
 }
 
 function stopBackgroundMusic(reset: boolean) {
-  if (!backgroundPlayer) return;
-  backgroundPlayer.pause();
-  if (reset) backgroundPlayer.currentTime = 0;
+  if (backgroundNode) {
+    backgroundNode.stop();
+    backgroundNode.disconnect();
+    backgroundNode = null;
+  }
   if (reset) {
-    backgroundPlayer = null;
+    backgroundLoadToken += 1;
+    backgroundLoadingSource = null;
     backgroundSource = null;
+    suspendBackgroundMusic();
+  }
+}
+
+function suspendBackgroundMusic() {
+  if (backgroundContext?.state === "running") {
+    void backgroundContext.suspend().catch(() => {});
+  }
+}
+
+type AudioContextConstructor = new () => AudioContext;
+
+function getBackgroundAudioContext() {
+  if (backgroundContext) return backgroundContext;
+  const AudioContextClass = window.AudioContext
+    ?? (window as Window & { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext;
+  if (!AudioContextClass) return null;
+  backgroundContext = new AudioContextClass();
+  backgroundGain = backgroundContext.createGain();
+  backgroundGain.connect(backgroundContext.destination);
+  return backgroundContext;
+}
+
+async function loadAndStartBackgroundMusic(context: AudioContext, source: string, token: number) {
+  try {
+    let buffer = backgroundBuffers.get(source);
+    if (!buffer) {
+      const response = await fetch(source);
+      if (!response.ok) throw new Error(`Unable to load background music: ${response.status}`);
+      buffer = await context.decodeAudioData(await response.arrayBuffer());
+      backgroundBuffers.set(source, buffer);
+    }
+    if (
+      token !== backgroundLoadToken
+      || source !== backgroundSource
+      || !preferences.musicEnabled
+      || suspended
+      || !backgroundGain
+    ) return;
+
+    const node = context.createBufferSource();
+    node.buffer = buffer;
+    node.loop = true;
+    node.connect(backgroundGain);
+    node.start();
+    backgroundNode = node;
+  } catch {
+    // Music is optional; a failed asset should never affect app usage.
+  } finally {
+    if (backgroundLoadingSource === source) backgroundLoadingSource = null;
   }
 }

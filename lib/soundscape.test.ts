@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SOUND_PREFERENCES, getBackgroundThemeForHour, saveSoundPreferences } from "./soundscape";
+import {
+  beginVoiceCaptureSoundscape,
+  DEFAULT_SOUND_PREFERENCES,
+  endVoiceCaptureSoundscape,
+  getBackgroundThemeForHour,
+  saveSoundPreferences,
+} from "./soundscape";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -19,7 +25,8 @@ describe("time-of-day background themes", () => {
 
   it("uses a transient audio session for effects when theme music is muted", () => {
     const audioSession = { type: "auto" };
-    vi.stubGlobal("navigator", { audioSession });
+    const mediaSession = { metadata: { title: "Old media" }, playbackState: "playing" };
+    vi.stubGlobal("navigator", { audioSession, mediaSession });
     vi.stubGlobal("window", {
       localStorage: { setItem: vi.fn() },
     });
@@ -27,5 +34,18 @@ describe("time-of-day background themes", () => {
     saveSoundPreferences({ ...DEFAULT_SOUND_PREFERENCES, musicEnabled: false });
 
     expect(audioSession.type).toBe("transient");
+    expect(mediaSession).toMatchObject({ metadata: null, playbackState: "none" });
+  });
+
+  it("uses a recording audio session while voice capture is active", () => {
+    const audioSession = { type: "auto" };
+    vi.stubGlobal("navigator", { audioSession });
+
+    saveSoundPreferences(DEFAULT_SOUND_PREFERENCES);
+    beginVoiceCaptureSoundscape();
+    expect(audioSession.type).toBe("play-and-record");
+
+    endVoiceCaptureSoundscape();
+    expect(audioSession.type).toBe("ambient");
   });
 });

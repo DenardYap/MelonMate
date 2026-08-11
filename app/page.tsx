@@ -411,6 +411,7 @@ function WeightTrendCard() {
               height={130}
               color="var(--canta-500)"
               unit={` ${profile.unit}`}
+              showLastValue={false}
               accessibleLabel={`${t("weightTrend")}: ${weights.map((entry) => `${fmtDate(entry.date, lang)} ${entry.value} ${profile.unit}`).join(", ")}`}
             />
           </>

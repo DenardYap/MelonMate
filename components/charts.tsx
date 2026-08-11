@@ -10,6 +10,7 @@ export function LineChart({
   color = "var(--melon-500)",
   unit = "",
   showDots = true,
+  showLastValue = true,
   accessibleLabel,
 }: {
   points: number[];
@@ -18,12 +19,13 @@ export function LineChart({
   color?: string;
   unit?: string;
   showDots?: boolean;
+  showLastValue?: boolean;
   accessibleLabel?: string;
 }) {
   const W = 320;
   const H = height;
   const padL = 10;
-  const padR = 48;
+  const padR = showLastValue ? 48 : 10;
   const padT = 16;
   const padB = labels ? 22 : 8;
   const plotRight = W - padR;
@@ -96,10 +98,12 @@ export function LineChart({
         points.map((p, i) => (
           <circle key={i} cx={x(i)} cy={y(p)} r={i === points.length - 1 ? 4.8 : 3.2} fill={color} stroke="var(--bg)" strokeWidth="2" />
         ))}
-      <text x={x(points.length - 1) + 7} y={y(last) + 4} fontSize="11" fontWeight="700" fill="var(--ink)" className="tabular">
-        {Math.round(last * 10) / 10}
-        {unit}
-      </text>
+      {showLastValue && (
+        <text x={x(points.length - 1) + 7} y={y(last) + 4} fontSize="11" fontWeight="700" fill="var(--ink)" className="tabular">
+          {Math.round(last * 10) / 10}
+          {unit}
+        </text>
+      )}
       {labels &&
         labels.map((l, i) =>
           l ? (

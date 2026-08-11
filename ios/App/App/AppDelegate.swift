@@ -8,22 +8,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        configureAudioSession()
+        AppDelegate.configureAudioSessionForWebMedia()
         return true
     }
 
-    static func configureAudioSessionForMixing() {
+    static func configureAudioSessionForWebMedia() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-            try audioSession.setActive(true)
+            // The embedded web app plays gentle UI audio and records voice food
+            // logs. A playback-only category prevents WKWebView from opening the
+            // microphone in signed/TestFlight builds. Keep input available and
+            // let WebKit activate the session only when it starts media work.
+            try audioSession.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.mixWithOthers, .defaultToSpeaker, .allowBluetoothHFP]
+            )
         } catch {
-            print("Unable to activate app audio: \(error.localizedDescription)")
+            print("Unable to configure app audio: \(error.localizedDescription)")
         }
-    }
-
-    private func configureAudioSession() {
-        AppDelegate.configureAudioSessionForMixing()
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -42,8 +45,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // WebKit and media plugins can replace the shared category while the app
-        // is inactive. Restore non-interrupting UI audio on every activation.
-        configureAudioSession()
+        // is inactive. Restore a category that supports both playback and input.
+        AppDelegate.configureAudioSessionForWebMedia()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

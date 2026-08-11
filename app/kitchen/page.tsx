@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useActiveProfile, useStore, newId } from "@/lib/store";
 import { CAT_LABEL, CAT_ORDER, MEAL_ORDER, translate, type DictKey } from "@/lib/i18n";
 import { addDays, fmtDate, todayStr, weekDates, weekdayLabel } from "@/lib/dates";
@@ -8,14 +8,14 @@ import { fmtNum, mulMacros } from "@/lib/nutrition";
 import { defaultMealByTime } from "@/lib/voice";
 import { EmptyState, GlassCard, Segmented, Sheet, Stepper, toast } from "@/components/ui";
 import { AppIcon, FoodGlyph, MealGlyph, SavedFoodGlyph, SELECTABLE_ICONS } from "@/components/icons";
-import type { GroceryItem, Ingredient, MealSlot, NutritionUnit, Recipe, RecipeCat } from "@/lib/types";
+import type { GroceryItem, Ingredient, MealSlot, Recipe, RecipeCat } from "@/lib/types";
 import { recommendRecipes, selectedRecipesForProfile } from "@/lib/onboarding";
 import { mealPlanMealCount, type MealPlanApplyMode } from "@/lib/mealPlans";
 import { filterRecipes, paginateRecipes } from "@/lib/recipeDiscovery";
 import { syncNow } from "@/lib/sync";
 import { restrictionsFromProfile } from "@/lib/ingredientRestrictions";
 import { IngredientRestrictionEditor } from "@/components/IngredientRestrictionEditor";
-import { caloriesFromMacros, NUTRITION_UNITS, nutritionBasis, nutritionUnitLabel } from "@/lib/customRecipes";
+import { caloriesFromMacros, nutritionBasis, nutritionUnitLabel } from "@/lib/customRecipes";
 
 type Tab = "recipes" | "planner" | "groceries";
 
@@ -110,6 +110,12 @@ function RecipesTab() {
   const restrictions = restrictionsFromProfile(profile);
 
   const recipes = useMemo(() => selectedRecipesForProfile(profile, allRecipes), [allRecipes, profile]);
+
+  useEffect(() => {
+    if (window.location.hash !== "#create-recipe") return;
+    setCreating(true);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }, []);
 
   const list = useMemo(
     () => (cat === "all" ? recipes : recipes.filter((r) => r.cat === cat)),
@@ -613,8 +619,6 @@ function RecipeFormSheet({
     p: "",
     c: "",
     f: "",
-    basisAmount: "1",
-    basisUnit: "serving" as NutritionUnit,
     routineDays: [] as number[],
     routineMeal: "" as MealSlot | "",
     ings: [] as { name: string; amount: string }[],
@@ -626,7 +630,6 @@ function RecipeFormSheet({
   const [iconQuery, setIconQuery] = useState("");
 
   if (open && initial && loadedId !== initial.id) {
-    const basis = nutritionBasis(initial);
     const calculated = caloriesFromMacros(initial.perServing);
     setLoadedId(initial.id);
     setCalEdited(Math.abs(initial.perServing.cal - calculated) >= 1);
@@ -641,8 +644,6 @@ function RecipeFormSheet({
       p: String(initial.perServing.protein),
       c: String(initial.perServing.carbs),
       f: String(initial.perServing.fat),
-      basisAmount: String(basis.amount),
-      basisUnit: basis.unit,
       routineDays: initial.routine?.days ?? [],
       routineMeal: initial.routine?.meal ?? "",
       ings: initial.ingredients.map((i) => ({ name: i.name[lang] || i.name.en, amount: i.amount[lang] || i.amount.en })),
@@ -681,7 +682,7 @@ function RecipeFormSheet({
         carbs: Number(form.c) || 0,
         fat: Number(form.f) || 0,
       },
-      nutritionBasis: { amount: Math.max(0.01, Number(form.basisAmount) || 1), unit: form.basisUnit },
+      nutritionBasis: initial ? nutritionBasis(initial) : { amount: 1, unit: "serving" as const },
       routine: form.routineDays.length ? { days: form.routineDays, meal: form.routineMeal || undefined } : undefined,
       ingredients,
       tags: [],
@@ -761,20 +762,7 @@ function RecipeFormSheet({
           </div>
         </div>
 
-        <div className="t-section">{lang === "zh" ? "營養基準" : "Nutrition basis"}</div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <div className="t-cap mb-1">{lang === "zh" ? "數量" : "Amount"}</div>
-            <input className="field" type="number" inputMode="decimal" min="0.01" step="0.1" value={form.basisAmount} onChange={(e) => setF({ basisAmount: e.target.value })} />
-          </div>
-          <div>
-            <div className="t-cap mb-1">{lang === "zh" ? "單位" : "Unit"}</div>
-            <select className="field" value={form.basisUnit} onChange={(e) => setF({ basisUnit: e.target.value as NutritionUnit })}>
-              {NUTRITION_UNITS.map((unit) => <option key={unit} value={unit}>{nutritionUnitLabel(unit, 2, lang)}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="t-cap">{lang === "zh" ? "例如：1 份，或 100 克。記錄時可輸入 1.5 份、150 克等。" : "For example, 1 serving or 100 g. When logging, you can enter 1.5 servings, 150 g, and so on."}</div>
+        <div className="t-section">{lang === "zh" ? "每份營養" : "Nutrition per serving"}</div>
         <div className="grid grid-cols-2 gap-2">
           <input className="field" inputMode="decimal" placeholder={`${t("protein")} g`} value={form.p} onChange={(e) => setF({ p: e.target.value })} />
           <input className="field" inputMode="decimal" placeholder={`${t("carbs")} g`} value={form.c} onChange={(e) => setF({ c: e.target.value })} />

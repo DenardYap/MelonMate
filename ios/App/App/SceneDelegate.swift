@@ -23,6 +23,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        AppDelegate.configureAudioSessionForMixing()
+        AppDelegate.configureAudioSessionForWebMedia()
     }
 }

@@ -34,7 +34,11 @@ import { AnimatedFoodHoney, isHoneyTheme } from "@/components/AnimatedFoodHoney"
 import type { BiText, FoodItem, Lang, Macros, MealSlot, NutritionUnit, Recipe } from "@/lib/types";
 import { apiFetch, isNativeApiOriginMissingError, nativeApiUnavailableMessage } from "@/lib/api";
 import { successHaptic } from "@/lib/nativeApp";
-import { playSound } from "@/lib/soundscape";
+import {
+  beginVoiceCaptureSoundscape,
+  endVoiceCaptureSoundscape,
+  playSound,
+} from "@/lib/soundscape";
 
 type ReviewSource = "search" | "text" | "voice" | "photo" | "barcode" | "manual";
 
@@ -162,6 +166,7 @@ function AddInner() {
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(params.get("mode") === "photo" || params.get("mode") === "scan");
   const [manualOpen, setManualOpen] = useState(params.get("mode") === "manual");
+  const [recipeOpen, setRecipeOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchResultsRef = useRef<HTMLDivElement>(null);
 
@@ -174,6 +179,10 @@ function AddInner() {
     return recipes.filter((recipe) => recipe.custom && routineMatches(recipe, localDate, meal));
   }, [date, meal, recipes]);
   const savedRecipes = useMemo(() => recipes.filter((recipe) => recipe.custom), [recipes]);
+  const recipeChoices = useMemo(() => {
+    const regularIds = new Set(regularRecipes.map((recipe) => recipe.id));
+    return [...regularRecipes, ...savedRecipes.filter((recipe) => !regularIds.has(recipe.id))];
+  }, [regularRecipes, savedRecipes]);
   const searchActive = searchFocused || input.trim().length >= 2;
 
   useEffect(() => {
@@ -465,31 +474,6 @@ function AddInner() {
               </div>
             </div>
           )}
-          {!review && !input.trim() && savedRecipes.length > 0 && (
-            <div className="food-quick-recipes">
-              <div className="food-search-heading">
-                <b>{regularRecipes.length ? (lang === "zh" ? "現在常吃" : "Regulars right now") : (lang === "zh" ? "我的食物與食譜" : "My foods & recipes")}</b>
-                <span>{regularRecipes.length || savedRecipes.length}</span>
-              </div>
-              <div className="food-quick-recipe-grid">
-                {(regularRecipes.length ? regularRecipes : savedRecipes).slice(0, 8).map((recipe) => {
-                  const basis = nutritionBasis(recipe);
-                  return (
-                    <button
-                      key={recipe.id}
-                      type="button"
-                      className="food-quick-recipe press"
-                      onClick={() => reviewCatalogResult({ kind: "recipe", item: recipe, score: 160, matchedOn: lang === "zh" ? "我的食譜" : "My recipe" })}
-                    >
-                      <span><AppIcon name={iconFromLegacy(recipe.emoji, "cutlery")} size={19} /></span>
-                      <b>{recipe.name[lang] || recipe.name.en}</b>
-                      <small>{fmtNum(recipe.perServing.cal)} cal / {formatAmount(basis.amount)} {nutritionUnitLabel(basis.unit, basis.amount, lang)}</small>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           <div className="log-food-actions">
             <button className="log-food-action press" onClick={() => setCameraOpen(true)}>
               <span><AppIcon name="camera" size={22} /></span>
@@ -509,6 +493,11 @@ function AddInner() {
               <span><AppIcon name="manual" size={22} /></span>
               <b>{lang === "zh" ? "自訂" : "Custom"}</b>
               <small>{lang === "zh" ? "自行輸入熱量與營養資料" : "Enter calories and nutrition yourself"}</small>
+            </button>
+            <button className="log-food-action log-food-recipe press" onClick={() => setRecipeOpen(true)}>
+              <span><AppIcon name="kitchen" size={22} /></span>
+              <b>{lang === "zh" ? "食譜" : "Recipe"}</b>
+              <small>{lang === "zh" ? "將多種食材組合成可重複使用的餐點" : "Combine ingredients into one reusable meal"}</small>
             </button>
           </div>
         </GlassCard>
@@ -536,6 +525,60 @@ function AddInner() {
         onAnalyze={(transcript) => analyzeText(transcript, "voice")}
         onComplete={() => setVoiceOpen(false)}
       />
+      <Sheet
+        open={recipeOpen}
+        onClose={() => setRecipeOpen(false)}
+        title={<span className="icon-label"><AppIcon name="kitchen" size={20} /> {lang === "zh" ? "食譜" : "Recipes"}</span>}
+      >
+        <div className="flex flex-col gap-3 pb-2">
+          <p className="t-sub">
+            {lang === "zh" ? "你想記錄已儲存的食譜，還是加入食材建立新食譜？" : "Would you like to log a saved recipe, or add ingredients to a new one?"}
+          </p>
+          <button
+            type="button"
+            className="row row-button press"
+            onClick={() => {
+              setRecipeOpen(false);
+              router.push("/kitchen#create-recipe");
+            }}
+          >
+            <AppIcon name="plus" size={20} />
+            <span className="min-w-0 flex-1">
+              <b>{lang === "zh" ? "建立新食譜" : "Create a new recipe"}</b>
+              <small>{lang === "zh" ? "加入食材並儲存每份營養" : "Add ingredients and save nutrition per serving"}</small>
+            </span>
+            <AppIcon name="next" size={17} />
+          </button>
+          {recipeChoices.length > 0 && (
+            <div className="food-quick-recipes">
+              <div className="food-search-heading">
+                <b>{lang === "zh" ? "已儲存食譜" : "Saved recipes"}</b>
+                <span>{recipeChoices.length}</span>
+              </div>
+              <div className="food-quick-recipe-grid">
+                {recipeChoices.map((recipe) => {
+                  const basis = nutritionBasis(recipe);
+                  return (
+                    <button
+                      key={recipe.id}
+                      type="button"
+                      className="food-quick-recipe press"
+                      onClick={() => {
+                        setRecipeOpen(false);
+                        reviewCatalogResult({ kind: "recipe", item: recipe, score: 160, matchedOn: lang === "zh" ? "我的食譜" : "My recipe" });
+                      }}
+                    >
+                      <span><AppIcon name={iconFromLegacy(recipe.emoji, "cutlery")} size={19} /></span>
+                      <b>{recipe.name[lang] || recipe.name.en}</b>
+                      <small>{fmtNum(recipe.perServing.cal)} cal / {formatAmount(basis.amount)} {nutritionUnitLabel(basis.unit, basis.amount, lang)}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </Sheet>
       <ManualFoodSheet open={manualOpen} lang={lang} onClose={() => setManualOpen(false)} onReview={(next) => { setManualOpen(false); setReview(next); }} />
     </main>
   );
@@ -672,6 +715,7 @@ function VoiceSheet({
 
   useEffect(() => {
     if (!open) return;
+    beginVoiceCaptureSoundscape();
     let active = true;
     let handled = false;
     let recorderSession: VoiceRecordingSession | null = null;
@@ -845,6 +889,7 @@ function VoiceSheet({
         recorderSession.stream.getTracks().forEach((track) => track.stop());
         if (recorderSession.recorder.state !== "inactive") recorderSession.recorder.stop();
       }
+      endVoiceCaptureSoundscape();
     };
   }, [attempt, lang, open, voiceKeywords]);
 
