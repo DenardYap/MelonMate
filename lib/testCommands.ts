@@ -65,18 +65,11 @@ export function runTestCommand(raw: string): TestCommandResult {
   }
 
   const targetXp = xpForLevel(value);
-  const farmXp = Math.min(Math.max(0, garden.gardenXp), targetXp);
   const game = app.game[profileId] ?? emptyGame();
-  useGardenStore.setState({
-    gardens: {
-      ...gardenStore.gardens,
-      [profileId]: { ...garden, gardenXp: farmXp },
-    },
-  });
   useStore.setState({
     game: {
       ...app.game,
-      [profileId]: { ...game, xp: targetXp - farmXp },
+      [profileId]: { ...game, xp: targetXp },
     },
   });
 

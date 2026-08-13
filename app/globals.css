@@ -561,6 +561,40 @@ textarea:lang(zh-Hant) {
   font-weight: 850;
   font-variant-numeric: tabular-nums;
 }
+.streak-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+}
+.streak-badge-grid > div {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  padding: 9px 3px 7px;
+  border: 1px solid var(--glass-brd);
+  border-radius: 14px;
+  background: var(--track);
+  text-align: center;
+}
+.streak-badge-grid > div > span {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border-radius: 50%;
+}
+.streak-badge-grid .is-unlocked {
+  border-color: rgba(211, 153, 52, .28);
+  background: linear-gradient(145deg, rgba(255, 244, 202, .82), rgba(245, 218, 145, .48));
+}
+.streak-badge-grid .is-unlocked > span { color: #fff; background: linear-gradient(145deg, #f0a74b, #d96738); box-shadow: 0 4px 10px rgba(191, 101, 42, .24); }
+.streak-badge-grid .is-locked { color: var(--ink-3); opacity: .68; }
+.streak-badge-grid .is-locked > span { background: var(--glass-strong); }
+.streak-badge-grid b { margin-top: 5px; font-size: 12px; line-height: 1; }
+.streak-badge-grid small { margin-top: 1px; font-size: 7px; font-weight: 750; }
+.streak-badge-grid em { margin-top: 4px; color: #8a6722; font-size: 7px; font-style: normal; font-weight: 900; white-space: nowrap; }
 .profile-avatar-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .profile-avatar-choice {
   position: relative;
@@ -623,6 +657,7 @@ textarea:lang(zh-Hant) {
   .profile-avatar-choice { padding: 5px 3px 7px; border-radius: 16px; }
   .profile-avatar-choice-art { border-radius: 13px; }
   .profile-avatar-choice > span { font-size: 8px; }
+  .streak-badge-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 input, textarea {
@@ -1635,6 +1670,107 @@ button.chip:has(> .app-icon:only-child) { min-width: 44px; }
 .health-card-copy { min-width: 0; }
 .health-card-action { justify-self: end; }
 
+.apple-health-stats-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.apple-health-stats-head > .chip {
+  flex: none;
+  gap: 5px;
+}
+.apple-health-today {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 16px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  color: var(--ink-2);
+  background: var(--track);
+  font-size: 11px;
+  font-weight: 650;
+}
+.apple-health-today span { display: inline-flex; align-items: center; gap: 5px; }
+.apple-health-today .app-icon { color: var(--melon-700); }
+.apple-health-today b { color: var(--ink); font-size: 13px; }
+.apple-health-period {
+  margin: 15px 0 7px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .65px;
+}
+.apple-health-workout-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.apple-health-workout-stats > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 11px 5px;
+  border: 1px solid color-mix(in srgb, var(--melon-300) 18%, var(--glass-brd));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--melon-100) 46%, transparent);
+  text-align: center;
+}
+.apple-health-workout-stats b { color: var(--melon-700); font-size: 19px; line-height: 1; }
+.apple-health-workout-stats small { color: var(--ink-3); font-size: 8px; font-weight: 750; }
+.apple-health-recent-head { margin: 15px 0 7px; font-size: 11px; }
+.apple-health-empty {
+  padding: 11px 12px;
+  border-radius: 13px;
+  background: var(--track);
+  text-align: center;
+}
+
+.reward-guide-setting-icon { width: 38px; height: 38px; }
+.reward-guide-setting-icon.is-xp { color: #80621c; background: #fff3c9; }
+.reward-guide-setting-icon.is-dew { color: #337d88; background: #e1f5f5; }
+.reward-guide-sheet > p { margin: 0 0 14px; line-height: 1.55; }
+.reward-guide-list { display: grid; gap: 8px; }
+.reward-guide-list article {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--melon-300) 18%, var(--glass-brd));
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--glass-strong) 70%, transparent);
+}
+.reward-guide-list article > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  color: #80621c;
+  background: #fff3c9;
+}
+.reward-guide-sheet.is-dew .reward-guide-list article > span { color: #337d88; background: #e1f5f5; }
+.reward-guide-list b,
+.reward-guide-list small { display: block; }
+.reward-guide-list b { font-size: 12px; }
+.reward-guide-list small { margin-top: 3px; color: var(--ink-3); font-size: 9px; line-height: 1.45; }
+.reward-guide-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 11px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  color: #315f69;
+  background: rgba(199, 236, 234, .58);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.reward-guide-note .app-icon { flex: none; }
+
 .entry-amount-row {
   display: flex;
   align-items: center;
@@ -1808,6 +1944,19 @@ button.chip:has(> .app-icon:only-child) { min-width: 44px; }
 .friend-notification-row > i { width:7px; height:7px; flex:0 0 auto; border-radius:50%; background:#df5b62; }
 .friend-notification-empty { display:flex; min-height:230px; flex-direction:column; align-items:center; justify-content:center; gap:7px; text-align:center; }
 .friend-notification-empty small { max-width:280px; color:var(--ink-3); }
+.friend-sharing-card { display:flex; flex-direction:column; gap:6px; }
+.friend-sharing-manage { display:flex; min-height:36px; align-items:center; justify-content:center; gap:6px; margin:0 10px; border:1px solid var(--glass-brd); border-radius:0 0 14px 14px; color:var(--melon-700); background:var(--track); font:800 11px/1 inherit; }
+.friend-sharing-sheet { display:flex; flex-direction:column; gap:10px; padding-bottom:4px; }
+.friend-sharing-toggle { display:flex; min-height:54px; align-items:center; justify-content:space-between; gap:10px; padding:11px 12px; border:1px solid var(--glass-brd); border-radius:16px; color:var(--ink); background:var(--track); text-align:left; }
+.friend-sharing-toggle > span { display:flex; min-width:0; align-items:center; gap:9px; }
+.friend-sharing-toggle > i { flex:none; color:var(--ink-3); font-size:10px; font-style:normal; font-weight:850; }
+.friend-sharing-toggle.is-on { border-color:var(--melon-300); background:var(--melon-100); }
+.friend-sharing-toggle.is-on > i { color:var(--melon-700); }
+.friend-sharing-toggle:disabled { opacity:.48; }
+.friend-sharing-recipes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.friend-sharing-recipes button { display:flex; min-width:0; min-height:43px; align-items:center; gap:7px; padding:8px 10px; border:1px solid var(--glass-brd); border-radius:13px; color:var(--ink-2); background:var(--track); text-align:left; }
+.friend-sharing-recipes button span { overflow:hidden; font-size:11px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+.friend-sharing-recipes button.is-on { color:var(--melon-800); border-color:var(--melon-300); background:var(--melon-100); }
 .food-composer {
   display: grid;
   grid-template-columns: auto minmax(0,1fr) auto;
@@ -1882,6 +2031,9 @@ button.chip:has(> .app-icon:only-child) { min-width: 44px; }
 .food-review-item b { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .food-review-item small { margin-top: 2px; color: var(--ink-3); font-size: 10px; }
 .food-review-item strong { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.food-review-item-serving { display:grid; grid-template-columns:30px minmax(48px,72px) 30px; align-items:center; gap:5px; margin-top:7px; }
+.food-review-item-serving .ibtn { width:30px; height:30px; border-radius:10px; }
+.food-review-item-serving input { width:100%; min-width:0; height:30px; border:1px solid var(--glass-brd); border-radius:9px; background:var(--glass); font:750 12px/1 inherit; text-align:center; }
 .food-rationale { display: flex; align-items: flex-start; gap: 9px; margin-top: 13px; padding: 11px 12px; border-radius: 15px; color: var(--ink-2); background: color-mix(in srgb, var(--canta-100) 52%, var(--track)); font-size: 11px; line-height: 1.45; }
 .food-rationale > .app-icon { flex: none; color: var(--canta-600); }
 .food-rationale b { display: block; margin-bottom: 2px; color: var(--ink); font-size: 10px; text-transform: uppercase; letter-spacing: .35px; }
@@ -2055,6 +2207,9 @@ button.chip:has(> .app-icon:only-child) { min-width: 44px; }
 }
 
 @media (max-width: 640px) {
+  .log-food-page.is-searching {
+    padding-top: max(calc(env(safe-area-inset-top) + 18px), 18px);
+  }
   .log-food-page.is-searching > header { display: none; }
   .log-food-stage.is-searching { padding-top: 0; }
   .log-food-stage.is-searching .log-food-honey,
@@ -4152,7 +4307,7 @@ body:has(.farm-game-shell) { overflow: hidden; }
   .farm-player-level-copy b { margin-top:0; font-size:8px; }
 }
 
-/* Farm resource education: Dew is currency; XP is permanent progression. */
+/* Farm resource education: Dew is farm currency; XP is food-and-fitness progression. */
 .farm-resource-trigger {
   position: relative;
   font: inherit;

@@ -25,14 +25,15 @@ describe("friend content sharing", () => {
     useStore.getState().resetAll();
   });
 
-  it("always publishes the active meal plan, workout plan, and saved recipes", () => {
+  it("publishes only the meal plan, workout plan, and recipes selected for a friend", () => {
     const store = useStore.getState();
     const planId = store.plans[0].id;
     store.addRecipe(RECIPE);
     store.planMeal(todayStr(), "breakfast", RECIPE.id, 1);
     store.updateProfile("p-me", { planId });
+    store.updateFriendSharing("close-friend", { shareMealPlan: true, shareWorkoutPlan: true, workoutPlanId: planId, sharedRecipeIds: [RECIPE.id] });
 
-    const snapshot = buildMemberSnapshot();
+    const snapshot = buildMemberSnapshot("close-friend");
     expect(snapshot.version).toBe(8);
     expect(snapshot.notificationDeviceId).toBe(store.ws.deviceId);
     expect(snapshot.mealPlan?.recipes.map((recipe) => recipe.id)).toContain(RECIPE.id);
@@ -54,24 +55,25 @@ describe("friend content sharing", () => {
     expect(buildMemberSnapshot("friend-with-avatar").photoDataUrl).toBe(photoDataUrl);
   });
 
-  it("publishes the same complete content to every friend without per-friend selection", () => {
+  it("keeps sharing choices isolated per friend", () => {
     const store = useStore.getState();
     const planId = store.plans[0].id;
     store.addRecipe(RECIPE);
     store.planMeal(todayStr(), "breakfast", RECIPE.id, 1);
     store.updateProfile("p-me", { planId });
+    store.updateFriendSharing("friend-with-plans", { shareMealPlan: true, shareWorkoutPlan: true, workoutPlanId: planId, sharedRecipeIds: [RECIPE.id] });
     const first = buildMemberSnapshot("friend-with-plans");
     const second = buildMemberSnapshot("friend-progress-only");
 
     expect(first.mealPlan?.recipes.map((recipe) => recipe.id)).toContain(RECIPE.id);
     expect(first.workoutPlan?.plan.id).toBe(planId);
     expect(first.sharedRecipes?.map((recipe) => recipe.id)).toEqual([RECIPE.id]);
-    expect(second.mealPlan).toEqual(first.mealPlan);
-    expect(second.workoutPlan).toEqual(first.workoutPlan);
-    expect(second.sharedRecipes).toEqual(first.sharedRecipes);
+    expect(second.mealPlan).toBeUndefined();
+    expect(second.workoutPlan).toBeUndefined();
+    expect(second.sharedRecipes).toBeUndefined();
   });
 
-  it("always publishes the active workout plan rather than an old sharing selection", () => {
+  it("publishes the workout plan selected for that friend", () => {
     const store = useStore.getState();
     const activePlanId = store.plans[0].id;
     const sharedPlanId = store.plans[1].id;
@@ -81,7 +83,7 @@ describe("friend content sharing", () => {
       workoutPlanId: sharedPlanId,
     });
 
-    expect(buildMemberSnapshot("training-friend").workoutPlan?.plan.id).toBe(activePlanId);
+    expect(buildMemberSnapshot("training-friend").workoutPlan?.plan.id).toBe(sharedPlanId);
     expect(useStore.getState().profiles[0].planId).toBe(activePlanId);
   });
 

@@ -47,7 +47,10 @@ export function FriendNotificationButton() {
       <button
         type="button"
         className="ibtn press friend-notification-trigger"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          markAllRead();
+          setOpen(true);
+        }}
         aria-label={lang === "zh" ? `朋友分享通知，${unread} 則未讀` : `Friend share notifications, ${unread} unread`}
       >
         <AppIcon name="bell" size={19} />

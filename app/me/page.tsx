@@ -19,7 +19,7 @@ import { LineChart } from "@/components/charts";
 import DailyTargetsSheet from "@/components/DailyTargetsSheet";
 import LockScreenWidget from "@/components/LockScreenWidget";
 import type { MemberSnapshot, ThemeId, WeightUnit } from "@/lib/types";
-import { levelFromXp, xpForLevel } from "@/lib/game";
+import { levelFromXp, MAX_PLAYER_LEVEL, xpForLevel } from "@/lib/game";
 import { THEME_UNLOCK_LEVEL, THEME_VISUALS } from "@/lib/themes";
 import { AppIcon } from "@/components/icons";
 import OnboardingFlow from "@/components/OnboardingFlow";
@@ -34,6 +34,8 @@ import {
 } from "@/lib/profilePhoto";
 import LevelProgressRing from "@/components/LevelProgressRing";
 import { FriendNotificationButton } from "@/components/FriendShareNotifications";
+import RewardGuideSettings from "@/components/RewardGuideSettings";
+import { STREAK_MILESTONES } from "@/lib/streakRewards";
 
 const THEME_OPTIONS: {
   id: ThemeId;
@@ -183,11 +185,38 @@ export default function MePage() {
               <span>{game.xp.toLocaleString()} {t("xp")}</span>
             </div>
             <div className="t-cap mt-1">
-              {lang === "zh"
-                ? `還差 ${xpToNextLevel.toLocaleString()} XP 升到等級 ${level + 1}`
-                : `${xpToNextLevel.toLocaleString()} XP to Level ${level + 1}`}
+              {level >= MAX_PLAYER_LEVEL
+                ? (lang === "zh" ? "已完成目前的等級進度" : "Current level track complete")
+                : lang === "zh"
+                  ? `還差 ${xpToNextLevel.toLocaleString()} XP 升到等級 ${level + 1}`
+                  : `${xpToNextLevel.toLocaleString()} XP to Level ${level + 1}`}
             </div>
           </div>
+        </div>
+      </GlassCard>
+
+      <GlassCard className="p-4 mb-4 streak-badge-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="t-section icon-label"><AppIcon name="fire" size={17} /> {lang === "zh" ? "連續紀錄徽章" : "Streak badges"}</div>
+            <div className="t-cap mt-1">
+              {lang === "zh" ? `目前 ${game.streak} 天 · 最佳 ${game.best} 天` : `${game.streak} days current · ${game.best} days best`}
+            </div>
+          </div>
+          <span className="chip chip-on tabular">{game.streakMilestoneClaims?.length ?? 0}/{STREAK_MILESTONES.length}</span>
+        </div>
+        <div className="streak-badge-grid mt-3">
+          {STREAK_MILESTONES.map((milestone) => {
+            const unlocked = game.streakMilestoneClaims?.includes(milestone.days) ?? false;
+            return (
+              <div className={unlocked ? "is-unlocked" : "is-locked"} key={milestone.days}>
+                <span><AppIcon name={unlocked ? "fire" : "lock"} size={19} /></span>
+                <b>{milestone.days}</b>
+                <small>{lang === "zh" ? "天" : "days"}</small>
+                <em>+{milestone.xp} XP</em>
+              </div>
+            );
+          })}
         </div>
       </GlassCard>
 
@@ -354,6 +383,8 @@ export default function MePage() {
 
       <NativeAppSettings />
 
+      <RewardGuideSettings />
+
       {/* settings */}
       <GlassCard className="px-4 py-2 mb-4">
         <div className="row">
@@ -502,7 +533,12 @@ function FriendsSection() {
         </GlassCard>
       ) : (
         <div className="flex flex-col gap-3">
-          {friends.map((friend) => <FriendProgressCard key={friend.id} friend={friend} />)}
+          {friends.map((friend) => (
+            <div className="friend-sharing-card" key={friend.id}>
+              <FriendProgressCard friend={friend} />
+              <FriendSharingControls friend={friend} />
+            </div>
+          ))}
         </div>
       )}
 
@@ -564,6 +600,61 @@ function FriendsSection() {
         )}
       </Sheet>
     </section>
+  );
+}
+
+function FriendSharingControls({ friend }: { friend: MemberSnapshot }) {
+  const lang = useStore((state) => state.lang);
+  const profile = useActiveProfile();
+  const recipes = useStore((state) => state.recipes);
+  const plans = useStore((state) => state.plans);
+  const settings = useStore((state) => state.friendSharing[friend.id]) ?? {
+    shareMealPlan: false,
+    shareWorkoutPlan: false,
+    sharedRecipeIds: [],
+  };
+  const updateSharing = useStore((state) => state.updateFriendSharing);
+  const toggleRecipe = useStore((state) => state.toggleFriendSharedRecipe);
+  const [open, setOpen] = useState(false);
+  const activePlan = plans.find((plan) => plan.id === profile.planId);
+  const recipeChoices = recipes.filter((recipe) => recipe.custom || (profile.selectedRecipeIds ?? []).includes(recipe.id));
+  const sharedCount = settings.sharedRecipeIds.length + Number(settings.shareWorkoutPlan) + Number(settings.shareMealPlan);
+
+  const syncSharing = () => void syncNow().catch(() => {
+    toast(lang === "zh" ? "分享設定已儲存，稍後會再同步" : "Sharing saved; sync will retry shortly", "warning");
+  });
+
+  return (
+    <>
+      <button type="button" className="friend-sharing-manage press" onClick={() => setOpen(true)}>
+        <AppIcon name="friends" size={15} />
+        {lang === "zh" ? `管理分享${sharedCount ? ` · ${sharedCount}` : ""}` : `Manage sharing${sharedCount ? ` · ${sharedCount}` : ""}`}
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={<span className="icon-label"><AppIcon name="friends" size={19} />{lang === "zh" ? `分享給 ${friend.name}` : `Share with ${friend.name}`}</span>}>
+        <div className="friend-sharing-sheet">
+          <p className="t-sub">{lang === "zh" ? "只會把你在此處選擇的內容分享給這位朋友。" : "Only content selected here is shared with this friend."}</p>
+          <button type="button" className={`friend-sharing-toggle press ${settings.shareMealPlan ? "is-on" : ""}`} onClick={() => { updateSharing(friend.id, { shareMealPlan: !settings.shareMealPlan }); syncSharing(); }}>
+            <span><AppIcon name="calendar" size={18} /><b>{lang === "zh" ? "未來 7 天餐點計畫" : "Next 7 days meal plan"}</b></span>
+            <i>{settings.shareMealPlan ? (lang === "zh" ? "已分享" : "Shared") : (lang === "zh" ? "關閉" : "Off")}</i>
+          </button>
+          <button type="button" disabled={!activePlan} className={`friend-sharing-toggle press ${settings.shareWorkoutPlan ? "is-on" : ""}`} onClick={() => {
+            if (!activePlan) return;
+            updateSharing(friend.id, { shareWorkoutPlan: !settings.shareWorkoutPlan, workoutPlanId: activePlan.id });
+            syncSharing();
+          }}>
+            <span><AppIcon name="gym" size={18} /><b>{activePlan ? (activePlan.name[lang] || activePlan.name.en) : (lang === "zh" ? "尚未選擇訓練計畫" : "No workout plan selected")}</b></span>
+            <i>{settings.shareWorkoutPlan ? (lang === "zh" ? "已分享" : "Shared") : (lang === "zh" ? "關閉" : "Off")}</i>
+          </button>
+          <div className="t-section mt-2">{lang === "zh" ? "選擇食譜" : "Choose recipes"}</div>
+          {recipeChoices.length ? <div className="friend-sharing-recipes">
+            {recipeChoices.map((recipe) => {
+              const selected = settings.sharedRecipeIds.includes(recipe.id);
+              return <button type="button" key={recipe.id} className={`press ${selected ? "is-on" : ""}`} onClick={() => { toggleRecipe(friend.id, recipe.id); syncSharing(); }}><AppIcon name={selected ? "checkCircle" : "kitchen"} size={16} /><span>{recipe.name[lang] || recipe.name.en}</span></button>;
+            })}
+          </div> : <div className="t-sub">{lang === "zh" ? "先在餐點頁儲存或建立食譜。" : "Save or create a recipe on the Meal page first."}</div>}
+        </div>
+      </Sheet>
+    </>
   );
 }
 

@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { lastSetsFor, makeSessionEntries, newId, openSession, useActiveProfile, useStore } from "@/lib/store";
 import { translate, type DictKey } from "@/lib/i18n";
-import { fmtDate, fmtDuration, todayStr } from "@/lib/dates";
+import { addDays, fmtDate, fmtDuration, todayStr } from "@/lib/dates";
 import { exKey, fmtNum } from "@/lib/nutrition";
 import { GROUP_LABEL, groupOf, type MuscleGroup } from "@/lib/plans";
 import { EmptyState, GlassCard, Segmented, Sheet, toast } from "@/components/ui";
@@ -14,6 +14,7 @@ import { ExercisePickerSheet } from "@/components/ExercisePickerSheet";
 import { exerciseProgressSeries, seedWeightInUnit } from "@/lib/workouts";
 import type { ExerciseSpec, WorkoutPlan, WorkoutSession, WorkoutWeek } from "@/lib/types";
 import { recommendWorkoutPlans } from "@/lib/onboarding";
+import { connectAndSyncAppleHealth, hasAppleHealthBridge, isAppleHealthConnected } from "@/lib/appleHealth";
 
 type Tab = "train" | "plans" | "progress" | "shared";
 
@@ -234,6 +235,8 @@ function TrainTab({ onChoosePlan }: { onChoosePlan: () => void }) {
         </GlassCard>
       )}
 
+      <AppleHealthStatsCard />
+
       {/* week overview */}
       {plan && (
         <GlassCard className="p-4 mb-4">
@@ -300,6 +303,110 @@ function TrainTab({ onChoosePlan }: { onChoosePlan: () => void }) {
         </GlassCard>
       )}
     </div>
+  );
+}
+
+function AppleHealthStatsCard() {
+  const lang = useStore((state) => state.lang);
+  const profile = useActiveProfile();
+  const healthByDate = useStore((state) => state.health[profile.id]);
+  const [available, setAvailable] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const today = todayStr();
+
+  useEffect(() => {
+    setAvailable(hasAppleHealthBridge());
+    setConnected(isAppleHealthConnected());
+  }, []);
+
+  const recentDays = useMemo(() => Object.values(healthByDate ?? {})
+    .filter((day) => day.date >= addDays(today, -6) && day.date <= today)
+    .sort((left, right) => right.date.localeCompare(left.date)), [healthByDate, today]);
+  const todayActivity = healthByDate?.[today];
+  const recentWorkouts = useMemo(() => recentDays
+    .flatMap((day) => day.workouts.map((workout) => ({ date: day.date, workout })))
+    .sort((left, right) => right.workout.startedAt - left.workout.startedAt), [recentDays]);
+  const workoutMinutes = recentWorkouts.reduce((total, item) => total + item.workout.durationMinutes, 0);
+  const activeCalories = recentWorkouts.reduce((total, item) => total + item.workout.activeCalories, 0);
+
+  if (!available && !healthByDate) return null;
+
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const result = await connectAndSyncAppleHealth(today);
+      if (result.status === "synced") {
+        toast(
+          result.xp > 0
+            ? `Apple Health · +${result.xp} XP`
+            : (lang === "zh" ? "Apple 健康已是最新狀態" : "Apple Health is up to date"),
+          "heart"
+        );
+      } else if (result.status === "denied") {
+        toast(lang === "zh" ? "請允許讀取步數、站立與訓練" : "Allow steps, standing, and workouts in Apple Health", "warning");
+      } else {
+        toast(lang === "zh" ? "無法讀取 Apple 健康" : "Couldn’t read Apple Health", "warning");
+      }
+    } catch {
+      toast(lang === "zh" ? "Apple 健康同步失敗" : "Apple Health sync failed", "warning");
+    } finally {
+      setConnected(isAppleHealthConnected());
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <GlassCard className="p-4 mb-4 apple-health-stats-card">
+      <div className="apple-health-stats-head">
+        <span className="icon-tile"><AppIcon name="heart" size={21} /></span>
+        <div className="flex-1 min-w-0">
+          <div className="t-section">Apple Health</div>
+          <div className="t-cap mt-1">
+            {connected
+              ? (lang === "zh" ? "已連接 Apple Watch 與健康資料" : "Apple Watch and Health data connected")
+              : (lang === "zh" ? "連接以查看 Apple Watch 訓練" : "Connect to see your Apple Watch workouts")}
+          </div>
+        </div>
+        <button type="button" className={`chip press ${connected ? "chip-on" : ""}`} disabled={syncing} onClick={() => void sync()}>
+          <AppIcon name="refresh" size={14} />
+          {syncing ? (lang === "zh" ? "同步中" : "Syncing") : connected ? (lang === "zh" ? "同步" : "Sync") : (lang === "zh" ? "連接" : "Connect")}
+        </button>
+      </div>
+
+      <div className="apple-health-today tabular">
+        <span><AppIcon name="stretch" size={16} /><b>{(todayActivity?.steps ?? 0).toLocaleString()}</b> {lang === "zh" ? "今日步數" : "steps today"}</span>
+        <span><AppIcon name="timer" size={16} /><b>{todayActivity?.standMinutes ?? 0}</b> {lang === "zh" ? "今日站立分鐘" : "standing min today"}</span>
+      </div>
+
+      <div className="t-cap apple-health-period">{lang === "zh" ? "最近 7 個同步日" : "LAST 7 SYNCED DAYS"}</div>
+      <div className="apple-health-workout-stats tabular">
+        <span><b>{recentWorkouts.length}</b><small>{lang === "zh" ? "訓練" : "workouts"}</small></span>
+        <span><b>{Math.round(workoutMinutes)}</b><small>{lang === "zh" ? "分鐘" : "minutes"}</small></span>
+        <span><b>{Math.round(activeCalories)}</b><small>{lang === "zh" ? "活動卡路里" : "active cal"}</small></span>
+      </div>
+
+      <div className="apple-health-recent-head">
+        <b>{lang === "zh" ? "最近的 Apple Watch 訓練" : "Recent Apple Watch workouts"}</b>
+      </div>
+      {recentWorkouts.length ? (
+        <div className="health-card-workouts apple-health-recent-list">
+          {recentWorkouts.slice(0, 5).map(({ date, workout }) => (
+            <div key={workout.id}>
+              <AppIcon name="gym" size={17} />
+              <span>
+                <b>{workout.activityType}</b>
+                <small>{fmtDate(date, lang)} · {Math.round(workout.durationMinutes)} min · {Math.round(workout.activeCalories)} cal</small>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="apple-health-empty t-cap">
+          {lang === "zh" ? "同步後，Apple Watch 訓練會顯示在這裡。" : "Your Apple Watch workouts will appear here after syncing."}
+        </div>
+      )}
+    </GlassCard>
   );
 }
 

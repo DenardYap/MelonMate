@@ -721,21 +721,31 @@ function FoodReviewCard({
   onConfirm: (items: ReviewItem[], meal: MealSlot) => void;
 }) {
   const [meal, setMeal] = useState(initialMeal);
-  const measuredItem = review.items.length === 1 && review.items[0].amount && review.items[0].amountUnit
-    ? review.items[0]
-    : null;
+  const [amounts, setAmounts] = useState(() => review.items.map((item) => item.amount ?? 1));
+  const measuredItem = review.items.length === 1 && review.items[0].amount && review.items[0].amountUnit ? review.items[0] : null;
   const initialAmount = measuredItem?.amount ?? 1;
-  const [amount, setAmount] = useState(initialAmount);
+  const amount = amounts[0] ?? initialAmount;
+  const setAmount = (value: number | ((current: number) => number)) => setAmounts((current) => {
+    const next = [...current];
+    next[0] = typeof value === "function" ? value(next[0] ?? initialAmount) : value;
+    return next;
+  });
   const factor = measuredItem ? amount / initialAmount : amount;
   const amountStep = measuredItem ? nutritionUnitStep(measuredItem.amountUnit as NutritionUnit) : 0.5;
-  const adjustedItems = review.items.map((item) => ({
-    ...item,
-    grams: item.amountUnit === "g"
-      ? amount
-      : item.grams == null ? undefined : Math.round(item.grams * factor * 10) / 10,
-    amount: item.amount == null ? undefined : amount,
-    macros: mulMacros(item.macros, factor),
-  }));
+  const adjustedItems = review.items.map((item, index) => {
+    const itemAmount = amounts[index] ?? item.amount ?? 1;
+    const itemFactor = review.items.length === 1
+      ? factor
+      : itemAmount / (item.amount ?? 1);
+    return {
+      ...item,
+      grams: item.amountUnit === "g"
+        ? itemAmount
+        : item.grams == null ? undefined : Math.round(item.grams * itemFactor * 10) / 10,
+      amount: item.amountUnit ? itemAmount : item.amount,
+      macros: mulMacros(item.macros, itemFactor),
+    };
+  });
   const adjusted = sumMacros(adjustedItems.map((item) => item.macros));
   const confidenceTone = review.confidence >= 80 ? "high" : review.confidence < 50 ? "low" : "medium";
 
@@ -757,18 +767,35 @@ function FoodReviewCard({
       </div>
 
       <div className="food-review-items">
-        {adjustedItems.map((item, index) => (
+        {adjustedItems.map((item, index) => {
+          const original = review.items[index];
+          const itemAmount = amounts[index] ?? original.amount ?? 1;
+          const itemStep = original.amountUnit ? nutritionUnitStep(original.amountUnit as NutritionUnit) : 0.5;
+          return (
           <div className="food-review-item" key={`${item.refId ?? item.name.en}-${index}`}>
             <span><AppIcon name={iconFromLegacy(item.emoji, "cutlery")} size={20} /></span>
-            <div className="flex-1 min-w-0"><b>{item.name[lang] || item.name.en}</b><small>{measuredItem && item.amountUnit ? `${formatAmount(amount)} ${nutritionUnitLabel(item.amountUnit, amount, lang)}` : scaledServingLabel(item, amount, lang)}</small></div>
+            <div className="flex-1 min-w-0">
+              <b>{item.name[lang] || item.name.en}</b>
+              <small>{original.amountUnit
+                ? `${formatAmount(itemAmount)} ${nutritionUnitLabel(original.amountUnit, itemAmount, lang)}`
+                : scaledServingLabel(original, itemAmount, lang)}</small>
+              {review.items.length > 1 && (
+                <div className="food-review-item-serving">
+                  <button type="button" className="ibtn press" onClick={() => setAmounts((current) => current.map((value, itemIndex) => itemIndex === index ? Math.max(itemStep, Math.round((value - itemStep) * 100) / 100) : value))} disabled={itemAmount <= itemStep} aria-label={lang === "zh" ? `減少 ${item.name[lang] || item.name.en}` : `Decrease ${item.name.en}`}><AppIcon name="minus" size={14} /></button>
+                  <DecimalInput className="" min={0.01} value={itemAmount} onChange={(value) => setAmounts((current) => current.map((saved, itemIndex) => itemIndex === index ? value : saved))} ariaLabel={lang === "zh" ? `${item.name[lang] || item.name.en} 食用量` : `${item.name.en} amount`} />
+                  <button type="button" className="ibtn press" onClick={() => setAmounts((current) => current.map((value, itemIndex) => itemIndex === index ? Math.round((value + itemStep) * 100) / 100 : value))} aria-label={lang === "zh" ? `增加 ${item.name[lang] || item.name.en}` : `Increase ${item.name.en}`}><AppIcon name="plus" size={14} /></button>
+                </div>
+              )}
+            </div>
             <strong>{fmtNum(item.macros.cal)} cal</strong>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="food-rationale"><AppIcon name="idea" size={18} /><span><b>{lang === "zh" ? "計算依據" : "Why this estimate"}</b>{review.rationale}</span></div>
 
-      <div className="food-serving-editor mt-4">
+      {review.items.length === 1 && <div className="food-serving-editor mt-4">
         <label>{measuredItem ? (lang === "zh" ? "食用量" : "Amount eaten") : (lang === "zh" ? "份數" : "Servings")}</label>
         <div className="food-serving-controls">
           <button type="button" className="ibtn press" onClick={() => setAmount((value) => Math.max(amountStep, Math.round((value - amountStep) * 100) / 100))} disabled={amount <= amountStep} aria-label={lang === "zh" ? "減少份量" : "Decrease amount"}><AppIcon name="minus" size={18} /></button>
@@ -778,8 +805,8 @@ function FoodReviewCard({
           </div>
           <button type="button" className="ibtn press" onClick={() => setAmount((value) => Math.round((value + amountStep) * 100) / 100)} aria-label={lang === "zh" ? "增加份量" : "Increase amount"}><AppIcon name="plus" size={18} /></button>
         </div>
-        {review.items.length === 1 && <div className="food-serving-basis">{measuredItem?.amountUnit ? (lang === "zh" ? `營養資料以每 ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)} 計算` : `Nutrition saved per ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)}`) : servingBasisLabel(review.items[0], lang)}</div>}
-      </div>
+        <div className="food-serving-basis">{measuredItem?.amountUnit ? (lang === "zh" ? `營養資料以每 ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)} 計算` : `Nutrition saved per ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)}`) : servingBasisLabel(review.items[0], lang)}</div>
+      </div>}
 
       <div className="nutrition-details tabular mt-3"><span>P {fmtNum(adjusted.protein)}g</span><span>C {fmtNum(adjusted.carbs)}g</span><span>F {fmtNum(adjusted.fat)}g</span></div>
       <div className="mt-3"><MealPick slot={meal} setSlot={chooseMeal} lang={lang} /></div>

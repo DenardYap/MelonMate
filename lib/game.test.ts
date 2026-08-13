@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   DAILY_XP_REWARD,
+  DAILY_XP_CAP,
+  MAX_PLAYER_LEVEL,
+  MAX_TOTAL_XP,
   combinedXp,
+  dailyXpAward,
   healthRewardBetweenTiers,
   healthWorkoutXp,
   inAppWorkoutXp,
@@ -30,6 +34,12 @@ describe("daily XP", () => {
   it("allows the target but rejects calories over it", () => {
     expect(isDailyXpEligible(3, 2_000, 2_000)).toBe(true);
     expect(isDailyXpEligible(3, 2_001, 2_000)).toBe(false);
+  });
+
+  it("caps all food and fitness rewards at 300 XP per day", () => {
+    expect(DAILY_XP_CAP).toBe(300);
+    expect(dailyXpAward(250, 290, 50)).toBe(10);
+    expect(dailyXpAward(250, 300, 50)).toBe(0);
   });
 });
 
@@ -76,10 +86,11 @@ describe("in-app workout XP", () => {
 });
 
 describe("level unlocks", () => {
-  it("combines healthy-day and farm-earned XP into one level", () => {
+  it("ignores legacy farm XP and caps the current progression track", () => {
     const xp = combinedXp(50, 190);
-    expect(xp).toBe(240);
-    expect(levelFromXp(xp)).toBe(3);
+    expect(xp).toBe(50);
+    expect(combinedXp(MAX_TOTAL_XP + 1_000)).toBe(MAX_TOTAL_XP);
+    expect(levelFromXp(MAX_TOTAL_XP + 1_000)).toBe(MAX_PLAYER_LEVEL);
   });
 
   it("reports progress within the current level", () => {

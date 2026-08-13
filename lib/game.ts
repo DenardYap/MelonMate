@@ -1,8 +1,17 @@
 export const MIN_DAILY_ITEMS = 3;
 export const FOOD_LOG_XP_REWARD = 5;
-export const MAX_DAILY_REWARDED_FOOD_LOGS = 6;
+export const MAX_DAILY_REWARDED_FOOD_LOGS = 8;
 export const WEIGHT_LOG_XP_REWARD = 5;
 export const DAILY_XP_REWARD = 200;
+
+/**
+ * Level 20 is the end of the current progression track. A perfect 300 XP day
+ * reaches it in 73 days, keeping the complete track inside the intended
+ * 60–90 day window without rewarding repetitive logging.
+ */
+export const MAX_PLAYER_LEVEL = 20;
+export const DAILY_XP_CAP = 300;
+export const MAX_TOTAL_XP = (MAX_PLAYER_LEVEL - 1) ** 2 * 60;
 
 export const STEP_INCREMENT = 1_000;
 export const STEP_DAILY_TIER_CAP = 30;
@@ -20,35 +29,47 @@ export const HEALTH_WORKOUT_REWARDED_MINUTES_CAP = 180;
 export const IN_APP_WORKOUT_SET_XP = 3;
 export const IN_APP_WORKOUT_EXERCISE_XP = 12;
 
-/** Healthy-day XP and farm-earned XP now contribute to one user total. */
-export function combinedXp(healthyDayXp: number, farmEarnedXp: number): number {
-  return Math.max(0, healthyDayXp) + Math.max(0, farmEarnedXp);
+/** Farm activity is Dew-only; player XP comes from food and fitness. */
+export function combinedXp(healthyDayXp: number, _legacyFarmXp = 0): number {
+  return Math.min(MAX_TOTAL_XP, Math.max(0, healthyDayXp));
+}
+
+export function dailyXpAward(
+  currentXp: number,
+  alreadyAwardedToday: number,
+  requestedXp: number
+): number {
+  return Math.max(0, Math.min(
+    Math.floor(Math.max(0, requestedXp)),
+    DAILY_XP_CAP - Math.max(0, alreadyAwardedToday),
+    MAX_TOTAL_XP - Math.max(0, currentXp)
+  ));
 }
 
 /** Level curve shared by the garden, friends, and theme collection. */
 export function levelFromXp(xp: number): number {
-  return Math.floor(Math.sqrt(Math.max(0, xp) / 60)) + 1;
+  return Math.min(MAX_PLAYER_LEVEL, Math.floor(Math.sqrt(Math.max(0, xp) / 60)) + 1);
 }
 
 /** Total XP required to arrive at a level. */
 export function xpForLevel(level: number): number {
-  return Math.max(0, level - 1) ** 2 * 60;
+  return Math.min(MAX_TOTAL_XP, Math.max(0, level - 1) ** 2 * 60);
 }
 
 export function levelProgressFromXp(xp: number) {
   const totalXp = Math.max(0, xp);
   const level = levelFromXp(totalXp);
   const levelStartXp = xpForLevel(level);
-  const nextLevelXp = xpForLevel(level + 1);
+  const nextLevelXp = level >= MAX_PLAYER_LEVEL ? MAX_TOTAL_XP : xpForLevel(level + 1);
   const earned = totalXp - levelStartXp;
   const needed = nextLevelXp - levelStartXp;
 
   return {
     level,
     totalXp,
-    earned,
-    needed,
-    progress: needed > 0 ? Math.min(1, earned / needed) : 0,
+    earned: level >= MAX_PLAYER_LEVEL ? MAX_TOTAL_XP : earned,
+    needed: level >= MAX_PLAYER_LEVEL ? MAX_TOTAL_XP : needed,
+    progress: level >= MAX_PLAYER_LEVEL ? 1 : needed > 0 ? Math.min(1, earned / needed) : 0,
   };
 }
 

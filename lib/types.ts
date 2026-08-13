@@ -307,6 +307,18 @@ export interface GameState {
   weightXpClaims?: Record<string, boolean>;
   /** Highest HealthKit milestone already rewarded for each local date. */
   healthXpClaims?: Record<string, { stepTier: number; standTier: number; workoutIds?: string[] }>;
+  /** All food/fitness XP granted per local date, enforcing the 300 XP daily ceiling. */
+  dailyXpEarned?: Record<string, number>;
+  /** One-time streak milestones already rewarded and shown as profile badges. */
+  streakMilestoneClaims?: number[];
+  /** Earned milestone popups waiting to be acknowledged on this device. */
+  pendingStreakRewards?: StreakReward[];
+}
+
+export interface StreakReward {
+  days: number;
+  xp: number;
+  date: string;
 }
 
 export interface HealthWorkout {
@@ -441,7 +453,7 @@ export interface GardenPlot {
 
 export interface GardenState {
   dew: number;
-  /** Farm-earned contribution to the user's unified XP total. */
+  /** Legacy farm XP retained only for save compatibility; new farm actions never increase it. */
   gardenXp: number;
   unlockedPlots: number;
   plots: GardenPlot[];
@@ -495,7 +507,8 @@ export interface GardenState {
 /** A bounded, read-only view of a friend's farm. Private quest history stays local. */
 export interface FriendFarmSnapshot {
   dew: number;
-  gardenXp: number;
+  /** Deprecated legacy field accepted from older friend snapshots. */
+  gardenXp?: number;
   unlockedPlots: number;
   plots: GardenPlot[];
   harvests: Partial<Record<MelonVarietyId, number>>;

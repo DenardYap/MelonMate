@@ -15,6 +15,8 @@ import AchievementCelebration from "@/components/AchievementCelebration";
 import HealthRewardCelebration from "@/components/HealthRewardCelebration";
 import SoundProvider from "@/components/SoundProvider";
 import { FriendShareNotifier } from "@/components/FriendShareNotifications";
+import StreakRewardCelebration from "@/components/StreakRewardCelebration";
+import { applyThemeAppearance } from "@/lib/themeAppearance";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -35,6 +37,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme ?? "honeydew";
+    applyThemeAppearance(theme ?? "honeydew");
   }, [theme]);
 
   useEffect(() => {
@@ -97,7 +100,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   if (!hydrated) {
     return (
       <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="empty-icon a-floaty"><BrandMark size={40} /></div>
+        <div className="empty-icon a-floaty"><BrandMark size={40} theme={theme} /></div>
       </div>
     );
   }
@@ -108,6 +111,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <TabBar />
       <Onboarding />
       <HealthRewardCelebration />
+      <StreakRewardCelebration />
       <LevelUpCelebration />
       <AchievementCelebration />
       <FriendShareNotifier />

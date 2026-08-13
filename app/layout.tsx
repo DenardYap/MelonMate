@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     title: "MelonMate",
     description: "Your progress. Friends cheering.",
     type: "website",
-    images: [{ url: "/og-honey-2d.png", width: 1731, height: 909, alt: "Honey welcomes you to MelonMate." }],
+    images: [{ url: "/og-honey-2d.png", width: 1731, height: 909, alt: "A MelonMate companion welcomes you." }],
   },
   twitter: {
     card: "summary_large_image",

@@ -212,7 +212,7 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Honey isn't configured yet. Add OPENAI_API_KEY to enable chat and voice help.", code: "AI_NOT_CONFIGURED" },
+      { error: "Your MelonMate companion isn't configured yet. Add OPENAI_API_KEY to enable chat and voice help.", code: "AI_NOT_CONFIGURED" },
       { status: 503 }
     );
   }
@@ -248,7 +248,7 @@ export async function POST(request: Request) {
   }
 
   if (!messages.length || messages[messages.length - 1]?.role !== "user") {
-    return NextResponse.json({ error: "Send Honey a message first." }, { status: 400 });
+    return NextResponse.json({ error: `Send ${persona.name} a message first.` }, { status: 400 });
   }
   const recipeMatches = searchCurrentRecipeCandidates(
     [messages[messages.length - 1]?.content ?? ""],
@@ -283,7 +283,7 @@ export async function POST(request: Request) {
   if (!response.ok) {
     console.error("OpenAI agent failed", response.status, data.error?.message);
     return NextResponse.json(
-      { error: "Honey couldn't answer just now. Please try again." },
+      { error: `${persona.name} couldn't answer just now. Please try again.` },
       { status: 502 }
     );
   }
@@ -295,7 +295,7 @@ export async function POST(request: Request) {
       const action = actionFromToolCall(item.name, JSON.parse(item.arguments) as unknown);
       if (action) actions.push(action);
     } catch {
-      console.error("Honey returned an invalid action", item.name);
+      console.error(`${persona.name} returned an invalid action`, item.name);
     }
   }
 

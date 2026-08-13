@@ -75,6 +75,8 @@ import {
   Xmark,
 } from "iconoir-react";
 import type { FoodCat, MealSlot, RecipeCat } from "@/lib/types";
+import type { ThemeId } from "@/lib/types";
+import { themeBrand } from "@/lib/themeBrand";
 
 const ICONS = {
   home: HomeSimple,
@@ -266,11 +268,12 @@ export function MealGlyph({ meal, size = 18 }: { meal: MealSlot; size?: number }
   return <AppIcon name={MEAL_ICONS[meal]} size={size} />;
 }
 
-export function BrandMark({ size = 28 }: { size?: number }) {
+export function BrandMark({ size = 28, theme = "honeydew" }: { size?: number; theme?: ThemeId }) {
+  const brand = themeBrand(theme);
   return (
     <span className="brand-mark" style={{ width: size, height: size }} aria-hidden="true">
       <Image
-        src="/brand/honey-generic-2d.png"
+        src={brand.markSrc}
         alt=""
         width={size}
         height={size}

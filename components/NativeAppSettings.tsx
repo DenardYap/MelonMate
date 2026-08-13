@@ -84,15 +84,15 @@ export default function NativeAppSettings() {
 
   return (
     <GlassCard className="px-4 py-2 mb-4">
-      {!healthConnected && (
-        <button type="button" className="row row-button press" onClick={() => void syncHealth()} disabled={busy !== null}>
-          <div className="flex-1">
-            <div className="font-semibold icon-label"><AppIcon name="heart" size={18} /> Apple Health</div>
-            <div className="t-cap mt-1">{lang === "zh" ? "連接後自動同步步數與站立時間" : "Connect once to sync steps and standing automatically"}</div>
-          </div>
-          <span className="chip">{busy === "health" ? "…" : (lang === "zh" ? "連接" : "Connect")}</span>
-        </button>
-      )}
+      <button type="button" className="row row-button press" onClick={() => void syncHealth()} disabled={busy !== null}>
+        <div className="flex-1">
+          <div className="font-semibold icon-label"><AppIcon name="heart" size={18} /> Apple Health</div>
+          <div className="t-cap mt-1">{healthConnected
+            ? (lang === "zh" ? "已連接 · 同步步數、站立與 Apple Watch 訓練" : "Connected · syncs steps, standing, and Apple Watch workouts")
+            : (lang === "zh" ? "連接後自動同步步數、站立與訓練" : "Connect to sync steps, standing, and workouts automatically")}</div>
+        </div>
+        <span className={`chip ${healthConnected ? "chip-on" : ""}`}>{busy === "health" ? "…" : healthConnected ? (lang === "zh" ? "立即同步" : "Sync now") : (lang === "zh" ? "連接" : "Connect")}</span>
+      </button>
       <button type="button" className="row row-button press" onClick={() => void enablePush()} disabled={busy !== null || permission === "granted"}>
         <div className="flex-1">
           <div className="font-semibold icon-label"><AppIcon name="bell" size={18} /> {lang === "zh" ? "推播通知" : "Push notifications"}</div>

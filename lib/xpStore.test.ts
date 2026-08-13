@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, todayStr } from "./dates";
 import {
   DAILY_XP_REWARD,
+  DAILY_XP_CAP,
   FOOD_LOG_XP_REWARD,
   MAX_DAILY_REWARDED_FOOD_LOGS,
   WEIGHT_LOG_XP_REWARD,
 } from "./game";
 import { migrateHealthXpClaimTiers, useStore } from "./store";
+import { STREAK_MILESTONES } from "./streakRewards";
 
 const PROFILE = "p-me";
 
@@ -25,7 +27,7 @@ describe("healthy-action XP store", () => {
     useStore.getState().resetAll();
   });
 
-  it("awards each of the first six food logs and prevents add/delete farming", () => {
+  it("awards each allowed food log and prevents add/delete farming", () => {
     const store = useStore.getState();
     const rewards = Array.from(
       { length: MAX_DAILY_REWARDED_FOOD_LOGS + 1 },
@@ -64,6 +66,37 @@ describe("healthy-action XP store", () => {
     useStore.getState().reconcileGame();
 
     expect(useStore.getState().game[PROFILE].xp).toBe(3 * FOOD_LOG_XP_REWARD + DAILY_XP_REWARD);
+  });
+
+  it("awards a one-time XP badge at a streak milestone", () => {
+    const store = useStore.getState();
+    const dates = [addDays(todayStr(), -3), addDays(todayStr(), -2), addDays(todayStr(), -1)];
+    dates.forEach((date) => {
+      store.addLog(foodLog(date));
+      store.addLog(foodLog(date));
+      store.addLog(foodLog(date));
+    });
+    useStore.setState((state) => ({
+      game: {
+        ...state.game,
+        [PROFILE]: { ...state.game[PROFILE], lastEval: addDays(dates[0], -1) },
+      },
+    }));
+
+    useStore.getState().reconcileGame();
+
+    const milestone = STREAK_MILESTONES[0];
+    const game = useStore.getState().game[PROFILE];
+    expect(game.streak).toBe(3);
+    expect(game.xp).toBe(dates.length * (3 * FOOD_LOG_XP_REWARD + DAILY_XP_REWARD) + milestone.xp);
+    expect(game.streakMilestoneClaims).toEqual([milestone.days]);
+    expect(game.pendingStreakRewards).toEqual([{ days: milestone.days, xp: milestone.xp, date: dates[2] }]);
+
+    useStore.getState().reconcileGame();
+    expect(useStore.getState().game[PROFILE].xp).toBe(game.xp);
+    useStore.getState().acknowledgeStreakReward(milestone.days);
+    expect(useStore.getState().game[PROFILE].pendingStreakRewards).toEqual([]);
+    expect(useStore.getState().game[PROFILE].streakMilestoneClaims).toEqual([milestone.days]);
   });
 
   it("awards weight logging XP only once per local day", () => {
@@ -112,6 +145,18 @@ describe("healthy-action XP store", () => {
 
     expect(result).toMatchObject({ xp: 18, completedSets: 2, completedExercises: 1 });
     expect(useStore.getState().game[PROFILE].xp).toBe(18);
+  });
+
+  it("enforces one shared daily cap across Health and food rewards", () => {
+    const store = useStore.getState();
+    expect(store.applyHealthActivity({
+      date: todayStr(),
+      steps: 30_000,
+      standMinutes: 240,
+      workouts: [{ id: "long-workout", activityType: "Pilates", durationMinutes: 180, activeCalories: 500, startedAt: Date.now() }],
+    })).toBe(DAILY_XP_CAP);
+    expect(useStore.getState().addLog(foodLog())).toBe(0);
+    expect(useStore.getState().game[PROFILE].xp).toBe(DAILY_XP_CAP);
   });
 
   it("preserves already-claimed Health XP when upgrading to smaller milestones", () => {

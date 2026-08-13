@@ -43,13 +43,13 @@ describe("farm harvest progression", () => {
     expect(honeyed.xp).toBe(normal.xp);
   });
 
-  it("adds Densuke Pingu's XP without percentage rounding", () => {
+  it("adds Densuke Pingu's Dew without awarding XP", () => {
     const garden = freshGarden();
     garden.buildingLevels.farmhouse = 1;
     garden.activeCompanions = ["densuke-penguin"];
 
     const base = varietyById("honeydew");
-    expect(harvestRewards(garden, "honeydew").xp).toBe(base.harvestXp + 3);
+    expect(harvestRewards(garden, "honeydew")).toEqual({ dew: base.harvestReward + 3, xp: 0 });
   });
 
   it("turns Farmhouse Tier 2 into visible whole-number companion gains", () => {
@@ -61,13 +61,13 @@ describe("farm harvest progression", () => {
     expect(harvestRewards(garden, "honeydew").dew).toBe(base.harvestReward + 2);
 
     garden.activeCompanions = ["densuke-penguin"];
-    expect(harvestRewards(garden, "honeydew").xp).toBe(base.harvestXp + 4);
+    expect(harvestRewards(garden, "honeydew")).toEqual({ dew: base.harvestReward + 4, xp: 0 });
   });
 
   it("shows the exact whole-number order payout before delivery", () => {
     const garden = freshGarden();
     garden.buildingLevels = { farmhouse: 2, market: 3 };
     garden.activeCompanions = ["golden-capybara"];
-    expect(farmOrderRewards(garden, { dewReward: 28, xpReward: 24 })).toEqual({ dew: 59, xp: 55 });
+    expect(farmOrderRewards(garden, { dewReward: 28, xpReward: 24 })).toEqual({ dew: 59, xp: 0 });
   });
 });

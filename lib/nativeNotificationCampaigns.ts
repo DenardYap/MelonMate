@@ -178,8 +178,8 @@ export function buildNativeCampaignNotifications(
           ? (snapshot.lang === "zh" ? `${name}可以採收了` : `${name} is ready to harvest`)
           : (snapshot.lang === "zh" ? `${count} 顆瓜可以採收了` : `${count} melons are ready to harvest`),
         body: snapshot.lang === "zh"
-          ? "回到瓜園採收露珠與 XP。"
-          : "Return to your garden to collect Dew and XP.",
+          ? "回到瓜園採收露珠。"
+          : "Return to your garden to collect Dew.",
         at: new Date(lastHarvest.readyAt),
         extra: {
           campaign: "harvest",

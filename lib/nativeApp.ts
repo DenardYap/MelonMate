@@ -21,6 +21,7 @@ import type { Lang } from "./types";
 const SETTINGS_KEY = "melonmate-native-settings-v1";
 const LEGACY_DAILY_REMINDER_ID = 7_001;
 const HEALTH_REWARD_NOTIFICATION_ID_BASE = 400_000_000;
+const STREAK_REWARD_NOTIFICATION_ID_BASE = 500_000_000;
 const HEALTH_AUTO_SYNC_INTERVAL_MS = 60_000;
 
 interface NativeSettings {
@@ -383,6 +384,32 @@ export async function sendHealthRewardNotification(
       sound: "default",
       schedule: { at: new Date(Date.now() + 500) },
       extra: { path: "/", campaign: "health-reward" },
+    }],
+  });
+  return true;
+}
+
+export async function sendStreakRewardNotification(
+  reward: { days: number; xp: number },
+  lang: Lang
+): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  let permission = (await LocalNotifications.checkPermissions()).display;
+  if (permission === "prompt" || permission === "prompt-with-rationale") {
+    permission = (await LocalNotifications.requestPermissions()).display;
+  }
+  if (permission !== "granted") return false;
+
+  await LocalNotifications.schedule({
+    notifications: [{
+      id: STREAK_REWARD_NOTIFICATION_ID_BASE + reward.days,
+      title: lang === "zh" ? `${reward.days} 天連續紀錄徽章！` : `${reward.days}-day streak badge!`,
+      body: reward.xp > 0
+        ? (lang === "zh" ? `保持好習慣，獲得 +${reward.xp} XP。` : `Your consistency earned +${reward.xp} XP.`)
+        : (lang === "zh" ? "徽章已解鎖；今天已達 XP 上限。" : "Badge unlocked; you already reached today’s XP cap."),
+      sound: "default",
+      schedule: { at: new Date(Date.now() + 500) },
+      extra: { path: "/me", campaign: "streak-reward" },
     }],
   });
   return true;

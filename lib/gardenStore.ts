@@ -296,7 +296,6 @@ export const useGardenStore = create<GardenStore>()(
           const completedDailyCrate = claimed.length < reward.totalQuests
             && nextClaims.length >= reward.totalQuests;
           const bonusDew = completedDailyCrate ? GARDEN_DAILY_BONUS.dew : 0;
-          const bonusXp = completedDailyCrate ? GARDEN_DAILY_BONUS.xp : 0;
 
           return {
             gardens: {
@@ -304,7 +303,6 @@ export const useGardenStore = create<GardenStore>()(
               [profileId]: {
                 ...garden,
                 dew: garden.dew + reward.dew + bonusDew,
-                gardenXp: garden.gardenXp + reward.xp + bonusXp,
                 lastTended: reward.date,
                 dailyClaims: {
                   ...garden.dailyClaims,
@@ -379,7 +377,6 @@ export const useGardenStore = create<GardenStore>()(
               [profileId]: {
                 ...garden,
                 dew: garden.dew + reward.dew,
-                gardenXp: garden.gardenXp + reward.xp,
                 achievementClaims: [...new Set([
                   ...garden.achievementClaims,
                   ...claimable.map((achievement) => achievement.id),
@@ -531,7 +528,6 @@ export const useGardenStore = create<GardenStore>()(
               [profileId]: {
                 ...garden,
                 dew: garden.dew + reward.dew,
-                gardenXp: garden.gardenXp + reward.xp,
                 totalHarvests: garden.totalHarvests + 1,
                 totalHoneyedHarvests: garden.totalHoneyedHarvests + (honeyed ? 1 : 0),
                 harvests: {
@@ -780,7 +776,6 @@ export const useGardenStore = create<GardenStore>()(
           }
           const reward = farmOrderRewards(garden, order);
           let dew = reward.dew;
-          let xp = reward.xp;
           const orders = garden.farmOrders.map((item) => item.id === orderId ? { ...item, claimed: true } : item);
           let stewardshipDays = garden.stewardshipDays;
           const dailyDone = order.period === "daily"
@@ -790,7 +785,6 @@ export const useGardenStore = create<GardenStore>()(
             const milestone = STEWARDSHIP_MILESTONES.find((item) => item.days === stewardshipDays.length);
             if (milestone) {
               dew += milestone.dew;
-              xp += milestone.xp;
             }
           }
           return {
@@ -799,7 +793,6 @@ export const useGardenStore = create<GardenStore>()(
               [profileId]: {
                 ...garden,
                 dew: garden.dew + dew,
-                gardenXp: garden.gardenXp + xp,
                 farmOrders: orders,
                 stewardshipDays,
                 totalOrdersClaimed: garden.totalOrdersClaimed + 1,
@@ -879,7 +872,6 @@ export const useGardenStore = create<GardenStore>()(
               [profileId]: {
                 ...garden,
                 dew: garden.dew + summary.dew,
-                gardenXp: garden.gardenXp + summary.xp,
                 totalHarvests: garden.totalHarvests + summary.count,
                 totalHoneyedHarvests: garden.totalHoneyedHarvests + summary.honeyedCount,
                 totalHarvestAllUses: garden.totalHarvestAllUses + 1,

@@ -6,6 +6,46 @@
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>AppIconWatermelon</key>
+			<dict><key>CFBundleIconName</key><string>AppIconWatermelon</string><key>CFBundleIconFiles</key><array><string>AppIconWatermelon</string></array></dict>
+			<key>AppIconCantaloupe</key>
+			<dict><key>CFBundleIconName</key><string>AppIconCantaloupe</string><key>CFBundleIconFiles</key><array><string>AppIconCantaloupe</string></array></dict>
+			<key>AppIconCanary</key>
+			<dict><key>CFBundleIconName</key><string>AppIconCanary</string><key>CFBundleIconFiles</key><array><string>AppIconCanary</string></array></dict>
+			<key>AppIconHami</key>
+			<dict><key>CFBundleIconName</key><string>AppIconHami</string><key>CFBundleIconFiles</key><array><string>AppIconHami</string></array></dict>
+			<key>AppIconChamoe</key>
+			<dict><key>CFBundleIconName</key><string>AppIconChamoe</string><key>CFBundleIconFiles</key><array><string>AppIconChamoe</string></array></dict>
+			<key>AppIconMoonGold</key>
+			<dict><key>CFBundleIconName</key><string>AppIconMoonGold</string><key>CFBundleIconFiles</key><array><string>AppIconMoonGold</string></array></dict>
+			<key>AppIconDensuke</key>
+			<dict><key>CFBundleIconName</key><string>AppIconDensuke</string><key>CFBundleIconFiles</key><array><string>AppIconDensuke</string></array></dict>
+		</dict>
+	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>AppIconWatermelon</key>
+			<dict><key>CFBundleIconName</key><string>AppIconWatermelon</string><key>CFBundleIconFiles</key><array><string>AppIconWatermelon</string></array></dict>
+			<key>AppIconCantaloupe</key>
+			<dict><key>CFBundleIconName</key><string>AppIconCantaloupe</string><key>CFBundleIconFiles</key><array><string>AppIconCantaloupe</string></array></dict>
+			<key>AppIconCanary</key>
+			<dict><key>CFBundleIconName</key><string>AppIconCanary</string><key>CFBundleIconFiles</key><array><string>AppIconCanary</string></array></dict>
+			<key>AppIconHami</key>
+			<dict><key>CFBundleIconName</key><string>AppIconHami</string><key>CFBundleIconFiles</key><array><string>AppIconHami</string></array></dict>
+			<key>AppIconChamoe</key>
+			<dict><key>CFBundleIconName</key><string>AppIconChamoe</string><key>CFBundleIconFiles</key><array><string>AppIconChamoe</string></array></dict>
+			<key>AppIconMoonGold</key>
+			<dict><key>CFBundleIconName</key><string>AppIconMoonGold</string><key>CFBundleIconFiles</key><array><string>AppIconMoonGold</string></array></dict>
+			<key>AppIconDensuke</key>
+			<dict><key>CFBundleIconName</key><string>AppIconDensuke</string><key>CFBundleIconFiles</key><array><string>AppIconDensuke</string></array></dict>
+		</dict>
+	</dict>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>

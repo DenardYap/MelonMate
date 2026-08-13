@@ -32,6 +32,7 @@ import { addDays, todayStr } from "./dates";
 import { est1RM, exKey, sumMacros } from "./nutrition";
 import {
   combinedXp,
+  dailyXpAward,
   DAILY_XP_REWARD,
   FOOD_LOG_XP_REWARD,
   healthRewardBetweenTiers,
@@ -44,8 +45,8 @@ import {
   stepTierFromCount,
   WEIGHT_LOG_XP_REWARD,
 } from "./game";
-import { useGardenStore } from "./gardenStore";
 import { isThemeUnlocked } from "./themes";
+import { earnedStreakMilestones, streakMilestoneAt } from "./streakRewards";
 import { completedSets, lastCompletedSessionForDay, recommendExercisePreset, seedWeightInUnit } from "./workouts";
 import { migrateLegacyCalorieData, repairInflatedCalorieData } from "./calories";
 import {
@@ -75,6 +76,9 @@ const freshGame = (): GameState => ({
   foodLogXpClaims: {},
   weightXpClaims: {},
   healthXpClaims: {},
+  dailyXpEarned: {},
+  streakMilestoneClaims: [],
+  pendingStreakRewards: [],
 });
 
 function defaultProfiles(): Profile[] {
@@ -207,6 +211,7 @@ export interface Store {
   applyMembers: (members: Record<string, MemberSnapshot>) => void;
 
   reconcileGame: () => void;
+  acknowledgeStreakReward: (days: number) => void;
   awardGolden: (n: number) => void;
 
   importAll: (data: Partial<Store>) => void;
@@ -275,8 +280,7 @@ export const useStore = create<Store>()(
       setTheme: (theme) =>
         set((s) => {
           const healthyDayXp = s.game[s.activeProfileId]?.xp ?? 0;
-          const farmEarnedXp = useGardenStore.getState().gardens[s.activeProfileId]?.gardenXp ?? 0;
-          const level = levelFromXp(combinedXp(healthyDayXp, farmEarnedXp));
+          const level = levelFromXp(combinedXp(healthyDayXp));
           return isThemeUnlocked(theme, level) ? { theme } : s;
         }),
 
@@ -332,15 +336,19 @@ export const useStore = create<Store>()(
           const cur = s.logs[pid] ?? [];
           const g = s.game[pid] ?? freshGame();
           const claims = { ...(g.foodLogXpClaims ?? {}) };
+          const dailyXpEarned = { ...(g.dailyXpEarned ?? {}) };
           const claimedLogs = claims[e.date] ?? 0;
-          awardedXp = claimedLogs < MAX_DAILY_REWARDED_FOOD_LOGS ? FOOD_LOG_XP_REWARD : 0;
+          awardedXp = claimedLogs < MAX_DAILY_REWARDED_FOOD_LOGS
+            ? dailyXpAward(g.xp, dailyXpEarned[e.date] ?? 0, FOOD_LOG_XP_REWARD)
+            : 0;
           if (awardedXp > 0) claims[e.date] = claimedLogs + 1;
+          if (awardedXp > 0) dailyXpEarned[e.date] = (dailyXpEarned[e.date] ?? 0) + awardedXp;
           const entry: LogEntry = { ...e, id: newId(), at: Date.now(), xpAwarded: awardedXp };
           return {
             logs: { ...s.logs, [pid]: [...cur, entry] },
             game: {
               ...s.game,
-              [pid]: { ...g, xp: g.xp + awardedXp, foodLogXpClaims: claims },
+              [pid]: { ...g, xp: g.xp + awardedXp, foodLogXpClaims: claims, dailyXpEarned },
             },
           };
         });
@@ -783,9 +791,13 @@ export const useStore = create<Store>()(
         }
         const endedAt = Date.now();
         const durationMs = endedAt - session.startedAt;
-        const workoutReward = inAppWorkoutXp(session.entries);
+        const rawWorkoutReward = inAppWorkoutXp(session.entries);
+        let awardedWorkoutXp = 0;
         set((st) => {
           const g = st.game[pid] ?? freshGame();
+          const dailyXpEarned = { ...(g.dailyXpEarned ?? {}) };
+          awardedWorkoutXp = dailyXpAward(g.xp, dailyXpEarned[session.date] ?? 0, rawWorkoutReward.xp);
+          if (awardedWorkoutXp > 0) dailyXpEarned[session.date] = (dailyXpEarned[session.date] ?? 0) + awardedWorkoutXp;
           return {
             sessions: {
               ...st.sessions,
@@ -795,11 +807,11 @@ export const useStore = create<Store>()(
             },
             game: {
               ...st.game,
-              [pid]: { ...g, golden: g.golden + prs, xp: g.xp + workoutReward.xp },
+              [pid]: { ...g, golden: g.golden + prs, xp: g.xp + awardedWorkoutXp, dailyXpEarned },
             },
           };
         });
-        return { volume, prs, durationMs, ...workoutReward };
+        return { volume, prs, durationMs, ...rawWorkoutReward, xp: awardedWorkoutXp };
       },
 
       discardSession: (sessionId) =>
@@ -821,8 +833,10 @@ export const useStore = create<Store>()(
           const cur = (s.weights[pid] ?? []).filter((w) => w.date !== date);
           const game = s.game[pid] ?? freshGame();
           const claims = { ...(game.weightXpClaims ?? {}) };
-          awardedXp = claims[date] ? 0 : WEIGHT_LOG_XP_REWARD;
+          const dailyXpEarned = { ...(game.dailyXpEarned ?? {}) };
+          awardedXp = claims[date] ? 0 : dailyXpAward(game.xp, dailyXpEarned[date] ?? 0, WEIGHT_LOG_XP_REWARD);
           if (awardedXp > 0) claims[date] = true;
+          if (awardedXp > 0) dailyXpEarned[date] = (dailyXpEarned[date] ?? 0) + awardedXp;
           return {
             weights: { ...s.weights, [pid]: [...cur, { date, value }] },
             game: {
@@ -831,6 +845,7 @@ export const useStore = create<Store>()(
                 ...game,
                 xp: game.xp + awardedXp,
                 weightXpClaims: claims,
+                dailyXpEarned,
               },
             },
           };
@@ -852,14 +867,17 @@ export const useStore = create<Store>()(
           const pid = s.activeProfileId;
           const g = s.game[pid] ?? freshGame();
           const claims = { ...(g.healthXpClaims ?? {}) };
+          const dailyXpEarned = { ...(g.dailyXpEarned ?? {}) };
           const prior = claims[snapshot.date] ?? { stepTier: 0, standTier: 0 };
           const stepTier = stepTierFromCount(snapshot.steps);
           const standTier = standTierFromMinutes(snapshot.standMinutes);
           const workouts = snapshot.workouts ?? [];
           const claimedWorkoutIds = new Set(prior.workoutIds ?? []);
           const newWorkouts = workouts.filter((workout) => !claimedWorkoutIds.has(workout.id));
-          awardedXp = healthRewardBetweenTiers(prior, { stepTier, standTier }).totalXp
+          const requestedXp = healthRewardBetweenTiers(prior, { stepTier, standTier }).totalXp
             + newWorkouts.reduce((total, workout) => total + healthWorkoutXp(workout.durationMinutes), 0);
+          awardedXp = dailyXpAward(g.xp, dailyXpEarned[snapshot.date] ?? 0, requestedXp);
+          if (awardedXp > 0) dailyXpEarned[snapshot.date] = (dailyXpEarned[snapshot.date] ?? 0) + awardedXp;
           claims[snapshot.date] = {
             stepTier: Math.max(prior.stepTier, stepTier),
             standTier: Math.max(prior.standTier, standTier),
@@ -882,7 +900,7 @@ export const useStore = create<Store>()(
             },
             game: {
               ...s.game,
-              [pid]: { ...g, xp: g.xp + awardedXp, healthXpClaims: claims },
+              [pid]: { ...g, xp: g.xp + awardedXp, healthXpClaims: claims, dailyXpEarned },
             },
           };
         });
@@ -899,6 +917,21 @@ export const useStore = create<Store>()(
         })),
 
       applyMembers: (members) => set(() => ({ friends: migrateLegacyCalorieData(members) })),
+
+      acknowledgeStreakReward: (days) =>
+        set((s) => {
+          const pid = s.activeProfileId;
+          const game = s.game[pid] ?? freshGame();
+          return {
+            game: {
+              ...s.game,
+              [pid]: {
+                ...game,
+                pendingStreakRewards: (game.pendingStreakRewards ?? []).filter((reward) => reward.days !== days),
+              },
+            },
+          };
+        }),
 
       awardGolden: (n) =>
         set((s) => {
@@ -923,9 +956,25 @@ export const useStore = create<Store>()(
                 const hit = isDailyXpEligible(entries.length, tot.cal, p.goals.cal);
                 g.history[cursor] = hit;
                 if (hit) {
+                  const dailyXpEarned = { ...(g.dailyXpEarned ?? {}) };
+                  const awardedDailyXp = dailyXpAward(g.xp, dailyXpEarned[cursor] ?? 0, DAILY_XP_REWARD);
+                  if (awardedDailyXp > 0) dailyXpEarned[cursor] = (dailyXpEarned[cursor] ?? 0) + awardedDailyXp;
                   g.streak += 1;
                   g.melons += 1;
-                  g.xp += DAILY_XP_REWARD;
+                  g.xp += awardedDailyXp;
+                  const milestone = streakMilestoneAt(g.streak);
+                  const streakClaims = g.streakMilestoneClaims ?? [];
+                  if (milestone && !streakClaims.includes(milestone.days)) {
+                    const awardedStreakXp = dailyXpAward(g.xp, dailyXpEarned[cursor] ?? 0, milestone.xp);
+                    if (awardedStreakXp > 0) dailyXpEarned[cursor] = (dailyXpEarned[cursor] ?? 0) + awardedStreakXp;
+                    g.xp += awardedStreakXp;
+                    g.streakMilestoneClaims = [...streakClaims, milestone.days];
+                    g.pendingStreakRewards = [
+                      ...(g.pendingStreakRewards ?? []),
+                      { days: milestone.days, xp: awardedStreakXp, date: cursor },
+                    ];
+                  }
+                  g.dailyXpEarned = dailyXpEarned;
                   g.best = Math.max(g.best, g.streak);
                 } else {
                   g.streak = 0;
@@ -977,7 +1026,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: "melonmate-v1",
-      version: 15,
+      version: 17,
       migrate: (persisted, version) => {
         let state = version < 11
           ? migrateLegacyCalorieData(persisted as Partial<Store>)
@@ -1079,6 +1128,28 @@ export const useStore = create<Store>()(
           };
         }
         if (version < 15) state = { ...state, friendNotifications: state.friendNotifications ?? [] };
+        if (version < 16) {
+          state = {
+            ...state,
+            game: Object.fromEntries(Object.entries(state.game ?? {}).map(([profileId, game]) => [
+              profileId,
+              { ...game, xp: combinedXp(game.xp), dailyXpEarned: game.dailyXpEarned ?? {} },
+            ])),
+          };
+        }
+        if (version < 17) {
+          state = {
+            ...state,
+            game: Object.fromEntries(Object.entries(state.game ?? {}).map(([profileId, game]) => [
+              profileId,
+              {
+                ...game,
+                streakMilestoneClaims: game.streakMilestoneClaims ?? earnedStreakMilestones(game.best),
+                pendingStreakRewards: game.pendingStreakRewards ?? [],
+              },
+            ])),
+          };
+        }
         return state;
       },
     }
@@ -1112,9 +1183,8 @@ export function useActiveProfile(): Profile {
 export function useGame(): GameState {
   const id = useStore((s) => s.activeProfileId);
   const game = useStore((s) => s.game);
-  const farmEarnedXp = useGardenStore((s) => s.gardens[id]?.gardenXp ?? 0);
   const saved = game[id] ?? freshGame();
-  return { ...saved, xp: combinedXp(saved.xp, farmEarnedXp) };
+  return { ...saved, xp: combinedXp(saved.xp) };
 }
 
 export function todayLogs(s: Store, date: string): LogEntry[] {

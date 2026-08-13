@@ -32,15 +32,23 @@ export function connectionCodes(ws: { code: string | null; codes?: string[] }): 
   return [...new Set([...(ws.codes ?? []), ...(ws.code ? [ws.code] : [])])];
 }
 
-/** The friend ID remains for call-site compatibility; all friends receive the same complete snapshot. */
-export function buildMemberSnapshot(_friendId?: string | null): MemberSnapshot {
+/** Builds the per-friend snapshot, honoring that connection's sharing choices. */
+export function buildMemberSnapshot(friendId?: string | null): MemberSnapshot {
   const s = useStore.getState();
   const profile = s.profiles.find((p) => p.id === s.activeProfileId) ?? s.profiles[0];
+  const sharing = friendId ? s.friendSharing[friendId] ?? {
+    shareMealPlan: false,
+    shareWorkoutPlan: false,
+    sharedRecipeIds: [],
+  } : {
+    shareMealPlan: false,
+    shareWorkoutPlan: false,
+    sharedRecipeIds: [],
+  };
   const game = s.game[profile.id];
   const savedFarm = useGardenStore.getState().gardens[profile.id];
   const farm = savedFarm ?? freshGarden();
-  const farmEarnedXp = farm.gardenXp;
-  const xp = combinedXp(game?.xp ?? 0, farmEarnedXp);
+  const xp = combinedXp(game?.xp ?? 0);
   const level = levelFromXp(xp);
 
   const today = todayStr();
@@ -69,8 +77,8 @@ export function buildMemberSnapshot(_friendId?: string | null): MemberSnapshot {
     )
   );
   const mealRecipes = s.recipes.filter((recipe) => plannedRecipeIds.has(recipe.id));
-  const selectedRecipeIds = new Set(profile.selectedRecipeIds ?? []);
-  const sharedRecipes = s.recipes.filter((recipe) => recipe.custom || selectedRecipeIds.has(recipe.id));
+  const sharedRecipeIds = new Set(sharing.sharedRecipeIds);
+  const sharedRecipes = s.recipes.filter((recipe) => sharedRecipeIds.has(recipe.id));
 
   const completedSessions = (s.sessions[profile.id] ?? [])
     .filter((session) => session.endedAt)
@@ -84,7 +92,9 @@ export function buildMemberSnapshot(_friendId?: string | null): MemberSnapshot {
     ),
     prs: session.prs,
   });
-  const workoutPlan = s.plans.find((plan) => plan.id === profile.planId);
+  const workoutPlan = sharing.shareWorkoutPlan
+    ? s.plans.find((plan) => plan.id === (sharing.workoutPlanId ?? profile.planId))
+    : undefined;
   const workoutSummaries = completedSessions.map(sessionSummary);
   const foodLogs = [...(s.logs[profile.id] ?? [])]
     .sort((a, b) => b.at - a.at)
@@ -127,14 +137,13 @@ export function buildMemberSnapshot(_friendId?: string | null): MemberSnapshot {
     health,
     farm: {
       dew: farm.dew,
-      gardenXp: farm.gardenXp,
       unlockedPlots: farm.unlockedPlots,
       plots: farm.plots.map((plot) => ({ ...plot })),
       harvests: { ...farm.harvests },
       totalHarvests: farm.totalHarvests,
       lastTended: farm.lastTended,
     },
-    mealPlan: { days: mealDays, recipes: mealRecipes },
+    mealPlan: sharing.shareMealPlan ? { days: mealDays, recipes: mealRecipes } : undefined,
     sharedRecipes: sharedRecipes.length ? sharedRecipes : undefined,
     workoutPlan: workoutPlan
       ? { plan: workoutPlan, unit: profile.unit }

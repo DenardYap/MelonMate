@@ -561,8 +561,8 @@ export default function GardenPage() {
             playSound("harvest");
             toast(
               lang === "zh"
-                ? `收成 ${variety.name.zh}！+${result.dew} 露珠 · +${result.xp} 經驗`
-                : `${variety.name.en} harvested! +${result.dew} dew · +${result.xp} XP`,
+                ? `收成 ${variety.name.zh}！+${result.dew} 露珠`
+                : `${variety.name.en} harvested! +${result.dew} Dew`,
               "shopping"
             );
           }
@@ -747,7 +747,7 @@ export default function GardenPage() {
         "water"
       );
     } else {
-      toast(`${result.count} ${copy.harvested} · +${result.dew} ${copy.dew} · +${result.xp} XP`, "shopping");
+      toast(`${result.count} ${copy.harvested} · +${result.dew} ${copy.dew}`, "shopping");
     }
   };
 
@@ -1078,7 +1078,7 @@ export default function GardenPage() {
                         <span className="seed-time"><AppIcon name="timer" size={12} /> {formatGrowTime(variety.growMinutes, lang)}</span>
                         <span className="seed-meta">
                           <b><AppIcon name="water" size={15} /> {seedCostFor(garden, variety.seedCost)}</b><span>→</span>
-                          <b><AppIcon name="water" size={15} /> {variety.harvestReward}</b><b><AppIcon name="star" size={14} /> {variety.harvestXp}</b>
+                          <b><AppIcon name="water" size={15} /> {variety.harvestReward}</b>
                         </span>
                         {!unlocked && <span className="seed-lock"><AppIcon name="lock" size={17} /></span>}
                       </button>
@@ -1240,7 +1240,7 @@ export default function GardenPage() {
                           <article key={order.id} className={`${ready ? "is-ready" : ""} ${order.claimed ? "is-claimed" : ""}`}>
                             <span className="farm-order-icon"><AppIcon name={order.period === "weekly" ? "star" : "package"} size={22} /></span>
                             <div><small>{order.period === "weekly" ? copy.weeklyPremium : copy.dailyOrder}</small><b>{farmOrderLabel(order, lang)}</b><p>{Math.min(order.progress, order.target)}/{order.target}</p><span><i style={{ width: `${Math.min(100, order.progress / order.target * 100)}%` }} /></span></div>
-                            <aside><em><AppIcon name="water" size={11} /> {rewards.dew}</em><em><AppIcon name="star" size={11} /> {rewards.xp}</em></aside>
+                            <aside><em><AppIcon name="water" size={11} /> {rewards.dew}</em></aside>
                             <button className="press" disabled={!ready || order.claimed} onClick={() => onClaimOrder(order)}>{order.claimed ? copy.delivered : ready ? copy.deliver : copy.inProgress}</button>
                           </article>
                         );
@@ -1336,7 +1336,6 @@ export default function GardenPage() {
                           <div><b>{item.name[lang]}</b><em>{earned ? copy.earned : `${Math.min(item.current, item.target).toLocaleString()}/${item.target.toLocaleString()}${item.eachMilestone ? ` ${copy.each}` : ""}`}</em></div>
                           <p>{item.description[lang]}</p>
                           <aside className="achievement-rewards" aria-label={lang === "zh" ? "成就獎勵" : "Achievement rewards"}>
-                            <span><AppIcon name="star" size={11} /> +{item.reward.xp.toLocaleString()} XP</span>
                             <span><AppIcon name="water" size={11} /> +{item.reward.dew.toLocaleString()} {copy.dew}</span>
                           </aside>
                           <span><i style={{ width: `${progress}%` }} /></span>
@@ -1560,23 +1559,23 @@ function FarmResourceGuide({
       ? {
           eyebrow: "玩家進度",
           balance: "總經驗",
-          summary: "經驗會提升你的玩家等級，代表你在飲食、活動與農場中的累積進度。",
-          earnTitle: "到處都能賺經驗",
-          earnBody: "記錄食物、走路與站立、收成作物，以及領取農場獎勵。",
+          summary: "經驗會提升玩家等級，且只來自飲食與健身活動；農場則只產出露珠。",
+          earnTitle: "用健康行動賺經驗",
+          earnBody: "記錄食物與體重、完成訓練，或同步 Apple 健康的步數、站立與訓練。每日最多 300 XP。",
           useTitle: "升級解鎖",
           useBody: "提升等級可以解鎖建築階級、夥伴、咒語精通、新種子與主題。",
-          note: "經驗不會被花掉；它會永久累積並推進下一個等級。",
+          note: "農場活動不會產生經驗。每天達到上限時，73 天可完成等級 20 的進度。",
           done: "懂了",
         }
       : {
           eyebrow: "PLAYER PROGRESS",
           balance: "Total XP",
-          summary: "XP raises your player level and reflects progress across food, activity, and your farm.",
-          earnTitle: "Earn XP everywhere",
-          earnBody: "Log food, walk and stand, harvest crops, and claim garden rewards.",
+          summary: "XP raises your player level and comes only from food and fitness; the farm produces Dew instead.",
+          earnTitle: "Earn XP with healthy actions",
+          earnBody: "Log food and weight, complete workouts, or sync Apple Health steps, standing, and workouts. The daily maximum is 300 XP.",
           useTitle: "Level up to unlock",
           useBody: "Higher levels unlock building tiers, companions, spell mastery, seeds, and themes.",
-          note: "XP is never spent. It permanently accumulates toward your next level.",
+          note: "Farm activity never awards XP. Reaching the daily maximum completes the Level 20 track in 73 days.",
           done: "Got it",
         };
 

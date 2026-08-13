@@ -8,7 +8,7 @@ import { fireConfetti } from "@/components/ui";
 import { useCelebrationQueue } from "@/lib/celebrationQueue";
 import { GARDEN_SPELL_IDS } from "@/lib/garden";
 import { useGardenStore } from "@/lib/gardenStore";
-import { levelFromXp, xpForLevel } from "@/lib/game";
+import { levelFromXp, MAX_PLAYER_LEVEL, xpForLevel } from "@/lib/game";
 import { levelUnlocksAt, nextUnlockLevelAfter } from "@/lib/levelUnlocks";
 import { successHaptic } from "@/lib/nativeApp";
 import { useGame, useStore } from "@/lib/store";
@@ -145,6 +145,7 @@ export default function LevelUpCelebration() {
 
   const nextUnlockLevel = nextUnlockLevelAfter(celebration.level);
   const nextUnlocks = nextUnlockLevel == null ? [] : levelUnlocksAt(nextUnlockLevel, game.golden);
+  const levelTrackComplete = celebration.level >= MAX_PLAYER_LEVEL;
   const xpToNextLevel = Math.max(0, xpForLevel(celebration.level + 1) - game.xp);
   const spellGiftCount = celebration.awardedSpells.length;
   const copy = lang === "zh" ? {
@@ -158,8 +159,8 @@ export default function LevelUpCelebration() {
     levelReward: "升級獎勵",
     next: "下一個解鎖",
     allUnlocked: "目前所有等級獎勵都已解鎖。",
-    xp: `還差 ${xpToNextLevel} XP 升到等級 ${celebration.level + 1}`,
-    tip: "記錄食物、走路、完成訓練與照顧農場都能繼續獲得 XP。",
+    xp: levelTrackComplete ? "已完成目前的等級進度" : `還差 ${xpToNextLevel} XP 升到等級 ${celebration.level + 1}`,
+    tip: "記錄食物、走路、站立與完成訓練都能繼續獲得 XP；農場只會產出露珠。",
     continue: "繼續前進",
     seed: "種子",
     theme: "主題",
@@ -179,8 +180,8 @@ export default function LevelUpCelebration() {
     levelReward: "Level reward",
     next: "Coming next",
     allUnlocked: "You've unlocked every level reward currently available.",
-    xp: `${xpToNextLevel} XP to Level ${celebration.level + 1}`,
-    tip: "Keep earning XP from food logs, walking, workouts, and tending your farm.",
+    xp: levelTrackComplete ? "Current level track complete" : `${xpToNextLevel} XP to Level ${celebration.level + 1}`,
+    tip: "Keep earning XP from food logs, walking, standing, and workouts. The farm awards Dew instead.",
     continue: "Keep going",
     seed: "Seed",
     theme: "Theme",

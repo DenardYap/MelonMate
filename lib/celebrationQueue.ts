@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-export type CelebrationKind = "level-up" | "achievement" | "health-reward";
+export type CelebrationKind = "level-up" | "achievement" | "health-reward" | "streak-reward";
 
 export interface CelebrationRequest {
   key: string;

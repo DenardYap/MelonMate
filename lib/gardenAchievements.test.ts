@@ -7,7 +7,7 @@ describe("garden achievements", () => {
   it("starts with every achievement locked", () => {
     expect(gardenAchievements(freshGarden()).filter((achievement) => achievement.earned)).toEqual([]);
     expect(gardenAchievements(freshGarden()).every(
-      (achievement) => achievement.reward.xp > 0 && achievement.reward.dew > 0
+      (achievement) => achievement.reward.xp === 0 && achievement.reward.dew > 0
     )).toBe(true);
   });
 

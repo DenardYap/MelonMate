@@ -75,13 +75,7 @@ export default function AchievementCelebration() {
   if (!celebrationIsActive || pending.length === 0) return null;
 
   const [primary, ...alsoUnlocked] = pending;
-  const totalReward = pending.reduce(
-    (total, achievement) => ({
-      xp: total.xp + achievement.reward.xp,
-      dew: total.dew + achievement.reward.dew,
-    }),
-    { xp: 0, dew: 0 }
-  );
+  const totalReward = pending.reduce((dew, achievement) => dew + achievement.reward.dew, 0);
   const copy = lang === "zh" ? {
     eyebrow: "成就解鎖",
     completed: "挑戰完成",
@@ -128,8 +122,7 @@ export default function AchievementCelebration() {
         </div>
         <div className="achievement-modal-rewards">
           <b>{copy.rewards}</b>
-          <span className="is-xp"><AppIcon name="star" size={16} /> +{totalReward.xp.toLocaleString()} XP</span>
-          <span className="is-dew"><AppIcon name="water" size={16} /> +{totalReward.dew.toLocaleString()} {copy.dew}</span>
+          <span className="is-dew"><AppIcon name="water" size={16} /> +{totalReward.toLocaleString()} {copy.dew}</span>
         </div>
         {alsoUnlocked.length > 0 && (
           <div className="achievement-modal-more">
@@ -138,7 +131,7 @@ export default function AchievementCelebration() {
               <div key={achievement.id}>
                 <span className={`tone-${achievement.tone}`}><AppIcon name={achievement.icon} size={17} /></span>
                 <b>{achievement.name[lang]}</b>
-                <small>+{achievement.reward.xp.toLocaleString()} XP · +{achievement.reward.dew.toLocaleString()} {copy.dew}</small>
+                <small>+{achievement.reward.dew.toLocaleString()} {copy.dew}</small>
               </div>
             ))}
           </div>

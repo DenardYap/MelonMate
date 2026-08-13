@@ -46,8 +46,8 @@ describe("local test commands", () => {
 
     runTestCommand("/set-lvl 2");
 
-    expect(useStore.getState().game[PROFILE].xp).toBe(0);
-    expect(useGardenStore.getState().gardens[PROFILE].gardenXp).toBe(xpForLevel(2));
+    expect(useStore.getState().game[PROFILE].xp).toBe(xpForLevel(2));
+    expect(useGardenStore.getState().gardens[PROFILE].gardenXp).toBe(1_000);
   });
 
   test("rejects missing, fractional, and zero level values", () => {

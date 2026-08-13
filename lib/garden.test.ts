@@ -13,7 +13,6 @@ import {
   varietyById,
 } from "./garden";
 import type { GardenPlot } from "./types";
-import { DAILY_XP_REWARD } from "./game";
 
 describe("rare melon level gates", () => {
   it.each([
@@ -87,17 +86,15 @@ describe("real-time crop loop", () => {
     }
   });
 
-  it("gives every variety an increasingly valuable timed crop", () => {
-    expect(MELON_VARIETIES.every((variety) => variety.growMinutes > 0 && variety.harvestXp > 0)).toBe(true);
+  it("gives every variety a timed, Dew-only crop", () => {
+    expect(MELON_VARIETIES.every((variety) => variety.growMinutes > 0 && variety.harvestXp === 0 && variety.harvestReward > 0)).toBe(true);
     expect(MELON_VARIETIES.map((variety) => variety.growMinutes)).toEqual(
       [...MELON_VARIETIES].map((variety) => variety.growMinutes).sort((a, b) => a - b)
     );
   });
 
-  it("keeps the largest crop reward far below the nutrition goal reward", () => {
-    expect(Math.max(...MELON_VARIETIES.map((variety) => variety.harvestXp))).toBeLessThanOrEqual(
-      DAILY_XP_REWARD / 10
-    );
+  it("never awards crop XP", () => {
+    expect(Math.max(...MELON_VARIETIES.map((variety) => variety.harvestXp))).toBe(0);
   });
 
   it("gives every variety three distinct growth-stage assets", () => {

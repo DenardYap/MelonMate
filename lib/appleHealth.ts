@@ -8,7 +8,9 @@ import { Capacitor } from "@capacitor/core";
 import { MelonMateHealth } from "@melonmate/capacitor-health";
 import type { HealthWorkout } from "./types";
 
-const HEALTH_CONNECTED_KEY = "melonmate-health-connected";
+// v2 includes workout read access. Existing step-only connections are asked
+// once for the newly added workout permission after upgrading.
+const HEALTH_CONNECTED_KEY = "melonmate-health-connected-v2";
 
 export type AppleHealthSyncResult =
   | { status: "unavailable" | "denied"; xp: 0 }
@@ -107,9 +109,17 @@ async function performAppleHealthSync(date: string): Promise<AppleHealthSyncResu
     );
     const xp = state.applyHealthActivity({ date, steps, standMinutes, workouts });
     if (xp > 0) {
+      let remainingXp = xp;
+      const stepXp = Math.min(reward.stepXp, remainingXp);
+      remainingXp -= stepXp;
+      const standXp = Math.min(reward.standXp, remainingXp);
+      remainingXp -= standXp;
+      const awardedWorkoutXp = Math.min(workoutXp, remainingXp);
       useHealthRewardQueue.getState().enqueue({
         ...reward,
-        workoutXp,
+        stepXp,
+        standXp,
+        workoutXp: awardedWorkoutXp,
         workouts: newlyCompletedWorkouts,
         totalXp: xp,
         date,

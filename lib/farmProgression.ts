@@ -40,7 +40,7 @@ export const FARM_BUILDINGS: readonly FarmBuildingDefinition[] = [
     badge: { x: 475, y: 180 },
     tiers: [
       { level: 1, unlockLevel: 3, dewCost: 60, effect: { en: "Open the Companion Lodge.", zh: "開放夥伴小屋。" } },
-      { level: 2, unlockLevel: 10, dewCost: 500, effect: { en: "Flat companion rewards gain +1 Dew or XP; timers and spell reach gain one extra step.", zh: "夥伴的固定獎勵額外增加 1 露珠或經驗；加速與咒語範圍再提升一階。" } },
+      { level: 2, unlockLevel: 10, dewCost: 500, effect: { en: "Flat companion Dew rewards gain +1; timers and spell reach gain one extra step.", zh: "夥伴的固定露珠獎勵額外增加 1；加速與咒語範圍再提升一階。" } },
       { level: 3, unlockLevel: 20, dewCost: 2_000, effect: { en: "Equip a second companion at half strength, with flat rewards rounded up.", zh: "可裝備第二位夥伴，固定獎勵以一半效果向上取整。" } },
     ],
   },
@@ -62,14 +62,14 @@ export const FARM_BUILDINGS: readonly FarmBuildingDefinition[] = [
     id: "market",
     name: { en: "Market Board", zh: "市集看板" },
     role: { en: "Farm Orders", zh: "農場訂單" },
-    description: { en: "The Market Board offers daily and weekly orders that reward extra Dew, XP, and 90-day progress.", zh: "市集看板提供每日與每週訂單，獎勵額外露珠、經驗與 90 天進度。" },
+    description: { en: "The Market Board offers daily and weekly orders that reward extra Dew and 90-day progress.", zh: "市集看板提供每日與每週訂單，獎勵額外露珠與 90 天進度。" },
     howToUse: { en: "Build Tier 1, open Orders here, complete each request, then return to deliver it. Higher tiers add more orders, rerolls, and weekly rewards.", zh: "建造第一階後，從這裡開啟訂單，完成需求後回來交付。更高階會增加訂單、刷新機會與每週獎勵。" },
     hotspot: { x: 0, y: 420, width: 485, height: 510 },
     badge: { x: 245, y: 610 },
     tiers: [
       { level: 1, unlockLevel: 2, dewCost: 35, effect: { en: "Receive 2 daily farm orders.", zh: "每天獲得 2 張農場訂單。" } },
       { level: 2, unlockLevel: 7, dewCost: 180, effect: { en: "Receive a 3rd order and one free reroll.", zh: "增加第 3 張訂單與每日一次免費刷新。" } },
-      { level: 3, unlockLevel: 14, dewCost: 650, effect: { en: "Add a premium weekly order and +10 Dew and XP per order.", zh: "增加高級每週訂單，每張訂單額外獲得 10 露珠與經驗。" } },
+      { level: 3, unlockLevel: 14, dewCost: 650, effect: { en: "Add a premium weekly order and +10 Dew per order.", zh: "增加高級每週訂單，每張訂單額外獲得 10 露珠。" } },
     ],
   },
   {
@@ -104,14 +104,14 @@ export const FARM_BUILDINGS: readonly FarmBuildingDefinition[] = [
     id: "greenhouse",
     name: { en: "Greenhouse", zh: "溫室" },
     role: { en: "Patient Growing", zh: "長時培育" },
-    description: { en: "The Greenhouse specializes in valuable long-growing crops, making them mature faster and eventually increasing their Dew and XP rewards.", zh: "溫室專門培育高價值的長時作物，讓它們更快成熟，並逐步提高露珠與經驗獎勵。" },
+    description: { en: "The Greenhouse specializes in valuable long-growing crops, making them mature faster and increasing their Dew rewards.", zh: "溫室專門培育高價值的長時作物，讓它們更快成熟，並提高露珠獎勵。" },
     howToUse: { en: "Its effects are automatic for crops with growth times of 4 hours or more. Plant longer crops to receive the full benefit.", zh: "效果會自動套用在生長時間 4 小時以上的作物。種植長時作物即可獲得完整加成。" },
     hotspot: { x: 2050, y: 245, width: 350, height: 440 },
     badge: { x: 2260, y: 530 },
     tiers: [
       { level: 1, unlockLevel: 8, dewCost: 300, effect: { en: "4h+ crops grow 10% faster.", zh: "生長 4 小時以上的作物加速 10%。" } },
       { level: 2, unlockLevel: 13, dewCost: 900, effect: { en: "4h+ crops also earn +3 Dew.", zh: "4 小時以上作物另獲 3 露珠。" } },
-      { level: 3, unlockLevel: 20, dewCost: 2_500, effect: { en: "12h+ crops also earn +5 XP.", zh: "12 小時以上作物另獲 5 經驗。" } },
+      { level: 3, unlockLevel: 20, dewCost: 2_500, effect: { en: "12h+ crops also earn +5 Dew.", zh: "12 小時以上作物另獲 5 露珠。" } },
     ],
   },
   {
@@ -143,18 +143,18 @@ export const FARM_COMPANIONS: readonly FarmCompanionDefinition[] = [
   { id: "chamoe-bee", name: { en: "Chamoe Bee", zh: "香瓜蜜蜂" }, src: "/garden/progression/companion-chamoe-bee.png", unlockLevel: 3, dewCost: 60, effect: { en: "+1 Dew from crops taking 2 hours or less.", zh: "2 小時內作物每次收成額外獲得 1 露珠。" } },
   { id: "honeydew-frog", name: { en: "Honeydew Frog", zh: "蜜瓜青蛙" }, src: "/garden/progression/companion-honeydew-frog.png", unlockLevel: 5, dewCost: 140, effect: { en: "Limited-target spells affect 1 additional crop.", zh: "有限目標咒語多影響 1 株作物。" } },
   { id: "melon-roll-snail", name: { en: "Melon Roll Snail", zh: "甜瓜捲蝸牛" }, src: "/garden/progression/companion-melon-roll-snail.png", unlockLevel: 7, dewCost: 260, effect: { en: "Crops taking 4+ hours grow 10% faster.", zh: "4 小時以上作物加速 10%。" } },
-  { id: "golden-capybara", name: { en: "Golden Capy", zh: "金瓜水豚" }, src: "/garden/progression/companion-golden-capybara.png", unlockLevel: 10, dewCost: 600, effect: { en: "+20 Dew and XP from every farm order.", zh: "每張農場訂單額外獲得 20 露珠與經驗。" } },
+  { id: "golden-capybara", name: { en: "Golden Capy", zh: "金瓜水豚" }, src: "/garden/progression/companion-golden-capybara.png", unlockLevel: 10, dewCost: 600, effect: { en: "+20 Dew from every farm order.", zh: "每張農場訂單額外獲得 20 露珠。" } },
   { id: "moon-bunny", name: { en: "Moon Bunny", zh: "月瓜兔" }, src: "/garden/progression/companion-moon-bunny.png", unlockLevel: 13, dewCost: 1_100, effect: { en: "First goal spell claimed each day grants a bonus copy.", zh: "每天第一次領取目標咒語時多得一份。" } },
-  { id: "densuke-penguin", name: { en: "Densuke Pingu", zh: "黑皮企鵝" }, src: "/garden/progression/companion-densuke-penguin.png", unlockLevel: 16, dewCost: 1_800, effect: { en: "+3 XP from every crop harvest.", zh: "每次作物收成額外獲得 3 經驗。" } },
+  { id: "densuke-penguin", name: { en: "Densuke Pingu", zh: "黑皮企鵝" }, src: "/garden/progression/companion-densuke-penguin.png", unlockLevel: 16, dewCost: 1_800, effect: { en: "+3 Dew from every crop harvest.", zh: "每次作物收成額外獲得 3 露珠。" } },
   { id: "cantaloupe-cat", name: { en: "Canta Cat", zh: "哈密貓" }, src: "/garden/progression/companion-cantaloupe-cat.png", unlockLevel: 18, dewCost: 2_400, effect: { en: "Dew Fortune: earn 2× Dew from every crop harvest.", zh: "露珠福運：所有作物收成獲得 2 倍露珠。" } },
 ] as const;
 
 export const STEWARDSHIP_MILESTONES = [
-  { days: 7, dew: 100, xp: 100 },
-  { days: 14, dew: 200, xp: 200 },
-  { days: 30, dew: 500, xp: 500 },
-  { days: 60, dew: 1_000, xp: 1_000 },
-  { days: 90, dew: 2_500, xp: 2_500 },
+  { days: 7, dew: 100, xp: 0 },
+  { days: 14, dew: 200, xp: 0 },
+  { days: 30, dew: 500, xp: 0 },
+  { days: 60, dew: 1_000, xp: 0 },
+  { days: 90, dew: 2_500, xp: 0 },
 ] as const;
 
 export const SPELL_MASTERY_COSTS: Record<Exclude<GardenSpellId, "everripe-eclipse">, readonly [number, number]> = {
@@ -218,14 +218,15 @@ export function harvestRewards(garden: GardenState, varietyId: MelonVarietyId, h
   const apiary = [0, 1, 2, 3][buildingLevel(garden, "apiary")];
   const greenhouse = buildingLevel(garden, "greenhouse") >= 2 && variety.growMinutes >= 240 ? 3 : 0;
   const bee = variety.growMinutes <= 120 ? companionFlatBonus(garden, "chamoe-bee", 1) : 0;
+  const greenhouseDew = buildingLevel(garden, "greenhouse") >= 3 && variety.growMinutes >= 720 ? 5 : 0;
+  const penguinDew = companionFlatBonus(garden, "densuke-penguin", 3);
   const cantaSlot = garden.activeCompanions.indexOf("cantaloupe-cat");
   const canta = cantaSlot === 0 ? 1 : cantaSlot === 1 ? 0.5 : 0;
-  const normalDew = Math.max(1, Math.round((variety.harvestReward + apiary + greenhouse + bee) * (1 + canta)));
+  const normalDew = Math.max(1, Math.round(
+    (variety.harvestReward + apiary + greenhouse + greenhouseDew + bee + penguinDew) * (1 + canta)
+  ));
   const dew = honeyed ? normalDew * 2 : normalDew;
-  const greenhouseXp = buildingLevel(garden, "greenhouse") >= 3 && variety.growMinutes >= 720 ? 5 : 0;
-  const penguin = companionFlatBonus(garden, "densuke-penguin", 3);
-  const xp = Math.max(1, variety.harvestXp + greenhouseXp + penguin);
-  return { dew, xp };
+  return { dew, xp: 0 };
 }
 
 export function effectiveSpell(garden: GardenState, spellId: GardenSpellId) {
@@ -276,7 +277,6 @@ function makeOrder(period: "daily" | "weekly", periodKey: string, slot: number, 
   const target = Math.max(1, targetByKind[kind]);
   const variety = kind === "harvest-variety" ? pick(available, seed >>> 4).id : undefined;
   const baseDew = period === "weekly" ? 180 : 28;
-  const baseXp = period === "weekly" ? 160 : 24;
   return {
     id: `${period}-${periodKey}-${slot}-${reroll}`,
     period,
@@ -285,7 +285,7 @@ function makeOrder(period: "daily" | "weekly", periodKey: string, slot: number, 
     target,
     progress: 0,
     dewReward: baseDew + target * (period === "weekly" ? 8 : 3),
-    xpReward: baseXp + target * (period === "weekly" ? 6 : 2),
+    xpReward: 0,
     variety,
     varieties: [],
     claimed: false,
@@ -334,6 +334,6 @@ export function farmOrderRewards(garden: GardenState, order: Pick<FarmOrder, "de
   const capyBonus = companionFlatBonus(garden, "golden-capybara", 20);
   return {
     dew: order.dewReward + marketBonus + capyBonus,
-    xp: order.xpReward + marketBonus + capyBonus,
+    xp: 0,
   };
 }

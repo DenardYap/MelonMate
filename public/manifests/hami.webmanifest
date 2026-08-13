@@ -1,0 +1,47 @@
+{
+  "name": "MelonMate 瓜瓜日誌",
+  "short_name": "MelonMate",
+  "description": "A personal food and fitness companion with friend progress.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EDF3DF",
+  "theme_color": "#EDF3DF",
+  "shortcuts": [
+    {
+      "name": "Scan a food barcode",
+      "short_name": "Scan food",
+      "url": "/add?mode=scan&source=app-shortcut",
+      "icons": [
+        {
+          "src": "/theme-icons/hami-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Estimate food from a photo",
+      "short_name": "Food photo",
+      "url": "/add?mode=photo&source=app-shortcut",
+      "icons": [
+        {
+          "src": "/theme-icons/hami-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "src": "/theme-icons/hami-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/theme-icons/hami-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

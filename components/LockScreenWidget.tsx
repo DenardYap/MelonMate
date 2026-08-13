@@ -23,6 +23,7 @@ function fallbackCopy(value: string): boolean {
 
 export default function LockScreenWidget() {
   const lang = useStore((state) => state.lang);
+  const theme = useStore((state) => state.theme);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const native = Capacitor.isNativePlatform();
@@ -68,7 +69,7 @@ export default function LockScreenWidget() {
           <div className="lock-screen-demo">
             <div className="lock-time">9:41</div>
             <div className="lock-date">{lang === "zh" ? "8 月 7 日，星期五" : "Friday, August 7"}</div>
-            <div className="lock-widget-pill"><BrandMark size={22} /><b>{lang === "zh" ? "記錄飲食" : "Log food"}</b><AppIcon name="kitchen" size={20} /></div>
+            <div className="lock-widget-pill"><BrandMark size={22} theme={theme} /><b>{lang === "zh" ? "記錄飲食" : "Log food"}</b><AppIcon name="kitchen" size={20} /></div>
           </div>
 
           <div className="t-sub">

@@ -13,6 +13,7 @@
     "catalog:generate": "node scripts/generate-food-catalog.mjs",
     "catalog:generate-expanded": "node scripts/generate-expanded-food-catalog.mjs",
     "audio:themes": "node scripts/generate-theme-samples.mjs",
+    "icons:themes": "node scripts/generate-theme-app-icons.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

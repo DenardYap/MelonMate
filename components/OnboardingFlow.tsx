@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types";
 import { filterRecipes } from "@/lib/recipeDiscovery";
 import { restrictionsFromProfile } from "@/lib/ingredientRestrictions";
+import { themeBrand } from "@/lib/themeBrand";
 
 const DIETS = [
   ["highProtein", "High protein", "高蛋白"],
@@ -75,6 +76,7 @@ export default function OnboardingFlow({ edit = false, onClose }: { edit?: boole
   const [restrictions, setRestrictions] = useState<string[]>(restrictionsFromProfile(saved));
   const [selectedPlan, setSelectedPlan] = useState(saved.planId);
   const [selectedRecipes, setSelectedRecipes] = useState<string[]>(saved.selectedRecipeIds ?? []);
+  const brand = themeBrand(store.theme);
 
   const c = (en: string, zh: string) => (lang === "zh" ? zh : en);
   const parsedWeightKg = numberOrUndefined(weight)
@@ -214,7 +216,7 @@ export default function OnboardingFlow({ edit = false, onClose }: { edit?: boole
       <div className="bg-melon" />
       <div className="onboarding-frame">
         <header className="onboarding-topbar">
-          <div className="icon-label font-extrabold"><BrandMark size={28} /> MelonMate</div>
+          <div className="icon-label font-extrabold"><BrandMark size={28} theme={store.theme} /> MelonMate</div>
           <button className="chip press" onClick={skip}>{edit ? c("Cancel", "取消") : c("Skip for now", "暫時跳過")}</button>
         </header>
 
@@ -228,7 +230,7 @@ export default function OnboardingFlow({ edit = false, onClose }: { edit?: boole
               <div className="text-center">
                 <div className="onboarding-honey-art a-floaty mx-auto" aria-hidden="true">
                   <Image
-                    src="/brand/honey-setup-2d.png"
+                    src={brand.setupSrc}
                     alt=""
                     width={164}
                     height={164}

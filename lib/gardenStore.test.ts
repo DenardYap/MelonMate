@@ -38,7 +38,7 @@ describe("garden economy", () => {
 
     const garden = useGardenStore.getState().gardens[PROFILE];
     expect(garden.dailyClaims[reward.date]).toEqual(["hydrate"]);
-    expect(garden.gardenXp).toBe(15);
+    expect(garden.gardenXp).toBe(0);
     expect(garden.plots[0].readyAt).toBe(before - 15 * 60_000);
   });
 
@@ -208,7 +208,7 @@ describe("garden economy", () => {
     const garden = useGardenStore.getState().gardens[PROFILE];
 
     expect(garden.dew).toBe(18 + first.dew + second.dew + GARDEN_DAILY_BONUS.dew);
-    expect(garden.gardenXp).toBe(first.xp + second.xp + GARDEN_DAILY_BONUS.xp);
+    expect(garden.gardenXp).toBe(0);
   });
 
   it("spends Dew to permanently expand the farm one field at a time", () => {
@@ -233,7 +233,7 @@ describe("garden economy", () => {
     expect(useGardenStore.getState().gardens[PROFILE].plots).toHaveLength(6);
   });
 
-  it("collects unlocked achievement XP and Dew exactly once without erasing prior badges", () => {
+  it("collects unlocked achievement Dew exactly once without erasing prior badges", () => {
     const garden = freshGarden();
     for (const variety of MELON_VARIETIES) garden.plantCounts[variety.id] = 1;
     garden.totalSpellCasts = 5;
@@ -254,7 +254,7 @@ describe("garden economy", () => {
       "allMelons",
     ]);
     expect(rewarded.dew).toBe(garden.dew + 5 + 12 + 50);
-    expect(rewarded.gardenXp).toBe(garden.gardenXp + 15 + 40 + 150);
+    expect(rewarded.gardenXp).toBe(garden.gardenXp);
   });
 
   it("does not pay an achievement before its requirement is complete", () => {
@@ -283,7 +283,7 @@ describe("garden economy", () => {
     expect(rewarded.achievementClaims).toEqual(["firstRoots"]);
     expect(rewarded.achievementRewardClaims).toEqual(["firstRoots"]);
     expect(rewarded.dew).toBe(garden.dew + 5);
-    expect(rewarded.gardenXp).toBe(garden.gardenXp + 15);
+    expect(rewarded.gardenXp).toBe(garden.gardenXp);
   });
 
   it("supports the second parcel through the final field", () => {
@@ -515,7 +515,7 @@ describe("garden economy", () => {
     const rewarded = useGardenStore.getState().gardens[PROFILE];
     expect(rewarded.stewardshipDays).toHaveLength(7);
     expect(rewarded.dew).toBe(18 + 10 + 100);
-    expect(rewarded.gardenXp).toBe(10 + 100);
+    expect(rewarded.gardenXp).toBe(0);
   });
 
   it.each([
@@ -544,7 +544,7 @@ describe("garden economy", () => {
     const rewarded = useGardenStore.getState().gardens[PROFILE];
     expect(rewarded.stewardshipDays).toHaveLength(day);
     expect(rewarded.dew).toBe(18 + 10 + milestoneReward);
-    expect(rewarded.gardenXp).toBe(10 + milestoneReward);
+    expect(rewarded.gardenXp).toBe(0);
   });
 
   it("makes Farmhouse Tier 2 add visible whole rewards to Golden Capy's order bonus", () => {
@@ -568,7 +568,7 @@ describe("garden economy", () => {
     expect(useGardenStore.getState().claimFarmOrder(PROFILE, garden.farmOrders[0].id)).toBe("done");
     const rewarded = useGardenStore.getState().gardens[PROFILE];
     expect(rewarded.dew).toBe(18 + 10 + 21);
-    expect(rewarded.gardenXp).toBe(10 + 21);
+    expect(rewarded.gardenXp).toBe(0);
   });
 
   it("upgrades spell mastery permanently through the Workshop", () => {
