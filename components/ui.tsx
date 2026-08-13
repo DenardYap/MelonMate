@@ -295,6 +295,65 @@ export function Stepper({
   );
 }
 
+/* ----------------------------- decimal input ----------------------------- */
+
+export function DecimalInput({
+  value,
+  onChange,
+  min = 0,
+  max = Number.POSITIVE_INFINITY,
+  className = "field tabular",
+  placeholder,
+  ariaLabel,
+  selectOnFocus = false,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  className?: string;
+  placeholder?: string;
+  ariaLabel: string;
+  selectOnFocus?: boolean;
+}) {
+  const [draft, setDraft] = useState(value === 0 ? "" : String(value));
+
+  useEffect(() => {
+    const parsed = Number(draft.replace(",", "."));
+    if (draft !== "" && Number.isFinite(parsed) && parsed === value) return;
+    setDraft(value === 0 ? "" : String(value));
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const commit = (raw: string) => {
+    if (!/^\d*(?:[.,]\d*)?$/.test(raw)) return;
+    setDraft(raw);
+    if (raw === "" || raw === "." || raw === ",") return;
+    const parsed = Number(raw.replace(",", "."));
+    if (Number.isFinite(parsed) && parsed >= min && parsed <= max) onChange(parsed);
+  };
+
+  return (
+    <input
+      className={className}
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onChange={(event) => commit(event.target.value)}
+      onFocus={(event) => { if (selectOnFocus) event.currentTarget.select(); }}
+      onBlur={() => {
+        const parsed = Number(draft.replace(",", "."));
+        if (draft === "" || !Number.isFinite(parsed) || parsed < min || parsed > max) {
+          setDraft(value === 0 ? "" : String(value));
+          return;
+        }
+        setDraft(String(parsed));
+      }}
+    />
+  );
+}
+
 /* ---------------------------------- Toast ---------------------------------- */
 
 interface ToastMsg {
@@ -332,6 +391,15 @@ export function ToastHost() {
   useEffect(() => {
     const timers = timersRef.current;
     pushToastImpl = (t) => {
+      const duplicate = [...itemsRef.current].reverse().find(
+        (item) => item.text === t.text && item.icon === t.icon
+      );
+      if (duplicate) {
+        const timer = timers.get(duplicate.id);
+        if (timer) clearTimeout(timer);
+        timers.set(duplicate.id, setTimeout(() => dismiss(duplicate.id), TOAST_DURATION_MS));
+        return;
+      }
       const id = ++idRef.current;
       const next = [...itemsRef.current, { ...t, id }];
       const removed = next.slice(0, -MAX_RENDERED_TOASTS);
@@ -356,10 +424,11 @@ export function ToastHost() {
     && !pathname.startsWith("/agent")
     && !pathname.startsWith("/garden")
     && !pathname.startsWith("/friends");
+  const hasFarmDock = pathname.startsWith("/garden");
 
   return (
     <div
-      className={`toast-host${hasTabBar ? " toast-host--with-tabbar" : ""}`}
+      className={`toast-host${hasTabBar ? " toast-host--with-tabbar" : ""}${hasFarmDock ? " toast-host--with-farm-dock" : ""}`}
       role="region"
       aria-live="polite"
       aria-label="Notifications"

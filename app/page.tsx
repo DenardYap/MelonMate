@@ -68,7 +68,7 @@ export default function TodayPage() {
       } else {
         toast(
           result.status === "denied"
-            ? lang === "zh" ? "請允許讀取步數與站立時間" : "Allow steps and standing access to earn XP"
+            ? lang === "zh" ? "請允許讀取步數、站立時間與訓練" : "Allow steps, standing, and workouts to earn XP"
             : lang === "zh" ? "此裝置無法使用 Apple 健康" : "Apple Health is unavailable on this device",
           "warning"
         );
@@ -235,7 +235,7 @@ export default function TodayPage() {
               <div className="t-cap tabular mt-1">
                 {(healthActivity?.steps ?? 0).toLocaleString()} {lang === "zh" ? "步" : "steps"} · {healthActivity?.standMinutes ?? 0} {lang === "zh" ? "站立分鐘" : "standing min"}
               </div>
-              <div className="t-cap mt-1">{lang === "zh" ? "每 1,000 步與每 10 分鐘站立可獲得經驗" : "Earn XP every 1,000 steps and 10 standing minutes"}</div>
+              <div className="t-cap mt-1">{lang === "zh" ? "步數、站立與已完成訓練都能獲得經驗" : "Earn XP from steps, standing, and completed workouts"}</div>
             </div>
             {!healthConnected && (
               <button className="chip press health-card-action" disabled={healthSyncing} onClick={() => void syncAppleHealth()}>
@@ -243,6 +243,16 @@ export default function TodayPage() {
               </button>
             )}
           </div>
+          {(healthActivity?.workouts ?? []).length > 0 && (
+            <div className="health-card-workouts mt-3">
+              {(healthActivity?.workouts ?? []).map((workout) => (
+                <div key={workout.id}>
+                  <AppIcon name="gym" size={17} />
+                  <span><b>{workout.activityType}</b><small>{Math.round(workout.durationMinutes)} min · {Math.round(workout.activeCalories)} cal</small></span>
+                </div>
+              ))}
+            </div>
+          )}
         </GlassCard>
       )}
 
@@ -371,9 +381,12 @@ function WeightTrendCard() {
       setError(true);
       return;
     }
-    logWeight(Math.round(parsed * 10) / 10);
+    const xp = logWeight(Math.round(parsed * 10) / 10);
     setOpen(false);
-    toast(lang === "zh" ? "已記錄今天的體重" : "Today’s weight saved", "checkCircle");
+    toast(
+      `${lang === "zh" ? "已記錄今天的體重" : "Today’s weight saved"}${xp > 0 ? ` · +${xp} XP` : ""}`,
+      "checkCircle"
+    );
   };
 
   return (

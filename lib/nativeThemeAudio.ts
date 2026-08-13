@@ -7,6 +7,7 @@ interface NativeThemeAudioPlugin {
   pauseTheme(): Promise<void>;
   stopTheme(): Promise<void>;
   setVolume(options: { volume: number }): Promise<void>;
+  playEffect(options: { filename: string; volume: number }): Promise<{ playing: boolean }>;
 }
 
 const NativeThemeAudio = registerPlugin<NativeThemeAudioPlugin>("MelonMateAudio");
@@ -29,4 +30,8 @@ export function stopNativeTheme() {
 
 export function setNativeThemeVolume(volume: number) {
   return NativeThemeAudio.setVolume({ volume });
+}
+
+export function playNativeEffect(filename: string, volume: number) {
+  return NativeThemeAudio.playEffect({ filename, volume });
 }

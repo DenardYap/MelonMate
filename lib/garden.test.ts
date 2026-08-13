@@ -31,9 +31,9 @@ describe("rare melon level gates", () => {
     expect(levels).toEqual([...levels].sort((a, b) => a - b));
   });
 
-  it("still requires a PR for Moon Gold in addition to its level", () => {
+  it("unlocks Moon Gold from level alone", () => {
     const moonGold = varietyById("moon-gold");
-    expect(isVarietyUnlocked(moonGold, 12, 0)).toBe(false);
+    expect(isVarietyUnlocked(moonGold, 6, 0)).toBe(true);
     expect(isVarietyUnlocked(moonGold, 6, 1)).toBe(true);
   });
 });

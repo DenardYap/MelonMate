@@ -19,6 +19,7 @@ import { lookupBarcode } from "@/lib/off";
 import { selectedRecipesForProfile } from "@/lib/onboarding";
 import { searchFoodCatalog, type FoodSearchResult } from "@/lib/foodSearch";
 import { resolveFoodServing } from "@/lib/foodServing";
+import { recentFoodHistory } from "@/lib/recentFoods";
 import {
   caloriesFromMacros,
   NUTRITION_UNITS,
@@ -28,10 +29,10 @@ import {
   routineMatches,
 } from "@/lib/customRecipes";
 import { melonCheer } from "@/lib/melonCheers";
-import { GlassCard, Sheet, toast, fireConfetti } from "@/components/ui";
+import { DecimalInput, GlassCard, Sheet, toast, fireConfetti } from "@/components/ui";
 import { AppIcon, FoodGlyph, MealGlyph, iconFromLegacy } from "@/components/icons";
 import { AnimatedFoodHoney, isHoneyTheme } from "@/components/AnimatedFoodHoney";
-import type { BiText, FoodItem, Lang, Macros, MealSlot, NutritionUnit, Recipe } from "@/lib/types";
+import type { BiText, FoodItem, Lang, LogEntry, Macros, MealSlot, NutritionUnit, Recipe } from "@/lib/types";
 import { apiFetch, isNativeApiOriginMissingError, nativeApiUnavailableMessage } from "@/lib/api";
 import { successHaptic } from "@/lib/nativeApp";
 import {
@@ -39,6 +40,8 @@ import {
   endVoiceCaptureSoundscape,
   playSound,
 } from "@/lib/soundscape";
+import { runTestCommand } from "@/lib/testCommands";
+import type { QuickLogMode } from "@/lib/quickLog";
 
 type ReviewSource = "search" | "text" | "voice" | "photo" | "barcode" | "manual";
 
@@ -135,6 +138,7 @@ function AddInner() {
   const theme = useStore((state) => state.theme);
   const addLog = useStore((state) => state.addLog);
   const addCustomFood = useStore((state) => state.addCustomFood);
+  const profileLogs = useStore((state) => state.logs[state.activeProfileId]);
   const profile = useActiveProfile();
   const customFoods = useStore((state) => state.customFoods);
   const allRecipes = useStore((state) => state.recipes);
@@ -150,12 +154,14 @@ function AddInner() {
   const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : todayStr();
   const isToday = date === todayStr();
   const initialMeal = (params.get("meal") as MealSlot | null) ?? defaultMealByTime();
+  const requestedCameraMode = params.get("mode");
   const requestedHoneyTheme = params.get("honeyTheme");
   const honeyThemePreview = isHoneyTheme(requestedHoneyTheme) ? requestedHoneyTheme : theme;
 
   const [meal, setMeal] = useState<MealSlot>(initialMeal);
   const [input, setInput] = useState("");
   const [review, setReview] = useState<FoodLogReview | null>(null);
+  const [searchReturnReview, setSearchReturnReview] = useState<FoodLogReview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -164,6 +170,7 @@ function AddInner() {
   const [onlineBusy, setOnlineBusy] = useState(false);
   const [onlineError, setOnlineError] = useState("");
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<QuickLogMode>(params.get("mode") === "photo" ? "photo" : "scan");
   const [cameraOpen, setCameraOpen] = useState(params.get("mode") === "photo" || params.get("mode") === "scan");
   const [manualOpen, setManualOpen] = useState(params.get("mode") === "manual");
   const [recipeOpen, setRecipeOpen] = useState(false);
@@ -183,7 +190,18 @@ function AddInner() {
     const regularIds = new Set(regularRecipes.map((recipe) => recipe.id));
     return [...regularRecipes, ...savedRecipes.filter((recipe) => !regularIds.has(recipe.id))];
   }, [regularRecipes, savedRecipes]);
-  const searchActive = searchFocused || input.trim().length >= 2;
+  const hasSearchQuery = input.trim().length >= 2;
+  const searchActive = searchFocused || hasSearchQuery;
+  const recentEntries = useMemo(
+    () => recentFoodHistory(profileLogs ?? []),
+    [profileLogs]
+  );
+
+  useEffect(() => {
+    if (requestedCameraMode !== "scan" && requestedCameraMode !== "photo") return;
+    setCameraMode(requestedCameraMode);
+    setCameraOpen(true);
+  }, [requestedCameraMode]);
 
   useEffect(() => {
     if (!searchActive || (results.length === 0 && onlineResults.length === 0 && !onlineBusy)) {
@@ -213,6 +231,17 @@ function AddInner() {
     };
   }, [onlineBusy, onlineResults.length, results.length, searchActive]);
 
+  const cancelSearch = () => {
+    setInput("");
+    setError("");
+    setOnlineResults([]);
+    setOnlineError("");
+    setSearchFocused(false);
+    searchInputRef.current?.blur();
+    if (searchReturnReview) setReview(searchReturnReview);
+    setSearchReturnReview(null);
+  };
+
   const reviewCatalogResult = (result: FoodSearchResult) => {
     setError("");
     searchInputRef.current?.blur();
@@ -220,9 +249,20 @@ function AddInner() {
     setSearchFocused(false);
     setOnlineResults([]);
     setOnlineError("");
+    setSearchReturnReview(null);
     setReview(result.kind === "food"
       ? reviewFromFood(result.item, "search", lang, result.matchedOn)
       : reviewFromRecipe(result.item, "search", lang, result.matchedOn));
+  };
+
+  const reviewRecentEntry = (entry: LogEntry) => {
+    setInput("");
+    setSearchFocused(false);
+    searchInputRef.current?.blur();
+    setOnlineResults([]);
+    setOnlineError("");
+    setSearchReturnReview(null);
+    setReview(reviewFromRecentLog(entry, lang));
   };
 
   const searchOnlineCatalog = async () => {
@@ -388,16 +428,54 @@ function AddInner() {
               autoComplete="off"
               value={input}
               onChange={(event) => {
-                setInput(event.target.value);
+                const nextInput = event.target.value;
+                setInput(nextInput);
+                if (nextInput.trim() && review) {
+                  setSearchReturnReview(review);
+                  setReview(null);
+                } else if (!nextInput.trim() && searchReturnReview) {
+                  setReview(searchReturnReview);
+                  setSearchReturnReview(null);
+                }
                 setError("");
                 setOnlineResults([]);
                 setOnlineError("");
               }}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
+              onFocus={() => {
+                setSearchFocused(true);
+                if (review) {
+                  setSearchReturnReview(review);
+                  setReview(null);
+                }
+              }}
+              onBlur={() => {
+                setSearchFocused(false);
+                if (input.trim().length < 2 && searchReturnReview) {
+                  setInput("");
+                  setReview(searchReturnReview);
+                  setSearchReturnReview(null);
+                }
+              }}
               onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelSearch();
+                  return;
+                }
                 if (event.key !== "Enter") return;
                 event.preventDefault();
+                const command = process.env.NODE_ENV === "development"
+                  ? runTestCommand(input)
+                  : { matched: false as const };
+                if (command.matched) {
+                  if (command.ok) {
+                    cancelSearch();
+                    toast(command.message, "checkCircle");
+                  } else {
+                    setError(command.message);
+                  }
+                  return;
+                }
                 if (results[0]) reviewCatalogResult(results[0]);
                 else void searchOnlineCatalog();
               }}
@@ -409,7 +487,17 @@ function AddInner() {
                 type="button"
                 className="food-composer-clear press"
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => { setInput(""); setError(""); setOnlineResults([]); setOnlineError(""); searchInputRef.current?.focus(); }}
+                onClick={() => {
+                  if (searchReturnReview) {
+                    cancelSearch();
+                    return;
+                  }
+                  setInput("");
+                  setError("");
+                  setOnlineResults([]);
+                  setOnlineError("");
+                  searchInputRef.current?.focus();
+                }}
                 aria-label={lang === "zh" ? "清除搜尋" : "Clear search"}
               >
                 <AppIcon name="close" size={18} />
@@ -417,18 +505,51 @@ function AddInner() {
             )}
           </div>
 
-          {!review && input.trim().length >= 2 && (
+          {!review && searchActive && (
             <div className="food-search-panel" aria-live="polite">
-              <div className="food-search-heading">
-                <b>{lang === "zh" ? "搜尋結果" : "Search results"}</b>
-                <span>{results.length + onlineResults.length}</span>
+              <div className="food-search-heading food-search-heading-with-back">
+                <button
+                  type="button"
+                  className="food-search-back press"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={cancelSearch}
+                  aria-label={searchReturnReview
+                    ? (lang === "zh" ? `返回 ${searchReturnReview.description}` : `Back to ${searchReturnReview.description}`)
+                    : (lang === "zh" ? "返回" : "Back")}
+                >
+                  <AppIcon name="back" size={14} />
+                  {lang === "zh" ? "返回" : "Back"}
+                </button>
+                <b>{hasSearchQuery ? (lang === "zh" ? "搜尋結果" : "Search results") : (lang === "zh" ? "最近記錄" : "Recent foods")}</b>
+                <span>{hasSearchQuery ? results.length + onlineResults.length : recentEntries.length}</span>
               </div>
               <div
                 ref={searchResultsRef}
                 className="food-search-results"
                 style={searchResultsMaxHeight ? { maxHeight: `${searchResultsMaxHeight}px` } : undefined}
               >
-                {results.length > 0 ? (
+                {!hasSearchQuery ? (
+                  recentEntries.length > 0 ? recentEntries.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className="row row-button press"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => reviewRecentEntry(entry)}
+                    >
+                      <AppIcon name={iconFromLegacy(entry.emoji, "cutlery")} size={19} />
+                      <span className="flex-1 min-w-0">
+                        <b className="block truncate">{entry.name[lang] || entry.name.en}</b>
+                        <small className="t-cap">{recentLogAmountLabel(entry, lang)} · {t(entry.meal as DictKey)} · {fmtNum(entry.macros.cal)} cal</small>
+                      </span>
+                      <AppIcon name="next" size={17} />
+                    </button>
+                  )) : (
+                    <p className="food-search-empty">
+                      {lang === "zh" ? "完成第一筆飲食記錄後，最近食物會顯示在這裡。" : "Your recent foods will appear here after your first log."}
+                    </p>
+                  )
+                ) : results.length > 0 ? (
                   results.map((result) => (
                     <button key={`${result.kind}-${result.item.id}`} type="button" className="row row-button press" onClick={() => reviewCatalogResult(result)}>
                       <FoodGlyph category={result.item.cat} size={19} />
@@ -444,7 +565,7 @@ function AddInner() {
                     {lang === "zh" ? "本機目錄找不到相符項目。" : "No matching item in the offline catalog."}
                   </p>
                 )}
-                {onlineResults.length > 0 && (
+                {hasSearchQuery && onlineResults.length > 0 && (
                   <>
                     <div className="food-online-heading">{lang === "zh" ? "線上商品" : "Online products"}</div>
                     {onlineResults.map((result) => (
@@ -459,8 +580,8 @@ function AddInner() {
                     ))}
                   </>
                 )}
-                {onlineError && <p className="food-online-error" role="status">{onlineError}</p>}
-                <div className="food-online-action">
+                {hasSearchQuery && onlineError && <p className="food-online-error" role="status">{onlineError}</p>}
+                {hasSearchQuery && <div className="food-online-action">
                   <button type="button" className="btn btn-ghost press" disabled={onlineBusy} onClick={() => void searchOnlineCatalog()}>
                     <AppIcon name={onlineBusy ? "refresh" : "search"} size={17} className={onlineBusy ? "a-spin" : ""} />
                     {onlineBusy
@@ -470,12 +591,12 @@ function AddInner() {
                         : (lang === "zh" ? "搜尋線上商品目錄" : "Search online products")}
                   </button>
                   <small>{lang === "zh" ? "商品資料來自 Open Food Facts；選取後會存到你的食物。" : "Products come from Open Food Facts and are saved to My foods when selected."}</small>
-                </div>
+                </div>}
               </div>
             </div>
           )}
-          <div className="log-food-actions">
-            <button className="log-food-action press" onClick={() => setCameraOpen(true)}>
+          {!searchActive && <div className="log-food-actions">
+            <button className="log-food-action press" onClick={() => { setCameraMode("scan"); setCameraOpen(true); }}>
               <span><AppIcon name="camera" size={22} /></span>
               <b>{lang === "zh" ? "相機" : "Camera"}</b>
               <small>{lang === "zh" ? "拍攝食物、營養標示或掃描條碼" : "Photograph food or a nutrition label, or scan a barcode"}</small>
@@ -499,7 +620,7 @@ function AddInner() {
               <b>{lang === "zh" ? "食譜" : "Recipe"}</b>
               <small>{lang === "zh" ? "將多種食材組合成可重複使用的餐點" : "Combine ingredients into one reusable meal"}</small>
             </button>
-          </div>
+          </div>}
         </GlassCard>
       </div>
 
@@ -512,12 +633,12 @@ function AddInner() {
           initialMeal={meal}
           lang={lang}
           onMealChange={setMeal}
-          onBack={() => setReview(null)}
+          onBack={() => { setReview(null); setSearchReturnReview(null); }}
           onConfirm={confirmReview}
         />
       )}
 
-      <CameraSheet open={cameraOpen} lang={lang} onClose={() => setCameraOpen(false)} onReview={(next) => { setCameraOpen(false); setReview(next); }} />
+      <CameraSheet mode={cameraMode} onModeChange={setCameraMode} open={cameraOpen} lang={lang} onClose={() => setCameraOpen(false)} onReview={(next) => { setCameraOpen(false); setReview(next); }} />
       <VoiceSheet
         open={voiceOpen}
         lang={lang}
@@ -652,7 +773,7 @@ function FoodReviewCard({
         <div className="food-serving-controls">
           <button type="button" className="ibtn press" onClick={() => setAmount((value) => Math.max(amountStep, Math.round((value - amountStep) * 100) / 100))} disabled={amount <= amountStep} aria-label={lang === "zh" ? "減少份量" : "Decrease amount"}><AppIcon name="minus" size={18} /></button>
           <div className="food-serving-value" aria-live="polite">
-            <input type="number" min={amountStep} step={amountStep} inputMode="decimal" value={formatAmount(amount)} onChange={(event) => { const next = Number(event.target.value); if (Number.isFinite(next) && next > 0) setAmount(next); }} aria-label={lang === "zh" ? "食用量" : "Amount eaten"} />
+            <DecimalInput className="" min={0.01} value={amount} onChange={setAmount} ariaLabel={lang === "zh" ? "食用量" : "Amount eaten"} />
             <span>{measuredItem?.amountUnit ? nutritionUnitLabel(measuredItem.amountUnit, amount, lang) : (lang === "zh" ? "份" : amount === 1 ? "serving" : "servings")}</span>
           </div>
           <button type="button" className="ibtn press" onClick={() => setAmount((value) => Math.round((value + amountStep) * 100) / 100)} aria-label={lang === "zh" ? "增加份量" : "Increase amount"}><AppIcon name="plus" size={18} /></button>
@@ -947,7 +1068,7 @@ function VoiceSheet({
   );
 }
 
-function CameraSheet({ open, lang, onClose, onReview }: { open: boolean; lang: Lang; onClose: () => void; onReview: (review: FoodLogReview) => void }) {
+function CameraSheet({ mode, onModeChange, open, lang, onClose, onReview }: { mode: QuickLogMode; onModeChange: (mode: QuickLogMode) => void; open: boolean; lang: Lang; onClose: () => void; onReview: (review: FoodLogReview) => void }) {
   const customFoods = useStore((state) => state.customFoods);
   const allRecipes = useStore((state) => state.recipes);
   const addCustomFood = useStore((state) => state.addCustomFood);
@@ -1008,17 +1129,29 @@ function CameraSheet({ open, lang, onClose, onReview }: { open: boolean; lang: L
     setMessage("");
     (async () => {
       try {
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        const reader = new BrowserMultiFormatReader();
-        if (!videoRef.current || cancelled) return;
-        const controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
-          if (result && !busyRef.current) void handleBarcode(result.getText());
-        });
-        if (cancelled) {
-          controls.stop();
-          return;
+        if (mode === "scan") {
+          const { BrowserMultiFormatReader } = await import("@zxing/browser");
+          const reader = new BrowserMultiFormatReader();
+          if (!videoRef.current || cancelled) return;
+          const controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
+            if (result && !busyRef.current) void handleBarcode(result.getText());
+          });
+          if (cancelled) {
+            controls.stop();
+            return;
+          }
+          controlsRef.current = controls;
+        } else {
+          if (!navigator.mediaDevices?.getUserMedia || !videoRef.current || cancelled) throw new Error("camera-unavailable");
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+          if (cancelled) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          controlsRef.current = { stop: () => stream.getTracks().forEach((track) => track.stop()) };
         }
-        controlsRef.current = controls;
         setStatus("ready");
       } catch {
         if (!cancelled) {
@@ -1028,7 +1161,7 @@ function CameraSheet({ open, lang, onClose, onReview }: { open: boolean; lang: L
       }
     })();
     return () => { cancelled = true; stopCamera(); };
-  }, [handleBarcode, lang, open, stopCamera]);
+  }, [handleBarcode, lang, mode, open, stopCamera]);
 
   const analyzeImage = async (imageDataUrl: string) => {
     if (busyRef.current) return;
@@ -1085,21 +1218,29 @@ function CameraSheet({ open, lang, onClose, onReview }: { open: boolean; lang: L
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title={<span className="icon-label"><AppIcon name="camera" size={20} /> {lang === "zh" ? "拍食物、營養標示或條碼" : "Food, nutrition label, or barcode"}</span>}>
+    <Sheet open={open} onClose={onClose} title={<span className="icon-label"><AppIcon name={mode === "scan" ? "barcode" : "camera"} size={20} /> {mode === "scan" ? (lang === "zh" ? "掃描條碼" : "Scan barcode") : (lang === "zh" ? "AI 食物照片" : "AI food photo")}</span>}>
       <div className="camera-unified pb-2">
         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(event) => void chooseFile(event.target.files?.[0])} />
+        <div className="seg w-full">
+          <button className={`seg-item ${mode === "scan" ? "on" : ""}`} onClick={() => onModeChange("scan")}><AppIcon name="barcode" size={16} /> {lang === "zh" ? "掃碼" : "Scanner"}</button>
+          <button className={`seg-item ${mode === "photo" ? "on" : ""}`} onClick={() => onModeChange("photo")}><AppIcon name="magic" size={16} /> {lang === "zh" ? "AI 照片" : "AI photo"}</button>
+        </div>
         <div className="camera-viewport">
           <video ref={videoRef} muted playsInline />
-          <div className="camera-reticle" />
+          {mode === "scan" && <div className="camera-reticle" />}
           {(status === "starting" || status === "looking" || status === "analyzing") && (
             <div className="camera-status"><AppIcon name="refresh" size={22} className="a-spin" /> {status === "analyzing" ? (lang === "zh" ? "分析照片中…" : "Analyzing photo…") : status === "looking" ? (lang === "zh" ? "查詢商品中…" : "Finding product…") : (lang === "zh" ? "開啟相機…" : "Opening camera…")}</div>
           )}
         </div>
         {message && <div className="target-error" role="alert">{message}</div>}
-        <div className="camera-controls">
-          <button className="camera-secondary press" onClick={() => fileRef.current?.click()}><AppIcon name="upload" size={20} /><span>{lang === "zh" ? "選照片" : "Choose photo"}</span></button>
-          <button className="camera-shutter press" disabled={status !== "ready"} onClick={captureFrame} aria-label={lang === "zh" ? "拍照" : "Take photo"}><span /></button>
-        </div>
+        {mode === "scan" ? (
+          <div className="t-cap text-center">{lang === "zh" ? "將條碼置於框內；辨識後會自動查詢。" : "Place the barcode inside the frame; lookup starts automatically."}</div>
+        ) : (
+          <div className="camera-controls">
+            <button className="camera-secondary press" onClick={() => fileRef.current?.click()}><AppIcon name="upload" size={20} /><span>{lang === "zh" ? "選照片" : "Choose photo"}</span></button>
+            <button className="camera-shutter press" disabled={status !== "ready"} onClick={captureFrame} aria-label={lang === "zh" ? "拍照" : "Take photo"}><span /></button>
+          </div>
+        )}
       </div>
     </Sheet>
   );
@@ -1160,7 +1301,7 @@ function ManualFoodSheet({ open, lang, onClose, onReview }: { open: boolean; lan
         <div>
           <div className="t-cap mb-1">{lang === "zh" ? "以下營養資料適用於" : "Nutrition below is for"}</div>
           <div className="grid grid-cols-2 gap-2">
-            <input className="field" type="number" inputMode="decimal" min="0.01" step="0.1" value={basisAmount} onChange={(event) => setBasisAmount(event.target.value)} aria-label={lang === "zh" ? "基準數量" : "Basis amount"} />
+            <input className="field" type="number" inputMode="decimal" min="0.01" step="any" value={basisAmount} onChange={(event) => setBasisAmount(event.target.value)} aria-label={lang === "zh" ? "基準數量" : "Basis amount"} />
             <select className="field" value={basisUnit} onChange={(event) => setBasisUnit(event.target.value as NutritionUnit)} aria-label={lang === "zh" ? "基準單位" : "Basis unit"}>
               {NUTRITION_UNITS.map((unit) => <option key={unit} value={unit}>{nutritionUnitLabel(unit, 2, lang)}</option>)}
             </select>
@@ -1218,6 +1359,38 @@ function reviewFromFood(food: FoodItem, source: ReviewSource, lang: Lang, matche
     confidence: source === "barcode" ? 99 : 100,
     items: [{ name: food.name, emoji: food.emoji, qtyLabel: serving.label, grams: serving.grams, macros: serving.macros, refId: food.id }],
   };
+}
+
+function reviewFromRecentLog(entry: LogEntry, lang: Lang): FoodLogReview {
+  const amountLabel = recentLogAmountLabel(entry, lang);
+  const source: ReviewSource = entry.src === "food" || entry.src === "recipe" || !entry.src ? "search" : entry.src;
+  return {
+    id: newId(),
+    source,
+    description: `${amountLabel} ${entry.name[lang] || entry.name.en}`,
+    rationale: lang === "zh"
+      ? "已從你的飲食記錄複製相同份量與營養資料。"
+      : "Copied from your food history with the same portion and nutrition.",
+    confidence: 100,
+    items: [{
+      name: entry.name,
+      emoji: entry.emoji || "🍽️",
+      qtyLabel: amountLabel,
+      grams: entry.grams,
+      amount: entry.amount,
+      amountUnit: entry.amountUnit,
+      macros: entry.macros,
+      refId: entry.refId,
+    }],
+  };
+}
+
+function recentLogAmountLabel(entry: LogEntry, lang: Lang): string {
+  if (entry.amount != null && entry.amountUnit) {
+    return `${formatAmount(entry.amount)} ${nutritionUnitLabel(entry.amountUnit, entry.amount, lang)}`;
+  }
+  if (entry.grams != null) return `${formatAmount(entry.grams)} ${lang === "zh" ? "克" : "g"}`;
+  return lang === "zh" ? "1 份" : "1 serving";
 }
 
 function searchResultNutrition(result: FoodSearchResult, lang: Lang): string {

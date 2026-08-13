@@ -65,6 +65,8 @@ export default function HealthRewardCelebration() {
     stand: "站立分鐘",
     stepReward: "步數獎勵",
     standReward: "站立獎勵",
+    workoutReward: "訓練獎勵",
+    calories: "大卡",
     total: "獲得經驗",
     collect: "領取 XP",
     dismiss: "關閉活動獎勵",
@@ -76,6 +78,8 @@ export default function HealthRewardCelebration() {
     stand: "standing min",
     stepReward: "Step reward",
     standReward: "Standing reward",
+    workoutReward: "Workout reward",
+    calories: "cal",
     total: "XP earned",
     collect: "Collect XP",
     dismiss: "Dismiss activity reward",
@@ -101,9 +105,21 @@ export default function HealthRewardCelebration() {
           <span><AppIcon name="stretch" size={18} /><b>{reward.steps.toLocaleString()}</b> {copy.steps}</span>
           <span><AppIcon name="timer" size={18} /><b>{reward.standMinutes.toLocaleString()}</b> {copy.stand}</span>
         </div>
+        {reward.workouts.length > 0 && (
+          <div className="health-reward-workouts">
+            {reward.workouts.map((workout) => (
+              <span key={workout.id}>
+                <AppIcon name="gym" size={18} />
+                <b>{workout.activityType}</b>
+                <small>{Math.round(workout.durationMinutes)} min · {Math.round(workout.activeCalories)} {copy.calories}</small>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="health-reward-breakdown">
           {reward.stepXp > 0 && <span><AppIcon name="stretch" size={18} /><b>{copy.stepReward}</b><em>+{reward.stepXp} XP</em></span>}
           {reward.standXp > 0 && <span><AppIcon name="timer" size={18} /><b>{copy.standReward}</b><em>+{reward.standXp} XP</em></span>}
+          {reward.workoutXp > 0 && <span><AppIcon name="gym" size={18} /><b>{copy.workoutReward}</b><em>+{reward.workoutXp} XP</em></span>}
           <strong><AppIcon name="star" size={20} /><b>{copy.total}</b><em>+{reward.totalXp} XP</em></strong>
         </div>
         <button ref={closeRef} className="health-reward-collect press" onClick={dismiss}>

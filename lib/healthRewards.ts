@@ -2,12 +2,15 @@
 
 import { create } from "zustand";
 import type { HealthRewardBreakdown } from "./game";
+import type { HealthWorkout } from "./types";
 
 export interface HealthRewardEvent extends HealthRewardBreakdown {
   id: string;
   date: string;
   steps: number;
   standMinutes: number;
+  workoutXp: number;
+  workouts: HealthWorkout[];
 }
 
 interface HealthRewardQueueState {
@@ -39,6 +42,11 @@ export const useHealthRewardQueue = create<HealthRewardQueueState>((set) => ({
           standMinutes: Math.max(pendingReward.standMinutes, reward.standMinutes),
           stepXp: pendingReward.stepXp + reward.stepXp,
           standXp: pendingReward.standXp + reward.standXp,
+          workoutXp: pendingReward.workoutXp + reward.workoutXp,
+          workouts: [
+            ...pendingReward.workouts,
+            ...reward.workouts.filter((workout) => !pendingReward.workouts.some((existing) => existing.id === workout.id)),
+          ],
           stepMilestones: pendingReward.stepMilestones + reward.stepMilestones,
           standMilestones: pendingReward.standMilestones + reward.standMilestones,
           totalXp: pendingReward.totalXp + reward.totalXp,

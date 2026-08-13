@@ -152,7 +152,7 @@ export default function LevelUpCelebration() {
     reached: `你已升到等級 ${celebration.level}`,
     crossed: `一次提升了 ${celebration.level - celebration.fromLevel} 個等級！`,
     unlocked: "本次獎勵",
-    noUnlock: "這個等級沒有新的種子或主題，但所有經驗都會繼續累積。",
+    noUnlock: "這個等級沒有新的收集獎勵，但所有經驗都會繼續累積。",
     spellGift: `${spellGiftCount} 個魔法咒語`,
     spellGiftNote: "已存入你的魔法書。",
     levelReward: "升級獎勵",
@@ -163,6 +163,9 @@ export default function LevelUpCelebration() {
     continue: "繼續前進",
     seed: "種子",
     theme: "主題",
+    avatar: "大頭貼",
+    musicPack: "音樂包",
+    farm: "農場",
     level: "等級",
     dismiss: "關閉升級畫面",
   } : {
@@ -170,7 +173,7 @@ export default function LevelUpCelebration() {
     reached: `You reached Level ${celebration.level}`,
     crossed: `You climbed ${celebration.level - celebration.fromLevel} levels at once!`,
     unlocked: "Your rewards",
-    noUnlock: "No new seed or theme at this level, but all of your XP carries forward.",
+    noUnlock: "No new collectible reward at this level, but all of your XP carries forward.",
     spellGift: `${spellGiftCount} Magic Spells`,
     spellGiftNote: "Added to your Spellbook.",
     levelReward: "Level reward",
@@ -181,6 +184,9 @@ export default function LevelUpCelebration() {
     continue: "Keep going",
     seed: "Seed",
     theme: "Theme",
+    avatar: "Profile photo",
+    musicPack: "Music pack",
+    farm: "Farm",
     level: "Level",
     dismiss: "Dismiss level-up celebration",
   };
@@ -231,7 +237,7 @@ export default function LevelUpCelebration() {
                 <div key={unlock.id} className="level-up-unlock">
                   <LevelUnlockVisual unlock={unlock} />
                   <div><b>{unlock.name[lang]}</b><small>{unlock.note[lang]}</small></div>
-                  <em>{copy.level} {unlock.unlockedAt} · {unlock.kind === "seed" ? copy.seed : copy.theme}</em>
+                  <em>{copy.level} {unlock.unlockedAt} · {unlock.kind === "seed" ? copy.seed : unlock.kind === "theme" ? copy.theme : unlock.kind === "avatar" ? copy.avatar : unlock.kind === "musicPack" ? copy.musicPack : copy.farm}</em>
                 </div>
               ))}
             </div>
@@ -265,6 +271,35 @@ function LevelUnlockVisual({ unlock }: { unlock: ReturnType<typeof levelUnlocksA
         aria-hidden="true"
       >
         <Image src={unlock.image} alt="" width={58} height={58} />
+      </span>
+    );
+  }
+
+  if (unlock.kind === "farm") {
+    return (
+      <span className="level-up-reward-visual is-seed" aria-hidden="true">
+        {unlock.image
+          ? <Image src={unlock.image} alt="" width={58} height={58} unoptimized />
+          : <AppIcon name={unlock.farmKind === "building" ? "home" : "heart"} size={31} />}
+      </span>
+    );
+  }
+
+  if (unlock.kind === "avatar") {
+    return (
+      <span className="level-up-reward-visual is-avatar" aria-hidden="true">
+        <Image src={unlock.image} alt="" width={58} height={58} unoptimized />
+      </span>
+    );
+  }
+
+  if (unlock.kind === "musicPack") {
+    return (
+      <span className="level-up-reward-visual is-music-pack" aria-hidden="true">
+        <AppIcon name="music" size={25} />
+        <span className="level-up-theme-swatches">
+          {unlock.colors.map((color) => <i key={color} style={{ background: color }} />)}
+        </span>
       </span>
     );
   }

@@ -31,7 +31,7 @@ describe("Apple Health sync", () => {
     });
     healthPlugin.isAvailable.mockReset().mockResolvedValue({ available: true });
     healthPlugin.requestActivityAuthorization.mockReset().mockResolvedValue({ authorized: true });
-    healthPlugin.readDailyActivity.mockReset().mockResolvedValue({ steps: 1_500, standMinutes: 0 });
+    healthPlugin.readDailyActivity.mockReset().mockResolvedValue({ steps: 1_500, standMinutes: 0, workouts: [] });
     useStore.getState().resetAll();
     useHealthRewardQueue.setState({ pending: [] });
   });
@@ -39,7 +39,7 @@ describe("Apple Health sync", () => {
   it("stores 1,500 steps, awards the 1,000-step milestone, and queues its popup", async () => {
     const result = await connectAndSyncAppleHealth("2026-08-09");
 
-    expect(result).toEqual({ status: "synced", xp: 7, steps: 1_500, standMinutes: 0 });
+    expect(result).toEqual({ status: "synced", xp: 7, steps: 1_500, standMinutes: 0, workouts: [] });
     expect(useStore.getState().health["p-me"]["2026-08-09"].steps).toBe(1_500);
     expect(useStore.getState().game["p-me"].xp).toBe(7);
     expect(useHealthRewardQueue.getState().pending[0]).toMatchObject({
@@ -74,6 +74,29 @@ describe("Apple Health sync", () => {
     });
   });
 
+  it("syncs workout type, duration, calories, and rewards each workout only once", async () => {
+    const pilates = {
+      id: "workout-pilates",
+      activityType: "Pilates",
+      durationMinutes: 45,
+      activeCalories: 210.4,
+      startedAt: 1_754_736_000_000,
+    };
+    healthPlugin.readDailyActivity.mockResolvedValue({ steps: 0, standMinutes: 0, workouts: [pilates] });
+
+    const first = await connectAndSyncAppleHealth("2026-08-09");
+    const second = await connectAndSyncAppleHealth("2026-08-09");
+
+    expect(first).toMatchObject({ status: "synced", xp: 90, workouts: [pilates] });
+    expect(second).toMatchObject({ status: "synced", xp: 0, workouts: [pilates] });
+    expect(useStore.getState().health["p-me"]["2026-08-09"].workouts).toEqual([pilates]);
+    expect(useHealthRewardQueue.getState().pending[0]).toMatchObject({
+      workoutXp: 90,
+      workouts: [pilates],
+      totalXp: 90,
+    });
+  });
+
   it("keeps the connected state and returns an actionable error when reading fails", async () => {
     healthPlugin.readDailyActivity.mockRejectedValueOnce(new Error("HealthKit query failed"));
 
@@ -102,8 +125,8 @@ describe("Apple Health sync", () => {
     resolveActivity?.({ steps: 1_500, standMinutes: 0 });
 
     await expect(Promise.all([first, second])).resolves.toEqual([
-      { status: "synced", xp: 7, steps: 1_500, standMinutes: 0 },
-      { status: "synced", xp: 7, steps: 1_500, standMinutes: 0 },
+      { status: "synced", xp: 7, steps: 1_500, standMinutes: 0, workouts: [] },
+      { status: "synced", xp: 7, steps: 1_500, standMinutes: 0, workouts: [] },
     ]);
     expect(healthPlugin.readDailyActivity).toHaveBeenCalledTimes(1);
   });

@@ -7,7 +7,15 @@ import type {
   TrainingFocus,
   WorkoutPlan,
   WorkoutSession,
+  WeightUnit,
 } from "./types";
+
+/** Bundled plan seed weights were imported in pounds; convert before showing or logging them. */
+export function seedWeightInUnit(seedWeight: number | undefined, unit: WeightUnit): number | undefined {
+  if (seedWeight == null) return undefined;
+  if (unit === "lb") return seedWeight;
+  return Math.round((seedWeight / 2.20462) * 2) / 2;
+}
 
 /**
  * Returns only the most recent completed occurrence of a workout day.
@@ -109,7 +117,7 @@ export function recommendExercisePreset({
   const historySets = historyEntry ? completedSets(historyEntry.sets) : [];
 
   const fixedPlanWeight = matchingPlanExercise?.targetWeight;
-  let weight = fixedPlanWeight ?? matchingPlanExercise?.seedWeight;
+  let weight = fixedPlanWeight ?? seedWeightInUnit(matchingPlanExercise?.seedWeight, profile.unit);
   let estimatedWeight = false;
   if (historySets.length) {
     const lastSet = historySets[historySets.length - 1];

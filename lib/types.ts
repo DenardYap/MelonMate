@@ -303,14 +303,26 @@ export interface GameState {
   history: Record<string, boolean>; // date -> goal hit
   /** Lifetime per-day claims prevent add/delete food-log XP farming. */
   foodLogXpClaims?: Record<string, number>;
+  /** A weight check-in earns XP at most once per local calendar day. */
+  weightXpClaims?: Record<string, boolean>;
   /** Highest HealthKit milestone already rewarded for each local date. */
-  healthXpClaims?: Record<string, { stepTier: number; standTier: number }>;
+  healthXpClaims?: Record<string, { stepTier: number; standTier: number; workoutIds?: string[] }>;
+}
+
+export interface HealthWorkout {
+  /** HealthKit's stable UUID, used to ensure a workout is rewarded only once. */
+  id: string;
+  activityType: string;
+  durationMinutes: number;
+  activeCalories: number;
+  startedAt: number;
 }
 
 export interface HealthActivitySnapshot {
   date: string;
   steps: number;
   standMinutes: number;
+  workouts: HealthWorkout[];
   syncedAt: number;
   source: "apple-health";
 }
@@ -338,7 +350,35 @@ export type GardenAchievementId =
   | "everySpell"
   | "rareMelons"
   | "harvests"
-  | "fields";
+  | "fields"
+  | "masterBuilder"
+  | "fullLodge"
+  | "spellSage"
+  | "steward90"
+  | "firstBuilding"
+  | "villageRising"
+  | "tierTwoTown"
+  | "firstCompanion"
+  | "threeCompanions"
+  | "doubleTrouble"
+  | "firstOrder"
+  | "orderRegular"
+  | "orderLegend"
+  | "weeklySupplier"
+  | "steward7"
+  | "steward30"
+  | "firstLayout"
+  | "layoutReused"
+  | "layoutArchitect"
+  | "firstHoneyed"
+  | "honeyedTwenty"
+  | "harvestAllTen"
+  | "wellWorn"
+  | "firstMastery"
+  | "spellCollector"
+  | "twelveFields"
+  | "harvestFiveHundred"
+  | "rerollRanger";
 export type GardenSpellId =
   | "pantry-spark"
   | "trailwind"
@@ -347,6 +387,47 @@ export type GardenSpellId =
   | "ironroot"
   | "starlight-season"
   | "everripe-eclipse";
+
+export type FarmBuildingId =
+  | "farmhouse"
+  | "workshop"
+  | "market"
+  | "well"
+  | "apiary"
+  | "greenhouse"
+  | "barn";
+
+/** These IDs intentionally match built-in profile-picture presets. */
+export type FarmCompanionId =
+  | "chamoe-bee"
+  | "honeydew-frog"
+  | "melon-roll-snail"
+  | "golden-capybara"
+  | "moon-bunny"
+  | "densuke-penguin"
+  | "cantaloupe-cat";
+
+export type FarmOrderKind =
+  | "harvest-any"
+  | "harvest-variety"
+  | "harvest-long"
+  | "harvest-variety-mix"
+  | "cast-spell";
+
+export interface FarmOrder {
+  id: string;
+  period: "daily" | "weekly";
+  periodKey: string;
+  kind: FarmOrderKind;
+  target: number;
+  progress: number;
+  dewReward: number;
+  xpReward: number;
+  variety?: MelonVarietyId;
+  /** A mix order counts distinct varieties harvested after the order appears. */
+  varieties?: MelonVarietyId[];
+  claimed: boolean;
+}
 
 export interface GardenPlot {
   id: number;
@@ -383,6 +464,27 @@ export interface GardenState {
   spellInventory: Partial<Record<GardenSpellId, number>>;
   /** Exact spell items awarded at each level, used to prevent duplicate grants. */
   levelSpellRewards: Record<string, GardenSpellId[]>;
+  /** Permanent landmark progression purchased with Dew after its XP gate is met. */
+  buildingLevels: Partial<Record<FarmBuildingId, number>>;
+  ownedCompanions: FarmCompanionId[];
+  activeCompanions: FarmCompanionId[];
+  moonBunnyBonusClaims: string[];
+  spellMastery: Partial<Record<GardenSpellId, number>>;
+  wellLastUsed?: string;
+  farmOrders: FarmOrder[];
+  orderRerolls: Record<string, number>;
+  /** Days on which every available daily farm order was completed. */
+  stewardshipDays: string[];
+  savedPlantingLayouts: (MelonVarietyId | null)[][];
+  /** Lifetime counters for progression systems and retroactive garden badges. */
+  totalHoneyedHarvests: number;
+  totalOrdersClaimed: number;
+  totalWeeklyOrdersClaimed: number;
+  totalOrderRerolls: number;
+  totalLayoutsSaved: number;
+  totalLayoutsReplanted: number;
+  totalHarvestAllUses: number;
+  totalWellUses: number;
   /** Legacy generic casts are migrated into the spell inventory. */
   bonusSpellCasts?: number;
   lastTended?: string;
@@ -433,8 +535,10 @@ export interface FriendSharingSettings {
 
 /** What a member publishes for friends to see. */
 export interface MemberSnapshot {
-  version?: 2 | 3 | 4 | 5 | 6;
+  version?: 2 | 3 | 4 | 5 | 6 | 7 | 8;
   id: string; // profileId.deviceId
+  /** Full device identity used only to route opt-in friend-share push alerts. */
+  notificationDeviceId?: string;
   name: string;
   emoji: string;
   photoDataUrl?: string;
@@ -444,6 +548,10 @@ export interface MemberSnapshot {
   best: number;
   melons: number;
   golden: number;
+  /** The friend's currently selected visual theme. */
+  theme?: ThemeId;
+  /** Permanently earned garden achievement badges. */
+  badges?: GardenAchievementId[];
   garden: { date: string; hit: boolean }[]; // last 7 evaluated days
   today: {
     date: string;
@@ -453,13 +561,29 @@ export interface MemberSnapshot {
     proteinGoal: number;
   };
   lastWorkout?: { date: string; name: BiText; volume: number; prs: number };
+  /** Recent food entries, newest first and bounded by the publisher. */
+  foodLogs?: LogEntry[];
+  /** Recent Apple Health daily snapshots, newest first. */
+  health?: HealthActivitySnapshot[];
   farm?: FriendFarmSnapshot;
   mealPlan?: FriendMealPlanSnapshot;
-  /** Standalone recipes the owner explicitly chose to share. */
+  /** Saved standalone recipes, published automatically for friends. */
   sharedRecipes?: Recipe[];
   workoutPlan?: FriendWorkoutPlanSnapshot;
   workouts?: FriendWorkoutProgress;
   updatedAt: number;
+}
+
+export interface FriendShareNotification {
+  id: string;
+  friendId: string;
+  friendName: string;
+  kind: "recipe" | "workout";
+  itemId: string;
+  itemName: BiText;
+  createdAt: number;
+  readAt?: number;
+  path: string;
 }
 
 /** Household/friend-editable content that syncs to the workspace. */

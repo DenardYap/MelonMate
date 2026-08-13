@@ -6,18 +6,46 @@ import { GlassCard, Sheet, toast } from "@/components/ui";
 import { AppIcon, BrandMark } from "@/components/icons";
 import { Capacitor } from "@capacitor/core";
 import { useRouter } from "next/navigation";
+import { quickLogUrl, type QuickLogMode } from "@/lib/quickLog";
+
+function fallbackCopy(value: string): boolean {
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  return copied;
+}
 
 export default function LockScreenWidget() {
   const lang = useStore((state) => state.lang);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const native = Capacitor.isNativePlatform();
-  const copyLink = async (mode: "scan" | "photo") => {
-    const url = native
-      ? `melonmate://add?mode=${mode}&source=lock-screen`
-      : `${window.location.origin}/add?mode=${mode}&source=lock-screen`;
-    await navigator.clipboard.writeText(url);
-    toast(lang === "zh" ? "連結已複製" : "Link copied", "copy");
+  const shortcutUrl = (mode: QuickLogMode) => quickLogUrl({
+    mode,
+    native,
+    currentOrigin: window.location.origin,
+    publicOrigin: process.env.NEXT_PUBLIC_SITE_URL,
+  });
+  const copyLink = async (mode: QuickLogMode) => {
+    const url = shortcutUrl(mode);
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) await navigator.clipboard.writeText(url);
+      else if (!fallbackCopy(url)) throw new Error("copy-failed");
+      toast(
+        lang === "zh"
+          ? `${mode === "scan" ? "掃碼" : "AI 照片"}捷徑連結已複製；請貼到「打開 URL」。`
+          : `${mode === "scan" ? "Scanner" : "AI photo"} shortcut link copied — paste it into Open URLs.`,
+        "copy"
+      );
+    } catch {
+      toast(lang === "zh" ? "無法複製。請在 HTTPS 網站再試一次。" : "Couldn’t copy the link. Open the HTTPS app and try again.", "error");
+    }
   };
 
   return (
@@ -68,7 +96,7 @@ export default function LockScreenWidget() {
           ) : (
             <>
               <ol className="widget-steps">
-                <li>{lang === "zh" ? "點下方按鈕複製掃碼連結。" : "Copy the scanner link below."}</li>
+                <li>{lang === "zh" ? "選擇掃碼或 AI 照片，並複製該捷徑連結。" : "Choose Scanner or AI photo and copy its shortcut link."}</li>
                 <li>{lang === "zh" ? "在「捷徑」建立「打開 URL」，貼上連結並命名為 MelonMate。" : "In Shortcuts, create an Open URLs shortcut, paste the link, and name it MelonMate."}</li>
                 <li>{lang === "zh" ? "長按鎖定畫面 → 自訂 → 加入小工具 → 捷徑 → 選擇 MelonMate。" : "Long-press the Lock Screen → Customize → Add Widgets → Shortcuts → choose MelonMate."}</li>
               </ol>
@@ -78,8 +106,12 @@ export default function LockScreenWidget() {
               <button className="btn btn-ghost press w-full" onClick={() => void copyLink("photo")}>
                 <AppIcon name="magic" />{lang === "zh" ? "複製 AI 照片連結" : "Copy AI photo link"}
               </button>
+              <div className="flex gap-2">
+                <button className="btn btn-ghost press flex-1" onClick={() => router.push("/add?mode=scan&source=lock-screen-preview")}>{lang === "zh" ? "測試掃碼" : "Test scanner"}</button>
+                <button className="btn btn-ghost press flex-1" onClick={() => router.push("/add?mode=photo&source=lock-screen-preview")}>{lang === "zh" ? "測試照片" : "Test photo"}</button>
+              </div>
               <div className="ai-disclaimer">
-                {lang === "zh" ? "相機需要 HTTPS 與相機權限。" : "Camera access requires HTTPS and camera permission."}
+                {lang === "zh" ? "複製的是已設定的 HTTPS App 連結，不會使用 localhost。相機需要 HTTPS 與權限。" : "Links use the configured HTTPS app—not localhost. Camera access requires HTTPS and permission."}
               </div>
             </>
           )}

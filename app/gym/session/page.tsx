@@ -7,7 +7,7 @@ import { translate, type DictKey } from "@/lib/i18n";
 import { fmtDate, fmtDuration } from "@/lib/dates";
 import { est1RM, fmtNum } from "@/lib/nutrition";
 import { completedSets, exerciseProgressSeries, lastCompletedSessionForDay } from "@/lib/workouts";
-import { fireConfetti, GlassCard, Sheet, toast } from "@/components/ui";
+import { DecimalInput, fireConfetti, GlassCard, Sheet, toast } from "@/components/ui";
 import { AppIcon } from "@/components/icons";
 import { LineChart } from "@/components/charts";
 import { ExercisePickerSheet } from "@/components/ExercisePickerSheet";
@@ -23,7 +23,14 @@ export default function SessionPage() {
 
   const session = openSession(store);
   const [rest, setRest] = useState<{ total: number; endsAt: number } | null>(null);
-  const [summary, setSummary] = useState<{ volume: number; prs: number; durationMs: number } | null>(null);
+  const [summary, setSummary] = useState<{
+    volume: number;
+    prs: number;
+    durationMs: number;
+    xp: number;
+    completedSets: number;
+    completedExercises: number;
+  } | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState(false);
 
@@ -116,6 +123,7 @@ export default function SessionPage() {
     const res = store.finishSession(session.id);
     setRest(null);
     setSummary(res);
+    playSound("success");
     if (res.prs > 0) fireConfetti();
   };
 
@@ -229,22 +237,25 @@ export default function SessionPage() {
       {/* summary sheet */}
       {summary && (
         <Sheet open onClose={() => router.push("/gym")} title={<span className="icon-label"><AppIcon name="spark" />{t("workoutDone")}</span>}>
-          <div className="grid grid-cols-3 gap-3 py-2">
+          <div className="grid grid-cols-2 gap-3 py-2">
             <div className="text-center">
               <div className="t-num font-extrabold" style={{ fontSize: 22 }}>{fmtDuration(summary.durationMs, lang)}</div>
               <div className="t-cap">{t("duration")}</div>
             </div>
             <div className="text-center">
-              <div className="t-num font-extrabold" style={{ fontSize: 22 }}>{fmtNum(summary.volume)}</div>
-              <div className="t-cap">{t("volume")} ({profile.unit})</div>
+              <div className="t-num font-extrabold" style={{ fontSize: 22 }}>{summary.completedExercises}</div>
+              <div className="t-cap">{lang === "zh" ? "完成動作" : "Exercises finished"}</div>
             </div>
             <div className="text-center">
-              <div className="t-num font-extrabold icon-label justify-center" style={{ fontSize: 22 }}>
-                {summary.prs > 0 ? <><AppIcon name="medal" size={22} />{summary.prs}</> : "—"}
-              </div>
-              <div className="t-cap">{t("prsToday")}</div>
+              <div className="t-num font-extrabold" style={{ fontSize: 22 }}>{summary.completedSets}</div>
+              <div className="t-cap">{lang === "zh" ? "完成組數" : "Sets finished"}</div>
+            </div>
+            <div className="text-center">
+              <div className="t-num font-extrabold icon-label justify-center" style={{ fontSize: 22 }}><AppIcon name="star" size={20} />+{summary.xp}</div>
+              <div className="t-cap">XP</div>
             </div>
           </div>
+          {summary.prs > 0 && <div className="chip chip-on icon-label justify-center mt-2"><AppIcon name="medal" size={18} /> {summary.prs} {t("prsToday")}</div>}
           <button className="btn btn-primary press w-full mt-3" onClick={() => router.push("/gym")}>
             {t("done")}
           </button>
@@ -445,20 +456,15 @@ function NumInput({
   placeholder?: string;
   ariaLabel: string;
 }) {
-  return (
-    <input
-      className="field tabular set-input"
-      inputMode="decimal"
-      value={value || ""}
-      placeholder={placeholder ?? "0"}
-      aria-label={ariaLabel}
-      onChange={(ev) => {
-        const v = parseFloat(ev.target.value);
-        onChange(Number.isFinite(v) ? v : 0);
-      }}
-      onFocus={(ev) => ev.target.select()}
-    />
-  );
+  return <DecimalInput
+    className="field tabular set-input"
+    value={value}
+    min={0}
+    onChange={onChange}
+    placeholder={placeholder ?? "0"}
+    ariaLabel={ariaLabel}
+    selectOnFocus
+  />;
 }
 
 /* -------------------------------- clocks -------------------------------- */
@@ -501,13 +507,14 @@ function RestTimer({
       if (Date.now() >= endsAt && !doneRef.current) {
         doneRef.current = true;
         playSound("timer");
-        setTimeout(onDone, 600);
+        setTimeout(onDone, 1_200);
       }
     }, 250);
     return () => clearInterval(id);
   }, [endsAt, onDone]);
 
   const remain = Math.max(0, (endsAt - Date.now()) / 1000);
+  const isDone = remain <= 0;
   const p = Math.min(1, Math.max(0, remain / total));
   const mm = Math.floor(remain / 60);
   const ss = String(Math.floor(remain % 60)).padStart(2, "0");
@@ -518,15 +525,15 @@ function RestTimer({
       <div className="flex items-center justify-between px-4 py-3" style={{ position: "relative" }}>
         <div className="flex items-center gap-2">
           <AppIcon name="stretch" size={22} />
-          <span className="font-bold">{translate("restTimer", lang)}</span>
+          <span className="font-bold">{isDone ? (lang === "zh" ? "開始！" : "GO!") : translate("restTimer", lang)}</span>
           <span className="t-num font-extrabold tabular" style={{ fontSize: 22 }}>
-            {mm}:{ss}
+            {isDone ? <AppIcon name="spark" size={24} /> : `${mm}:${ss}`}
           </span>
         </div>
-        <div className="flex gap-2">
+        {!isDone && <div className="flex gap-2">
           <button className="chip press" onClick={onExtend}>+15s</button>
           <button className="chip press" onClick={onDone}>{translate("skipRest", lang)}</button>
-        </div>
+        </div>}
       </div>
     </div>
   );

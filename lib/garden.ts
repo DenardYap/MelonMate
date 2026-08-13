@@ -13,7 +13,6 @@ export interface MelonVariety {
   harvestReward: number;
   harvestXp: number;
   unlockLevel: number;
-  requiresPr?: boolean;
   rarity?: "rare" | "legendary";
   accent: string;
 }
@@ -97,7 +96,7 @@ export const MELON_VARIETIES: MelonVariety[] = [
   {
     id: "moon-gold",
     name: { en: "Moon Gold", zh: "月金瓜" },
-    note: { en: "A PR gardener's prize", zh: "破紀錄園丁的珍品" },
+    note: { en: "A moonlit level reward", zh: "月光下的等級獎勵" },
     seedImage: "/garden/moon-gold-seed.png",
     plantImage: "/garden/moon-gold-plant.png",
     image: "/garden/moon-gold.png",
@@ -107,7 +106,6 @@ export const MELON_VARIETIES: MelonVariety[] = [
     harvestReward: 45,
     harvestXp: 9,
     unlockLevel: 6,
-    requiresPr: true,
     rarity: "rare",
     accent: "#d8a72c",
   },
@@ -195,6 +193,23 @@ export function freshGarden(): GardenState {
     spellClaims: {},
     spellInventory: {},
     levelSpellRewards: {},
+    buildingLevels: {},
+    ownedCompanions: [],
+    activeCompanions: [],
+    moonBunnyBonusClaims: [],
+    spellMastery: {},
+    farmOrders: [],
+    orderRerolls: {},
+    stewardshipDays: [],
+    savedPlantingLayouts: [],
+    totalHoneyedHarvests: 0,
+    totalOrdersClaimed: 0,
+    totalWeeklyOrdersClaimed: 0,
+    totalOrderRerolls: 0,
+    totalLayoutsSaved: 0,
+    totalLayoutsReplanted: 0,
+    totalHarvestAllUses: 0,
+    totalWellUses: 0,
   };
 }
 
@@ -205,9 +220,9 @@ export function varietyById(id: MelonVarietyId) {
 export function isVarietyUnlocked(
   variety: MelonVariety,
   level: number,
-  goldenMelons: number
+  _goldenMelons?: number
 ): boolean {
-  return level >= variety.unlockLevel && (!variety.requiresPr || goldenMelons > 0);
+  return level >= variety.unlockLevel;
 }
 
 export const GARDEN_DAILY_BONUS = { dew: 10, xp: 30 } as const;

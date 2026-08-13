@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
+import { useGardenStore } from "@/lib/gardenStore";
 import { connectionCodes, syncNow } from "@/lib/sync";
 import TabBar from "@/components/TabBar";
 import { ConfettiHost, ToastHost, toast } from "@/components/ui";
@@ -13,11 +14,22 @@ import LevelUpCelebration from "@/components/LevelUpCelebration";
 import AchievementCelebration from "@/components/AchievementCelebration";
 import HealthRewardCelebration from "@/components/HealthRewardCelebration";
 import SoundProvider from "@/components/SoundProvider";
+import { FriendShareNotifier } from "@/components/FriendShareNotifications";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const friendCodesKey = useStore((s) => connectionCodes(s.ws).join("|"));
+  const activeProfileId = useStore((s) => s.activeProfileId);
+  const gameProgress = useStore((s) => s.game[s.activeProfileId]);
+  const profile = useStore((s) => s.profiles.find((item) => item.id === s.activeProfileId));
+  const logs = useStore((s) => s.logs[s.activeProfileId]);
+  const sessions = useStore((s) => s.sessions[s.activeProfileId]);
+  const health = useStore((s) => s.health[s.activeProfileId]);
+  const planner = useStore((s) => s.planner);
+  const recipes = useStore((s) => s.recipes);
+  const plans = useStore((s) => s.plans);
+  const farm = useGardenStore((s) => s.gardens[activeProfileId]);
   const theme = useStore((s) => s.theme);
   const lang = useStore((s) => s.lang);
 
@@ -64,10 +76,23 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated || !friendCodesKey) return;
-    void syncNow();
-    const timer = window.setInterval(() => void syncNow(), 60_000);
-    return () => window.clearInterval(timer);
-  }, [hydrated, friendCodesKey]);
+    const sync = () => void syncNow();
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    const debounce = window.setTimeout(sync, 350);
+    const timer = window.setInterval(sync, 15_000);
+    window.addEventListener("focus", sync);
+    window.addEventListener("online", sync);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.clearTimeout(debounce);
+      window.clearInterval(timer);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("online", sync);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, [hydrated, friendCodesKey, gameProgress, profile, logs, sessions, health, planner, recipes, plans, farm, theme]);
 
   if (!hydrated) {
     return (
@@ -85,6 +110,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <HealthRewardCelebration />
       <LevelUpCelebration />
       <AchievementCelebration />
+      <FriendShareNotifier />
       <ToastHost />
       <ConfettiHost />
     </SoundProvider>

@@ -27,8 +27,13 @@ import NativeAppSettings from "@/components/NativeAppSettings";
 import { shareNativeBackup } from "@/lib/nativeBackup";
 import SoundSettings from "@/components/SoundSettings";
 import ProfileAvatar from "@/components/ProfileAvatar";
-import { BUILT_IN_PROFILE_AVATARS, prepareProfilePhoto } from "@/lib/profilePhoto";
+import {
+  BUILT_IN_PROFILE_AVATARS,
+  isBuiltInProfileAvatarUnlocked,
+  prepareProfilePhoto,
+} from "@/lib/profilePhoto";
 import LevelProgressRing from "@/components/LevelProgressRing";
+import { FriendNotificationButton } from "@/components/FriendShareNotifications";
 
 const THEME_OPTIONS: {
   id: ThemeId;
@@ -79,7 +84,14 @@ export default function MePage() {
     }
   };
 
-  const chooseBuiltInAvatar = (photoDataUrl: string) => {
+  const chooseBuiltInAvatar = (photoDataUrl: string, unlockLevel: number) => {
+    if (level < unlockLevel) {
+      toast(
+        lang === "zh" ? `此角色會在等級 ${unlockLevel} 解鎖` : `This friend unlocks at Level ${unlockLevel}`,
+        "lock"
+      );
+      return;
+    }
     store.updateProfile(profile.id, { photoDataUrl });
     setAvatarPickerOpen(false);
     toast(lang === "zh" ? "個人照片已更新" : "Profile photo updated", "checkCircle");
@@ -132,7 +144,10 @@ export default function MePage() {
     <main className="page stagger">
       <header className="flex items-center justify-between mb-4">
         <h1 className="t-hero icon-label"><AppIcon name="user" size={27} /> {t("me")}</h1>
-        <button className="chip press icon-label" onClick={() => setSetupOpen(true)}><AppIcon name="edit" size={15} /> {lang === "zh" ? "個人設定" : "My setup"}</button>
+        <div className="flex items-center gap-2">
+          <FriendNotificationButton />
+          <button className="chip press icon-label" onClick={() => setSetupOpen(true)}><AppIcon name="edit" size={15} /> {lang === "zh" ? "個人設定" : "My setup"}</button>
+        </div>
       </header>
 
       <GlassCard strong className="me-profile-card mb-4">
@@ -194,19 +209,22 @@ export default function MePage() {
         title={<span className="icon-label"><AppIcon name="user" size={20} /> {lang === "zh" ? "選擇個人照片" : "Choose profile photo"}</span>}
       >
         <div className="t-sub mb-3">
-          {lang === "zh" ? "選擇一位甜瓜朋友，或從你的相簿上傳照片。" : "Pick a melon friend, or upload a photo from your library."}
+          {lang === "zh" ? "選擇一位甜瓜朋友；升級後可收集更多角色。" : "Pick a melon friend. Level up to collect more characters."}
         </div>
         <div className="profile-avatar-grid">
           {BUILT_IN_PROFILE_AVATARS.map((avatar) => {
             const selected = profile.photoDataUrl === avatar.src;
+            const unlocked = isBuiltInProfileAvatarUnlocked(avatar, level);
+            const unlockCopy = lang === "zh" ? `等級 ${avatar.unlockLevel} 解鎖` : `Unlocks at Level ${avatar.unlockLevel}`;
             return (
               <button
                 type="button"
                 key={avatar.id}
-                className={`profile-avatar-choice press ${selected ? "is-selected" : ""}`}
+                className={`profile-avatar-choice press ${selected ? "is-selected" : ""} ${unlocked ? "" : "is-locked"}`}
                 aria-pressed={selected}
-                aria-label={avatar.name[lang]}
-                onClick={() => chooseBuiltInAvatar(avatar.src)}
+                aria-label={`${avatar.name[lang]}${unlocked ? "" : `, ${unlockCopy}`}`}
+                disabled={!unlocked}
+                onClick={() => chooseBuiltInAvatar(avatar.src, avatar.unlockLevel)}
               >
                 <ProfileAvatar
                   className="profile-avatar-choice-art"
@@ -215,7 +233,12 @@ export default function MePage() {
                   iconSize={28}
                 />
                 <span>{avatar.name[lang]}</span>
-                {selected && <i aria-hidden="true"><AppIcon name="check" size={13} strokeWidth={2.6} /></i>}
+                {!unlocked && (
+                  <i className="profile-avatar-lock" aria-hidden="true">
+                    <AppIcon name="lock" size={10} strokeWidth={2.6} /> L{avatar.unlockLevel}
+                  </i>
+                )}
+                {selected && unlocked && <i aria-hidden="true"><AppIcon name="check" size={13} strokeWidth={2.6} /></i>}
               </button>
             );
           })}
@@ -458,11 +481,6 @@ function FriendsSection() {
     }
   };
 
-  const refresh = async () => {
-    await syncNow();
-    if (!useStore.getState().ws.error) toast(t("lastSynced"), "↻");
-  };
-
   return (
     <section className="mb-4">
       <div className="flex items-center justify-between mb-2">
@@ -471,17 +489,6 @@ function FriendsSection() {
           <div className="t-cap">{t("friendsReadOnly")}</div>
         </div>
         <div className="flex gap-2">
-          {codes.length > 0 && (
-            <button
-              className="ibtn press"
-              style={{ width: 34, height: 34 }}
-              onClick={() => void refresh()}
-              disabled={store.ws.syncing}
-              aria-label={t("syncNow")}
-            >
-              <AppIcon name="refresh" size={18} />
-            </button>
-          )}
           <button className="chip chip-on press icon-label" onClick={() => setOpen(true)}><AppIcon name="addUser" size={16} /> {t("addFriend")}</button>
         </div>
       </div>

@@ -1,0 +1,33 @@
+MelonMate Music Credits
+=======================
+
+All music is by Kevin MacLeod (incompetech.com) and licensed under Creative
+Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+
+Cozy Grove (available from Level 1)
+-----------------------------------
+"Townie Loop" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1800003
+"Sidewalk Shade - slower" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200104
+"Bossa Antigua" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700069
+
+Peppy Picnic (unlocks at Level 5)
+---------------------------------
+"Fuzzball Parade" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1900017
+"Wholesome" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1900022
+"Farm" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1800016
+
+Town Café (unlocks at Level 10)
+-------------------------------
+"Local Forecast - Slower" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300011
+"Lobby Time" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600054
+"Casa Bossa Nova" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600012
+
+Moonlit Meadow (unlocks at Level 15)
+------------------------------------
+"Morning" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2300003
+"Northern Glade" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1800017
+"Evening" — https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2300002
+
+Changes made by MelonMate: each track was excerpted to 84 seconds,
+loudness-normalized, faded in and out, and re-encoded as a compact in-app loop.

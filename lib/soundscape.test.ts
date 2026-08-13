@@ -11,14 +11,14 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("time-of-day background themes", () => {
   it.each([
-    [5, "morning", "Melon Morning"],
-    [11, "morning", "Melon Morning"],
-    [12, "afternoon", "Garden Bounce"],
-    [17, "afternoon", "Garden Bounce"],
-    [18, "night", "Firefly Supper"],
-    [23, "night", "Firefly Supper"],
-    [0, "night", "Firefly Supper"],
-    [4, "night", "Firefly Supper"],
+    [5, "morning", "Townie Loop"],
+    [11, "morning", "Townie Loop"],
+    [12, "afternoon", "Sidewalk Shade - slower"],
+    [17, "afternoon", "Sidewalk Shade - slower"],
+    [18, "night", "Bossa Antigua"],
+    [23, "night", "Bossa Antigua"],
+    [0, "night", "Bossa Antigua"],
+    [4, "night", "Bossa Antigua"],
   ])("uses the expected theme at %i:00", (hour, id, title) => {
     expect(getBackgroundThemeForHour(hour)).toMatchObject({ id, title });
   });
@@ -35,6 +35,20 @@ describe("time-of-day background themes", () => {
 
     expect(audioSession.type).toBe("transient");
     expect(mediaSession).toMatchObject({ metadata: null, playbackState: "none" });
+  });
+
+  it.each([
+    ["peppy-picnic", 8, "Fuzzball Parade"],
+    ["peppy-picnic", 14, "Wholesome"],
+    ["peppy-picnic", 21, "Farm"],
+    ["town-cafe", 8, "Local Forecast - Slower"],
+    ["town-cafe", 14, "Lobby Time"],
+    ["town-cafe", 21, "Casa Bossa Nova"],
+    ["moonlit-meadow", 8, "Morning"],
+    ["moonlit-meadow", 14, "Northern Glade"],
+    ["moonlit-meadow", 21, "Evening"],
+  ] as const)("selects %s's time-of-day track", (packId, hour, title) => {
+    expect(getBackgroundThemeForHour(hour, packId)).toMatchObject({ title });
   });
 
   it("uses a recording audio session while voice capture is active", () => {

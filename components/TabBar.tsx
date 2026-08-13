@@ -11,6 +11,7 @@ export default function TabBar() {
   const pathname = usePathname();
   const lang = useStore((s) => s.lang);
   const game = useGame();
+  const unreadFriendShares = useStore((state) => state.friendNotifications.filter((notification) => !notification.readAt).length);
 
   if (pathname.startsWith("/add") || pathname.startsWith("/gym/session") || pathname.startsWith("/agent") || pathname.startsWith("/garden") || pathname.startsWith("/friends")) return null;
 
@@ -43,14 +44,17 @@ export default function TabBar() {
             aria-current={isOn(t.href) ? "page" : undefined}
           >
             {t.key === "me" ? (
-              <LevelProgressRing
-                xp={game.xp}
-                size={30}
-                stroke={5}
-                shortLabel=""
-                className="tab-level-ring"
-                label={lang === "zh" ? "等級" : "Level"}
-              />
+              <span className="tab-friend-notification-wrap">
+                <LevelProgressRing
+                  xp={game.xp}
+                  size={30}
+                  stroke={5}
+                  shortLabel=""
+                  className="tab-level-ring"
+                  label={lang === "zh" ? "等級" : "Level"}
+                />
+                {unreadFriendShares > 0 && <i>{unreadFriendShares > 9 ? "9+" : unreadFriendShares}</i>}
+              </span>
             ) : (
               <AppIcon name={t.icon} size={24} strokeWidth={isOn(t.href) ? 2.25 : 1.75} />
             )}

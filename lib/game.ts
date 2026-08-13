@@ -1,6 +1,7 @@
 export const MIN_DAILY_ITEMS = 3;
 export const FOOD_LOG_XP_REWARD = 5;
 export const MAX_DAILY_REWARDED_FOOD_LOGS = 6;
+export const WEIGHT_LOG_XP_REWARD = 5;
 export const DAILY_XP_REWARD = 200;
 
 export const STEP_INCREMENT = 1_000;
@@ -13,6 +14,11 @@ const STEP_REWARD_SPLIT = 3;
 export const STAND_MINUTES_INCREMENT = 10;
 export const STAND_DAILY_TIER_CAP = 24;
 export const STAND_XP_PER_TIER = 4;
+
+export const HEALTH_WORKOUT_XP_PER_MINUTE = 2;
+export const HEALTH_WORKOUT_REWARDED_MINUTES_CAP = 180;
+export const IN_APP_WORKOUT_SET_XP = 3;
+export const IN_APP_WORKOUT_EXERCISE_XP = 12;
 
 /** Healthy-day XP and farm-earned XP now contribute to one user total. */
 export function combinedXp(healthyDayXp: number, farmEarnedXp: number): number {
@@ -116,6 +122,30 @@ export function healthRewardBetweenTiers(
     stepMilestones: currentStepTier - previousStepTier,
     standMilestones: currentStandTier - previousStandTier,
     totalXp: stepXp + standXp,
+  };
+}
+
+/** Completed HealthKit workouts scale directly with active workout time. */
+export function healthWorkoutXp(durationMinutes: number): number {
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0;
+  return Math.round(Math.min(HEALTH_WORKOUT_REWARDED_MINUTES_CAP, durationMinutes) * HEALTH_WORKOUT_XP_PER_MINUTE);
+}
+
+/** In-app sessions reward every completed set plus a bonus for finishing all sets of an exercise. */
+export function inAppWorkoutXp(
+  entries: { sets: { done: boolean }[] }[]
+): { xp: number; completedSets: number; completedExercises: number } {
+  const completedSets = entries.reduce(
+    (total, entry) => total + entry.sets.filter((set) => set.done).length,
+    0
+  );
+  const completedExercises = entries.filter(
+    (entry) => entry.sets.length > 0 && entry.sets.every((set) => set.done)
+  ).length;
+  return {
+    xp: completedSets * IN_APP_WORKOUT_SET_XP + completedExercises * IN_APP_WORKOUT_EXERCISE_XP,
+    completedSets,
+    completedExercises,
   };
 }
 

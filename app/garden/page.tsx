@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import { fireConfetti, Sheet, toast } from "@/components/ui";
@@ -10,7 +10,6 @@ import { todayStr, weekDates } from "@/lib/dates";
 import {
   MAX_GARDEN_PLOTS,
   MELON_VARIETIES,
-  GARDEN_SPELL_EFFECTS,
   cropProgress,
   cropRemainingMs,
   cropStageImage,
@@ -25,11 +24,22 @@ import { levelProgressFromXp } from "@/lib/game";
 import { useGarden, useGardenStore } from "@/lib/gardenStore";
 import { sumMacros } from "@/lib/nutrition";
 import { useActiveProfile, useGame, useStore } from "@/lib/store";
-import type { GardenSpellId, MelonVarietyId } from "@/lib/types";
+import type { FarmBuildingId, FarmCompanionId, FarmOrder, GardenSpellId, MelonVarietyId } from "@/lib/types";
 import LevelProgressRing from "@/components/LevelProgressRing";
 import { playSound } from "@/lib/soundscape";
+import {
+  FARM_BUILDINGS,
+  FARM_COMPANIONS,
+  SPELL_MASTERY_COSTS,
+  STEWARDSHIP_MILESTONES,
+  buildingLevel,
+  effectiveSpell,
+  farmOrderRewards,
+  seedCostFor,
+} from "@/lib/farmProgression";
 
 const RAIN_DROPS = Array.from({ length: 22 }, (_, index) => index);
+const HONEYED_SPARKS = Array.from({ length: 16 }, (_, index) => index);
 const FARM_MAP_WIDTH = 2400;
 const FARM_MAP_HEIGHT = 1600;
 const FARM_MIN_ZOOM = 0.6;
@@ -72,8 +82,36 @@ function plotGroupCenter(unlockedPlots: number) {
   return { x: (left + right) / 2, y: (top + bottom) / 2 };
 }
 
-type FarmPanel = "seeds" | "spells" | "progress" | null;
+type FarmPanel = "seeds" | "farm" | "orders" | "spells" | "progress" | null;
 type FarmResource = "dew" | "xp";
+type CompanionMotion = "sitting" | "walking" | "standing" | "napping";
+const COMPANION_MOTIONS: CompanionMotion[] = ["sitting", "walking", "standing", "napping"];
+
+function CompanionAccent({ id }: { id: FarmCompanionId }) {
+  if (id === "chamoe-bee") return <g className="companion-svg-accent is-pollen"><circle cx="46" cy="86" r="4" /><circle cx="210" cy="74" r="3" /><circle cx="220" cy="110" r="5" /></g>;
+  if (id === "honeydew-frog") return <g className="companion-svg-accent is-bubbles"><circle cx="48" cy="78" r="8" /><circle cx="210" cy="58" r="5" /><circle cx="222" cy="92" r="3" /></g>;
+  if (id === "melon-roll-snail") return <path className="companion-svg-accent is-trail" d="M39 222c46 9 102 9 172 0" />;
+  if (id === "golden-capybara") return <g className="companion-svg-accent is-steam"><path d="M91 59c-12-13 10-18 0-34" /><path d="M129 50c-12-13 10-18 0-34" /><path d="M167 59c-12-13 10-18 0-34" /></g>;
+  if (id === "moon-bunny") return <g className="companion-svg-accent is-stars"><path d="m48 63 4 9 9 4-9 4-4 9-4-9-9-4 9-4z" /><path d="m207 104 3 7 7 3-7 3-3 7-3-7-7-3 7-3z" /></g>;
+  if (id === "densuke-penguin") return <g className="companion-svg-accent is-snow"><circle cx="48" cy="89" r="4" /><circle cx="208" cy="79" r="5" /><circle cx="220" cy="128" r="3" /></g>;
+  return <g className="companion-svg-accent is-dew"><path d="M46 81c10 14 10 23 0 28-10-5-10-14 0-28z" /><path d="M211 68c8 11 8 18 0 22-8-4-8-11 0-22z" /></g>;
+}
+
+function CompanionSprite({ id, src, motion }: { id: FarmCompanionId; src: string; motion: CompanionMotion }) {
+  const rawId = useId().replaceAll(":", "");
+  const spriteClip = `${rawId}-sprite`;
+  return (
+    <svg className={`companion-svg character-${id} motion-${motion}`} viewBox="0 0 256 256" aria-hidden="true">
+      <defs>
+        <clipPath id={spriteClip}><rect x="0" y="0" width="256" height="256" rx="56" /></clipPath>
+      </defs>
+      <ellipse className="companion-svg-shadow" cx="128" cy="225" rx="62" ry="13" />
+      <CompanionAccent id={id} />
+      <g className="companion-svg-character"><image href={src} width="256" height="256" clipPath={`url(#${spriteClip})`} /></g>
+      {motion === "napping" && <g className="companion-svg-zzz"><text x="184" y="72">Z</text><text x="211" y="45">z</text></g>}
+    </svg>
+  );
+}
 
 interface MagicSpell {
   id: GardenSpellId;
@@ -95,6 +133,77 @@ interface PendingSpellAction {
   kind: "buy" | "cast";
 }
 
+interface HoneyedCelebration {
+  key: number;
+  dew: number;
+  bonusDew: number;
+  cropCount: number;
+}
+
+type PlantingLayout = (MelonVarietyId | null)[];
+type PendingLayoutAction =
+  | { kind: "overwrite"; slot: number; saved: PlantingLayout; current: PlantingLayout }
+  | { kind: "funds"; slot: number; saved: PlantingLayout; cost: number; shortfall: number; cropCount: number };
+
+function CropLayoutMini({ layout, label, lang, compact = false }: { layout: PlantingLayout; label: string; lang: "en" | "zh"; compact?: boolean }) {
+  const cropCount = layout.filter(Boolean).length;
+  const cropTypes = MELON_VARIETIES.flatMap((variety) => {
+    const count = layout.filter((id) => id === variety.id).length;
+    return count ? [{ variety, count }] : [];
+  });
+  const visibleTypes = compact ? cropTypes.slice(0, 2) : cropTypes;
+  return (
+    <div className={`crop-layout-preview${compact ? " is-compact" : ""}`} role="img" aria-label={`${label}: ${cropTypes.map(({ variety, count }) => `${count} ${variety.name[lang]}`).join(", ") || "empty"}`}>
+      <span className="crop-layout-mini">
+        {PLOT_POSITIONS.map((position, index) => {
+          const varietyId = layout[index];
+          if (!varietyId) return null;
+          const variety = varietyById(varietyId);
+          return (
+            <i
+              key={index}
+              style={{
+                backgroundColor: variety.accent,
+                left: `${Math.max(3, Math.min(95, ((position.x - 600) / 1380) * 100))}%`,
+                top: `${Math.max(7, Math.min(91, ((position.y - 430) / 690) * 100))}%`,
+              }}
+            />
+          );
+        })}
+        {cropCount === 0 && <em>—</em>}
+      </span>
+      <span className="crop-layout-key" aria-hidden="true">
+        {visibleTypes.map(({ variety, count }) => (
+          <span key={variety.id}><i style={{ backgroundColor: variety.accent }} /><b>{count}×</b> {variety.name[lang]}</span>
+        ))}
+        {compact && cropTypes.length > visibleTypes.length && <span className="is-more">+{cropTypes.length - visibleTypes.length}</span>}
+      </span>
+    </div>
+  );
+}
+
+function HoneyedHarvestCelebration({ event, lang }: { event: HoneyedCelebration; lang: "en" | "zh" }) {
+  return (
+    <div key={event.key} className="honeyed-harvest-celebration" role="status" aria-live="assertive">
+      <div className="honeyed-harvest-flash" />
+      <div className="honeyed-harvest-card">
+        <span className="honeyed-harvest-emblem"><AppIcon name="water" size={30} /></span>
+        <small>{lang === "zh" ? "蜜糖豐收！" : "HONEYED HARVEST!"}</small>
+        <strong>2× {lang === "zh" ? "露珠" : "DEW"}</strong>
+        <b>+{event.dew.toLocaleString()} {lang === "zh" ? "露珠" : "Dew"}</b>
+        <p>
+          {lang === "zh"
+            ? `包含 +${event.bonusDew.toLocaleString()} 額外露珠${event.cropCount > 1 ? ` · ${event.cropCount} 株觸發` : ""}`
+            : `Includes +${event.bonusDew.toLocaleString()} bonus Dew${event.cropCount > 1 ? ` · ${event.cropCount} crops triggered` : ""}`}
+        </p>
+      </div>
+      <div className="honeyed-harvest-sparks" aria-hidden="true">
+        {HONEYED_SPARKS.map((spark) => <i key={spark} />)}
+      </div>
+    </div>
+  );
+}
+
 export default function GardenPage() {
   const router = useRouter();
   const now = useGardenClock();
@@ -109,16 +218,33 @@ export default function GardenPage() {
   const castSpell = useGardenStore((state) => state.castSpell);
   const harvest = useGardenStore((state) => state.harvest);
   const expandFarm = useGardenStore((state) => state.expandFarm);
+  const upgradeBuilding = useGardenStore((state) => state.upgradeBuilding);
+  const adoptCompanion = useGardenStore((state) => state.adoptCompanion);
+  const setActiveCompanion = useGardenStore((state) => state.setActiveCompanion);
+  const upgradeSpellMastery = useGardenStore((state) => state.upgradeSpellMastery);
+  const ensureFarmOrders = useGardenStore((state) => state.ensureFarmOrders);
+  const rerollFarmOrders = useGardenStore((state) => state.rerollFarmOrders);
+  const claimFarmOrder = useGardenStore((state) => state.claimFarmOrder);
+  const activateWell = useGardenStore((state) => state.useWell);
+  const harvestAll = useGardenStore((state) => state.harvestAll);
+  const savePlantingLayout = useGardenStore((state) => state.savePlantingLayout);
+  const replantLayout = useGardenStore((state) => state.replantLayout);
   const [selected, setSelected] = useState<MelonVarietyId>("honeydew");
   const [justTended, setJustTended] = useState(false);
   const [activePanel, setActivePanel] = useState<FarmPanel>(null);
   const [resourceGuide, setResourceGuide] = useState<FarmResource | null>(null);
   const [pendingSpellAction, setPendingSpellAction] = useState<PendingSpellAction | null>(null);
+  const [targetingSpell, setTargetingSpell] = useState<{ spell: MagicSpell; plotIds: number[] } | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<FarmBuildingId>("market");
+  const [companionMotions, setCompanionMotions] = useState<CompanionMotion[]>(["standing", "sitting"]);
+  const [honeyedCelebration, setHoneyedCelebration] = useState<HoneyedCelebration | null>(null);
+  const [pendingLayoutAction, setPendingLayoutAction] = useState<PendingLayoutAction | null>(null);
   const [zoom, setZoom] = useState<number>(1);
   const viewportRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef(1);
   const initialPlotCenterRef = useRef(plotGroupCenter(garden.unlockedPlots));
   const suppressClickUntilRef = useRef(0);
+  const honeyedTimerRef = useRef<number | null>(null);
   const panRef = useRef({ active: false, pointerId: -1, x: 0, y: 0, left: 0, top: 0 });
 
   const copy = lang === "zh" ? COPY.zh : COPY.en;
@@ -152,7 +278,7 @@ export default function GardenPage() {
       goal: lang === "zh" ? `食物記錄 ${Math.min(entries.length, 3)}/3` : `Food logs ${Math.min(entries.length, 3)}/3`,
       goalComplete: entries.length >= 3,
       claimKey: today,
-      ...GARDEN_SPELL_EFFECTS["pantry-spark"],
+      ...effectiveSpell(garden, "pantry-spark"),
     },
     {
       id: "trailwind",
@@ -162,7 +288,7 @@ export default function GardenPage() {
       goal: lang === "zh" ? `步數 ${Math.min(stepsToday, 6_000).toLocaleString()}/6,000` : `Steps ${Math.min(stepsToday, 6_000).toLocaleString()}/6,000`,
       goalComplete: stepsToday >= 6_000,
       claimKey: today,
-      ...GARDEN_SPELL_EFFECTS.trailwind,
+      ...effectiveSpell(garden, "trailwind"),
     },
     {
       id: "hearth-flame",
@@ -172,7 +298,7 @@ export default function GardenPage() {
       goal: cookedToday ? copy.recipeCooked : copy.cookRecipeGoal,
       goalComplete: cookedToday,
       claimKey: today,
-      ...GARDEN_SPELL_EFFECTS["hearth-flame"],
+      ...effectiveSpell(garden, "hearth-flame"),
     },
     {
       id: "balance-bloom",
@@ -182,7 +308,7 @@ export default function GardenPage() {
       goal: lang === "zh" ? `熱量內 · ${Math.min(entries.length, 3)}/3 筆` : `Under calories · ${Math.min(entries.length, 3)}/3 logs`,
       goalComplete: entries.length >= 3 && totals.cal <= profile.goals.cal,
       claimKey: today,
-      ...GARDEN_SPELL_EFFECTS["balance-bloom"],
+      ...effectiveSpell(garden, "balance-bloom"),
     },
     {
       id: "ironroot",
@@ -192,7 +318,7 @@ export default function GardenPage() {
       goal: workoutDone ? copy.workoutFinished : copy.finishWorkoutGoal,
       goalComplete: workoutDone,
       claimKey: today,
-      ...GARDEN_SPELL_EFFECTS.ironroot,
+      ...effectiveSpell(garden, "ironroot"),
     },
     {
       id: "starlight-season",
@@ -202,7 +328,7 @@ export default function GardenPage() {
       goal: lang === "zh" ? `本週達標 ${balancedDaysThisWeek}/4 天` : `On-target days ${balancedDaysThisWeek}/4`,
       goalComplete: balancedDaysThisWeek >= 4,
       claimKey: weekStart,
-      ...GARDEN_SPELL_EFFECTS["starlight-season"],
+      ...effectiveSpell(garden, "starlight-season"),
     },
     {
       id: "everripe-eclipse",
@@ -213,7 +339,7 @@ export default function GardenPage() {
       goalComplete: false,
       claimKey: "everripe-eclipse",
       requiresConfirmation: true,
-      ...GARDEN_SPELL_EFFECTS["everripe-eclipse"],
+      ...effectiveSpell(garden, "everripe-eclipse"),
     },
   ];
 
@@ -224,9 +350,23 @@ export default function GardenPage() {
   const ownedSpellCount = Object.values(garden.spellInventory).reduce((sum, count) => sum + (count ?? 0), 0);
   const availableSpellCount = claimableSpellCount + ownedSpellCount;
   const nextLevelUnlock = MELON_VARIETIES.find((variety) => level < variety.unlockLevel);
-  const nextExpansionCost = gardenExpansionCost(garden.unlockedPlots);
   const hour = new Date(now).getHours();
   const worldPhase = hour < 6 || hour >= 19 ? "is-night" : hour < 9 || hour >= 17 ? "is-golden-hour" : "is-day";
+
+  useEffect(() => {
+    ensureFarmOrders(profile.id, today, level);
+  }, [ensureFarmOrders, garden.buildingLevels.market, level, profile.id, today]);
+
+  useEffect(() => {
+    setCompanionMotions([
+      COMPANION_MOTIONS[Math.floor(Math.random() * COMPANION_MOTIONS.length)],
+      COMPANION_MOTIONS[Math.floor(Math.random() * COMPANION_MOTIONS.length)],
+    ]);
+  }, [profile.id]);
+
+  useEffect(() => () => {
+    if (honeyedTimerRef.current !== null) window.clearTimeout(honeyedTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -390,6 +530,15 @@ export default function GardenPage() {
     if (viewport?.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
   };
 
+  const celebrateHoneyedHarvest = (dew: number, bonusDew: number, cropCount = 1) => {
+    if (honeyedTimerRef.current !== null) window.clearTimeout(honeyedTimerRef.current);
+    setHoneyedCelebration({ key: Date.now(), dew, bonusDew, cropCount });
+    honeyedTimerRef.current = window.setTimeout(() => {
+      setHoneyedCelebration(null);
+      honeyedTimerRef.current = null;
+    }, 2800);
+  };
+
   const onPlotClick = (plotId: number) => {
     const plot = garden.plots.find((item) => item.id === plotId);
     if (!plot) return;
@@ -398,14 +547,25 @@ export default function GardenPage() {
       const variety = varietyById(plot.variety);
       if (isPlotReady(plot, now)) {
         const result = harvest(profile.id, plotId, now);
-        if (result === "harvested") {
-          playSound("harvest");
-          toast(
-            lang === "zh"
-              ? `收成 ${variety.name.zh}！+${variety.harvestReward} 露珠 · +${variety.harvestXp} 經驗`
-              : `${variety.name.en} harvested! +${variety.harvestReward} dew · +${variety.harvestXp} XP`,
-            "shopping"
-          );
+        if (typeof result === "object" && result.status === "harvested") {
+          if (result.honeyed) {
+            playSound("success");
+            celebrateHoneyedHarvest(result.dew, result.honeyedBonusDew);
+            toast(
+              lang === "zh"
+                ? `蜜糖豐收！2× 露珠 · +${result.dew} 露珠（+${result.honeyedBonusDew} 額外）`
+                : `Honeyed Harvest! 2× Dew · +${result.dew} Dew (+${result.honeyedBonusDew} bonus)`,
+              "water"
+            );
+          } else {
+            playSound("harvest");
+            toast(
+              lang === "zh"
+                ? `收成 ${variety.name.zh}！+${result.dew} 露珠 · +${result.xp} 經驗`
+                : `${variety.name.en} harvested! +${result.dew} dew · +${result.xp} XP`,
+              "shopping"
+            );
+          }
           fireConfetti();
         }
       } else {
@@ -434,12 +594,13 @@ export default function GardenPage() {
     }
   };
 
-  const castSpellNow = (spell: MagicSpell) => {
+  const castSpellNow = (spell: MagicSpell, targetPlotIds?: number[]) => {
     const result = castSpell(profile.id, {
       id: spell.id,
       boostMinutes: spell.boostMinutes,
       targetCount: spell.targetCount,
       instantFinish: spell.instantFinish,
+      targetPlotIds,
     }, now);
     if (result === "empty") {
       playSound("error");
@@ -479,7 +640,7 @@ export default function GardenPage() {
   };
 
   const onClaimGoalSpell = (spell: MagicSpell) => {
-    const result = claimGoalSpell(profile.id, spell.id, spell.claimKey, spell.goalComplete);
+    const result = claimGoalSpell(profile.id, spell.id, spell.claimKey, spell.goalComplete, today);
     if (result !== "claimed") return;
     playSound("success");
     toast(`${spell.name} · ${copy.addedToSpellbook}`, "spark");
@@ -488,6 +649,10 @@ export default function GardenPage() {
   const onCastSpell = (spell: MagicSpell) => {
     if (spell.requiresConfirmation) {
       setPendingSpellAction({ spell, kind: "cast" });
+      return;
+    }
+    if (buildingLevel(garden, "workshop") >= 2 && spell.targetCount !== "all") {
+      setTargetingSpell({ spell, plotIds: [] });
       return;
     }
     castSpellNow(spell);
@@ -515,20 +680,148 @@ export default function GardenPage() {
     }
   };
 
-  const focusNextExpansion = () => {
-    const viewport = viewportRef.current;
-    const position = PLOT_POSITIONS[garden.unlockedPlots];
-    if (!viewport || !position) return;
-    setActivePanel(null);
-    viewport.scrollTo({
-      left: Math.max(0, (position.x + 90) * zoom - viewport.clientWidth / 2),
-      top: Math.max(0, (position.y + 90) * zoom - viewport.clientHeight / 2),
-      behavior: "smooth",
-    });
+  const openBuilding = (buildingId: FarmBuildingId) => {
+    setSelectedBuilding(buildingId);
+    setActivePanel("farm");
+  };
+
+  const onBuildingClick = (buildingId: FarmBuildingId) => {
+    openBuilding(buildingId);
+  };
+
+  const onUpgradeBuilding = (buildingId: FarmBuildingId) => {
+    const result = upgradeBuilding(profile.id, buildingId, level);
+    if (result === "bought") {
+      playSound("expand");
+      fireConfetti();
+      toast(copy.buildingUpgraded, "spark");
+    } else if (result === "funds") toast(copy.needDew, "water");
+    else if (result === "locked") toast(copy.higherLevelNeeded, "lock");
+  };
+
+  const onAdoptCompanion = (companionId: (typeof FARM_COMPANIONS)[number]["id"]) => {
+    const result = adoptCompanion(profile.id, companionId, level);
+    if (result === "bought") {
+      playSound("success");
+      fireConfetti();
+      toast(copy.companionAdopted, "heart");
+    } else if (result === "prerequisite") toast(copy.buildFarmhouseFirst, "lock");
+    else if (result === "locked") toast(copy.higherLevelNeeded, "lock");
+    else if (result === "funds") toast(copy.needDew, "water");
+  };
+
+  const onSelectCompanion = (companionId: (typeof FARM_COMPANIONS)[number]["id"], slot: 0 | 1 = 0) => {
+    const result = setActiveCompanion(profile.id, companionId, slot);
+    if (result === "done") {
+      playSound("success");
+      toast(copy.companionActive, "heart");
+    } else if (result === "locked") toast(copy.secondSlotLocked, "lock");
+  };
+
+  const onUseWell = () => {
+    const result = activateWell(profile.id, today, now);
+    if (result === "done") {
+      playSound("spell");
+      setJustTended(true);
+      window.setTimeout(() => setJustTended(false), 1800);
+      toast(copy.cropsWatered, "water");
+    } else if (result === "empty") toast(copy.plantBeforeWatering, "leaf");
+    else if (result === "used") toast(copy.wellUsedToday, "timer");
+  };
+
+  const onHarvestAll = () => {
+    const result = harvestAll(profile.id, now);
+    if (!result.count) {
+      toast(copy.noReadyCrops, "timer");
+      return;
+    }
+    playSound("harvest");
+    fireConfetti();
+    if (result.honeyedCount > 0) {
+      playSound("success");
+      celebrateHoneyedHarvest(result.honeyedDew, result.honeyedBonusDew, result.honeyedCount);
+      toast(
+        lang === "zh"
+          ? `蜜糖豐收 ×${result.honeyedCount}！共 +${result.dew} 露珠（+${result.honeyedBonusDew} 額外）`
+          : `Honeyed Harvest ×${result.honeyedCount}! +${result.dew} Dew total (+${result.honeyedBonusDew} bonus)`,
+        "water"
+      );
+    } else {
+      toast(`${result.count} ${copy.harvested} · +${result.dew} ${copy.dew} · +${result.xp} XP`, "shopping");
+    }
+  };
+
+  const currentPlantingLayout = garden.plots.map((plot) => plot.variety);
+
+  const replantDetails = (layout?: PlantingLayout) => {
+    if (!layout) return { cropCount: 0, cost: 0 };
+    return garden.plots.reduce((details, plot) => {
+      const varietyId = layout[plot.id];
+      if (plot.variety || !varietyId) return details;
+      const variety = varietyById(varietyId);
+      if (!isVarietyUnlocked(variety, level, game.golden)) return details;
+      return { cropCount: details.cropCount + 1, cost: details.cost + seedCostFor(garden, variety.seedCost) };
+    }, { cropCount: 0, cost: 0 });
+  };
+
+  const saveLayoutNow = (slot: number) => {
+    const result = savePlantingLayout(profile.id, slot);
+    if (result === "done") {
+      playSound("success");
+      toast(copy.layoutSaved, "save");
+    }
+  };
+
+  const onSaveLayout = (slot: number) => {
+    const saved = garden.savedPlantingLayouts[slot];
+    if (saved?.some(Boolean)) {
+      setPendingLayoutAction({ kind: "overwrite", slot, saved, current: currentPlantingLayout });
+      return;
+    }
+    saveLayoutNow(slot);
+  };
+
+  const onReplantLayout = (slot: number) => {
+    const saved = garden.savedPlantingLayouts[slot];
+    if (!saved?.some(Boolean)) {
+      toast(copy.saveLayoutFirst, "warning");
+      return;
+    }
+    const details = replantDetails(saved);
+    if (details.cropCount > 0 && details.cost > garden.dew) {
+      playSound("error");
+      setPendingLayoutAction({
+        kind: "funds",
+        slot,
+        saved,
+        cost: details.cost,
+        shortfall: details.cost - garden.dew,
+        cropCount: details.cropCount,
+      });
+      return;
+    }
+    const result = replantLayout(profile.id, slot, level, game.golden, now);
+    if (result === "done") {
+      playSound("plant");
+      toast(`${copy.layoutPlanted} · −${details.cost.toLocaleString()} ${copy.dew}`, "leaf");
+    } else if (result === "funds") {
+      setPendingLayoutAction({ kind: "funds", slot, saved, cost: details.cost, shortfall: Math.max(0, details.cost - garden.dew), cropCount: details.cropCount });
+    } else if (result === "missing") toast(copy.saveLayoutFirst, "warning");
+    else if (result === "empty") toast(copy.noEmptyPlotsForLayout, "warning");
+  };
+
+  const onClaimOrder = (order: FarmOrder) => {
+    const result = claimFarmOrder(profile.id, order.id);
+    if (result === "done") {
+      playSound("success");
+      fireConfetti();
+      toast(copy.orderDelivered, "package");
+    }
   };
 
   return (
     <main className={"farm-game-shell " + worldPhase + (justTended ? " is-raining" : "")}>
+      {honeyedCelebration && <HoneyedHarvestCelebration event={honeyedCelebration} lang={lang} />}
       <header className="farm-game-hud">
         <button className="farm-back press" onClick={() => router.back()} aria-label={copy.back}>
           <AppIcon name="back" size={21} />
@@ -591,6 +884,69 @@ export default function GardenPage() {
           style={{ width: FARM_MAP_WIDTH * zoom, height: FARM_MAP_HEIGHT * zoom }}
         >
           <div className="farm-map" aria-label={copy.farmMap} style={{ transform: `scale(${zoom})` }}>
+            <div className="farm-progression-layer" aria-label={copy.farmBuildings}>
+              {FARM_BUILDINGS.map((building) => {
+                const currentLevel = buildingLevel(garden, building.id);
+                const visualLevel = currentLevel;
+                const nextTier = building.tiers[currentLevel];
+                const levelReady = Boolean(nextTier && level >= nextTier.unlockLevel);
+                const dewReady = Boolean(nextTier && garden.dew >= nextTier.dewCost);
+                const canUpgrade = levelReady && dewReady;
+                const buildingState = currentLevel > 0
+                  ? canUpgrade ? "is-built is-upgrade-ready" : "is-built"
+                  : canUpgrade ? "is-upgrade-ready" : levelReady ? "is-dew-needed" : "is-level-locked";
+                const badgeLabel = currentLevel > 0
+                  ? `${copy.tier} ${currentLevel}`
+                  : !nextTier
+                  ? `${copy.tier} ${currentLevel}`
+                  : !levelReady
+                    ? `${copy.unlockAt} ${copy.levelShort} ${nextTier.unlockLevel}`
+                    : `${copy.unlock} · ${nextTier.dewCost.toLocaleString()}`;
+                return (
+                  <div key={building.id} className={`farm-building-map is-${building.id} tier-${visualLevel} ${buildingState}`}>
+                    <Image
+                      className="farm-building-art"
+                      src={`/garden/progression/building-${building.id}.png`}
+                      alt=""
+                      width={1254}
+                      height={1254}
+                      unoptimized
+                    />
+                    <button
+                      type="button"
+                      className="farm-building-hotspot press"
+                      style={{ left: building.hotspot.x, top: building.hotspot.y, width: building.hotspot.width, height: building.hotspot.height }}
+                      onClick={() => onBuildingClick(building.id)}
+                      aria-label={`${building.name[lang]}, ${badgeLabel}`}
+                    />
+                    <span
+                      className="farm-building-badge"
+                      style={{ left: building.badge.x, top: building.badge.y }}
+                      aria-hidden="true"
+                    >
+                      <AppIcon name={!nextTier ? "trophy" : currentLevel > 0 || canUpgrade ? "spark" : levelReady ? "water" : "lock"} size={13} />
+                      {badgeLabel}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {garden.activeCompanions.map((companionId, index) => {
+                const companion = FARM_COMPANIONS.find((item) => item.id === companionId);
+                if (!companion) return null;
+                return (
+                  <button
+                    key={companion.id}
+                    type="button"
+                    className={`farm-active-companion slot-${index + 1} motion-${companionMotions[index] ?? "standing"}`}
+                    onClick={() => openBuilding("farmhouse")}
+                    aria-label={`${companion.name[lang]} · ${copy[companionMotions[index] ?? "standing"]} · ${copy.tapToOpenFarmhouse}`}
+                  >
+                    <CompanionSprite id={companion.id} src={companion.src} motion={companionMotions[index] ?? "standing"} />
+                  </button>
+                );
+              })}
+            </div>
             <div className="farm-plots-layer">
             {PLOT_POSITIONS.map((position, index) => {
               const plot = garden.plots[index];
@@ -680,20 +1036,16 @@ export default function GardenPage() {
         <button className={"press" + (activePanel === "progress" ? " is-active" : "")} onClick={() => setActivePanel("progress")}>
           <AppIcon name="trophy" size={23} /><span>{copy.progress}</span>
         </button>
-        <button className="press" onClick={focusNextExpansion} disabled={garden.unlockedPlots >= MAX_GARDEN_PLOTS}>
-          <AppIcon name="plus" size={23} /><span>{copy.expand}</span>
-          {nextExpansionCost != null && <em><AppIcon name="water" size={10} />{nextExpansionCost}</em>}
-        </button>
       </nav>
 
       {activePanel && (
         <div className="farm-drawer-layer">
           <button className="farm-drawer-scrim" onClick={() => setActivePanel(null)} aria-label={copy.close} />
-          <section className={"farm-drawer is-" + activePanel} aria-label={activePanel === "seeds" ? copy.seedShop : activePanel === "spells" ? copy.magicSpells : copy.harvestJournal}>
+          <section className={"farm-drawer is-" + activePanel} aria-label={activePanel === "seeds" ? copy.seedShop : activePanel === "farm" ? copy.farmBuildings : activePanel === "orders" ? copy.farmOrders : activePanel === "spells" ? copy.magicSpells : copy.harvestJournal}>
             <header className="farm-drawer-header">
               <div>
-                <small>{activePanel === "seeds" ? copy.seedSatchel : activePanel === "spells" ? copy.spellbook : copy.harvestJournal}</small>
-                <h2>{activePanel === "seeds" ? copy.chooseVariety : activePanel === "spells" ? copy.castGardenMagic : garden.totalHarvests + " " + copy.totalHarvested}</h2>
+                <small>{activePanel === "seeds" ? copy.seedSatchel : activePanel === "farm" ? copy.livingFarm : activePanel === "orders" ? copy.marketBoard : activePanel === "spells" ? copy.spellbook : copy.harvestJournal}</small>
+                <h2>{activePanel === "seeds" ? copy.chooseVariety : activePanel === "farm" ? copy.buildAndGrow : activePanel === "orders" ? copy.farmOrders : activePanel === "spells" ? copy.castGardenMagic : garden.totalHarvests + " " + copy.totalHarvested}</h2>
               </div>
               <button className="farm-drawer-close press" onClick={() => setActivePanel(null)} aria-label={copy.close}><AppIcon name="close" size={20} /></button>
             </header>
@@ -711,7 +1063,7 @@ export default function GardenPage() {
                         className={"seed-card press " + (selectedNow ? "is-selected " : "") + (unlocked ? "" : "is-locked ") + (variety.rarity ? "is-" + variety.rarity : "")}
                         onClick={() => {
                           if (!unlocked) {
-                            toast(variety.requiresPr && !game.golden ? copy.prNeeded : copy.reachLevel + " " + variety.unlockLevel, "lock");
+                            toast(copy.reachLevel + " " + variety.unlockLevel, "lock");
                             return;
                           }
                           setSelected(variety.id);
@@ -725,7 +1077,7 @@ export default function GardenPage() {
                         <span className="seed-note">{unlocked ? variety.note[lang] : copy.level + " " + variety.unlockLevel}</span>
                         <span className="seed-time"><AppIcon name="timer" size={12} /> {formatGrowTime(variety.growMinutes, lang)}</span>
                         <span className="seed-meta">
-                          <b><AppIcon name="water" size={15} /> {variety.seedCost}</b><span>→</span>
+                          <b><AppIcon name="water" size={15} /> {seedCostFor(garden, variety.seedCost)}</b><span>→</span>
                           <b><AppIcon name="water" size={15} /> {variety.harvestReward}</b><b><AppIcon name="star" size={14} /> {variety.harvestXp}</b>
                         </span>
                         {!unlocked && <span className="seed-lock"><AppIcon name="lock" size={17} /></span>}
@@ -733,6 +1085,175 @@ export default function GardenPage() {
                     );
                   })}
                 </div>
+              </>
+            )}
+
+            {activePanel === "farm" && (() => {
+              const building = FARM_BUILDINGS.find((item) => item.id === selectedBuilding)!;
+              const currentLevel = buildingLevel(garden, building.id);
+              const nextTier = building.tiers[currentLevel];
+              return (
+                <>
+                  <p className="farm-drawer-intro">{copy.buildingIntro}</p>
+                  <div className="farm-building-tabs hide-scroll">
+                    {FARM_BUILDINGS.map((item) => (
+                      <button key={item.id} className={`press ${item.id === selectedBuilding ? "is-active" : ""}`} onClick={() => setSelectedBuilding(item.id)}>
+                        <AppIcon name={item.id === "workshop" ? "magic" : item.id === "well" ? "water" : item.id === "apiary" ? "flower" : item.id === "greenhouse" ? "leaf" : item.id === "market" ? "package" : "home"} size={18} />
+                        <span>{item.name[lang]}</span><em>{copy.tier} {buildingLevel(garden, item.id)}</em>
+                      </button>
+                    ))}
+                  </div>
+
+                  <article className={`farm-building-card is-${building.id}`}>
+                    <span className="farm-building-preview"><Image src={`/garden/progression/building-${building.id}.png`} alt="" fill sizes="190px" unoptimized /></span>
+                    <div className="farm-building-summary">
+                      <small>{building.role[lang]}</small><h3>{building.name[lang]}</h3>
+                      <span>{copy.tier} {currentLevel}/3</span>
+                      <p>{building.description[lang]}</p>
+                    </div>
+                    <p className="farm-building-description">{building.description[lang]}</p>
+                    {nextTier ? (
+                      <div className="farm-next-tier">
+                        <b>{copy.nextUpgrade}: {nextTier.effect[lang]}</b>
+                        <span><AppIcon name="star" size={13} /> {copy.level} {nextTier.unlockLevel}</span>
+                        <button className="btn btn-primary press" onClick={() => onUpgradeBuilding(building.id)} disabled={level < nextTier.unlockLevel}>
+                          <AppIcon name={level < nextTier.unlockLevel ? "lock" : "water"} size={15} />
+                          {level < nextTier.unlockLevel ? `${copy.level} ${nextTier.unlockLevel}` : `${copy.upgrade} · ${nextTier.dewCost.toLocaleString()}`}
+                        </button>
+                      </div>
+                    ) : <div className="farm-mastered"><AppIcon name="trophy" size={18} /> {copy.fullyUpgraded}</div>}
+                  </article>
+
+                  {building.id === "well" && currentLevel > 0 && (
+                    <button className="farm-utility-action press" onClick={onUseWell} disabled={garden.wellLastUsed === today}>
+                      <AppIcon name="water" size={21} /><span><b>{copy.waterCrops}</b><small>{garden.wellLastUsed === today ? copy.wellUsedToday : copy.onceDaily}</small></span>
+                    </button>
+                  )}
+
+                  {building.id === "barn" && currentLevel > 0 && (
+                    <div className="farm-utility-grid">
+                      <button className="farm-utility-action press" onClick={onHarvestAll}><AppIcon name="shopping" size={20} /><span><b>{copy.harvestAll}</b><small>{copy.allReadyCrops}</small></span></button>
+                      {currentLevel >= 2 && Array.from({ length: currentLevel >= 3 ? 3 : 1 }, (_, slot) => {
+                        const savedLayout = garden.savedPlantingLayouts[slot];
+                        const hasSavedLayout = Boolean(savedLayout?.some(Boolean));
+                        const details = replantDetails(savedLayout);
+                        const canAfford = garden.dew >= details.cost;
+                        return (
+                          <div className="farm-layout-slot" key={slot}>
+                            <div className="farm-layout-slot-head">
+                              <span><b>{copy.layout} {slot + 1}</b><small>{hasSavedLayout ? `${savedLayout!.filter(Boolean).length} ${copy.cropsSaved}` : copy.emptyLayoutSlot}</small></span>
+                              <CropLayoutMini layout={hasSavedLayout ? savedLayout! : currentPlantingLayout} label={hasSavedLayout ? `${copy.savedLayout} ${slot + 1}` : copy.currentLayout} lang={lang} compact />
+                            </div>
+                            <button className="farm-utility-action press" onClick={() => onSaveLayout(slot)}>
+                              <AppIcon name="save" size={18} /><span><b>{hasSavedLayout ? copy.replaceLayout : copy.saveLayout}</b><small>{copy.currentPlanting}</small></span>
+                            </button>
+                            <button className={`farm-utility-action press${hasSavedLayout && !canAfford ? " is-short" : ""}`} onClick={() => onReplantLayout(slot)} disabled={!hasSavedLayout}>
+                              <AppIcon name={hasSavedLayout && !canAfford ? "warning" : "refresh"} size={18} />
+                              <span>
+                                <b>{copy.replantLayout}</b>
+                                <small>{hasSavedLayout ? `${details.cropCount} ${copy.crops} · ${details.cost.toLocaleString()} ${copy.dew}` : copy.saveLayoutFirst}</small>
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {building.id === "market" && currentLevel > 0 && (
+                    <button className="farm-utility-action press" onClick={() => setActivePanel("orders")}><AppIcon name="package" size={21} /><span><b>{copy.openOrders}</b><small>{garden.farmOrders.filter((order) => !order.claimed).length} {copy.available}</small></span></button>
+                  )}
+
+                  {building.id === "farmhouse" && (
+                    <div className="companion-lodge">
+                      <div className="farm-section-label"><AppIcon name="heart" size={16} /> {copy.companionLodge}</div>
+                      <p>{copy.companionIntro}</p>
+                      <div className="companion-grid">
+                        {FARM_COMPANIONS.map((companion) => {
+                          const owned = garden.ownedCompanions.includes(companion.id);
+                          const activeSlot = garden.activeCompanions.indexOf(companion.id);
+                          const unlocked = level >= companion.unlockLevel && currentLevel > 0;
+                          return (
+                            <article key={companion.id} className={`${owned ? "is-owned" : ""} ${activeSlot >= 0 ? "is-active" : ""}`}>
+                              <span><CompanionSprite id={companion.id} src={companion.src} motion="standing" /></span>
+                              <div><b>{companion.name[lang]}</b><small>{companion.effect[lang]}</small></div>
+                              {owned ? (
+                                <div className="companion-actions">
+                                  <button className="press" onClick={() => onSelectCompanion(companion.id, 0)}>{activeSlot === 0 ? copy.active : copy.choose}</button>
+                                  {currentLevel >= 3 && <button className="press" onClick={() => onSelectCompanion(companion.id, 1)}>{activeSlot === 1 ? copy.helper : copy.slotTwo}</button>}
+                                </div>
+                              ) : (
+                                <button className="press companion-adopt" onClick={() => onAdoptCompanion(companion.id)} disabled={!unlocked}>
+                                  <AppIcon name={unlocked ? "water" : "lock"} size={13} /> {unlocked ? `${copy.adopt} ${companion.dewCost.toLocaleString()}` : `${copy.level} ${companion.unlockLevel}`}
+                                </button>
+                              )}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {building.id === "workshop" && currentLevel > 0 && (
+                    <div className="spell-mastery-list">
+                      <div className="farm-section-label"><AppIcon name="magic" size={16} /> {copy.spellMastery}</div>
+                      {magicSpells.filter((spell) => spell.id !== "everripe-eclipse").map((spell) => {
+                        const mastery = Math.max(1, Math.min(3, garden.spellMastery[spell.id] ?? 1));
+                        const cost = mastery < 3 ? SPELL_MASTERY_COSTS[spell.id as Exclude<GardenSpellId, "everripe-eclipse">][mastery - 1] : 0;
+                        const workshopNeeded = mastery === 1 ? 1 : 3;
+                        return (
+                          <article key={spell.id}>
+                            <AppIcon name={spell.icon} size={19} /><div><b>{spell.name}</b><small>{copy.mastery} {mastery}/3 · {spell.targetCount === "all" ? copy.everyGrowingCrop : `${spell.targetCount} ${copy.crops}`} · {formatDuration(spell.boostMinutes * 60_000, lang)}</small></div>
+                            <button className="press" disabled={mastery >= 3 || currentLevel < workshopNeeded} onClick={() => {
+                              const result = upgradeSpellMastery(profile.id, spell.id);
+                              if (result === "bought") { playSound("spell"); toast(copy.spellUpgraded, "magic"); }
+                              else if (result === "funds") toast(copy.needDew, "water");
+                            }}>{mastery >= 3 ? copy.max : currentLevel < workshopNeeded ? `${copy.workshop} ${workshopNeeded}` : <><AppIcon name="water" size={12} /> {cost}</>}</button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                </>
+              );
+            })()}
+
+            {activePanel === "orders" && (
+              <>
+                {buildingLevel(garden, "market") === 0 ? (
+                  <div className="farm-locked-feature"><AppIcon name="lock" size={27} /><b>{copy.marketRequired}</b><p>{copy.marketRequiredBody}</p><button className="btn btn-primary press" onClick={() => openBuilding("market")}>{copy.openFarm}</button></div>
+                ) : (
+                  <>
+                    <div className="stewardship-card">
+                      <div><small>{copy.ninetyDayJourney}</small><b>{garden.stewardshipDays.length}/90 {copy.days}</b></div>
+                      <span><i style={{ width: `${Math.min(100, garden.stewardshipDays.length / 90 * 100)}%` }} /></span>
+                      <p>{copy.stewardshipBody}</p>
+                      <div>{STEWARDSHIP_MILESTONES.map((milestone) => <em key={milestone.days} className={garden.stewardshipDays.length >= milestone.days ? "is-earned" : ""}>{milestone.days}</em>)}</div>
+                    </div>
+                    <p className="farm-order-cadence"><AppIcon name="timer" size={14} /> {copy.orderResetCadence}</p>
+                    <div className="farm-order-list">
+                      {garden.farmOrders.map((order) => {
+                        const ready = order.progress >= order.target;
+                        const rewards = farmOrderRewards(garden, order);
+                        return (
+                          <article key={order.id} className={`${ready ? "is-ready" : ""} ${order.claimed ? "is-claimed" : ""}`}>
+                            <span className="farm-order-icon"><AppIcon name={order.period === "weekly" ? "star" : "package"} size={22} /></span>
+                            <div><small>{order.period === "weekly" ? copy.weeklyPremium : copy.dailyOrder}</small><b>{farmOrderLabel(order, lang)}</b><p>{Math.min(order.progress, order.target)}/{order.target}</p><span><i style={{ width: `${Math.min(100, order.progress / order.target * 100)}%` }} /></span></div>
+                            <aside><em><AppIcon name="water" size={11} /> {rewards.dew}</em><em><AppIcon name="star" size={11} /> {rewards.xp}</em></aside>
+                            <button className="press" disabled={!ready || order.claimed} onClick={() => onClaimOrder(order)}>{order.claimed ? copy.delivered : ready ? copy.deliver : copy.inProgress}</button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    {buildingLevel(garden, "market") >= 2 && <button className="farm-reroll press" onClick={() => {
+                      const result = rerollFarmOrders(profile.id, today, level);
+                      if (result === "done") toast(copy.ordersRefreshed, "refresh");
+                      else if (result === "used") toast(copy.rerollBeforeProgress, "warning");
+                      else if (result === "funds") toast(copy.needDewForReroll, "warning");
+                    }}><AppIcon name="refresh" size={15} /> {copy.rerollOrders} · {(garden.orderRerolls[today] ?? 0) === 0 ? copy.free : "25 Dew"}</button>}
+                  </>
+                )}
               </>
             )}
 
@@ -842,6 +1363,53 @@ export default function GardenPage() {
       )}
 
       <Sheet
+        open={Boolean(pendingLayoutAction)}
+        onClose={() => setPendingLayoutAction(null)}
+        title={
+          <span className="icon-label">
+            <AppIcon name={pendingLayoutAction?.kind === "funds" ? "warning" : "save"} size={20} />
+            {pendingLayoutAction?.kind === "funds" ? copy.notEnoughDewTitle : copy.replaceLayoutTitle}
+          </span>
+        }
+      >
+        {pendingLayoutAction?.kind === "overwrite" && (
+          <div className="layout-confirm">
+            <p>{copy.replaceLayoutBody}</p>
+            <div className="layout-compare">
+              <article>
+                <span><b>{copy.savedLayout}</b><small>{pendingLayoutAction.saved.filter(Boolean).length} {copy.crops}</small></span>
+                <CropLayoutMini layout={pendingLayoutAction.saved} label={copy.savedLayout} lang={lang} />
+              </article>
+              <AppIcon name="next" size={22} />
+              <article>
+                <span><b>{copy.currentLayout}</b><small>{pendingLayoutAction.current.filter(Boolean).length} {copy.crops}</small></span>
+                <CropLayoutMini layout={pendingLayoutAction.current} label={copy.currentLayout} lang={lang} />
+              </article>
+            </div>
+            <div className="layout-confirm-actions">
+              <button className="btn press" onClick={() => setPendingLayoutAction(null)}>{copy.keepSavedLayout}</button>
+              <button className="btn btn-primary press" onClick={() => {
+                const slot = pendingLayoutAction.slot;
+                setPendingLayoutAction(null);
+                saveLayoutNow(slot);
+              }}><AppIcon name="save" size={16} /> {copy.replaceLayout}</button>
+            </div>
+          </div>
+        )}
+        {pendingLayoutAction?.kind === "funds" && (
+          <div className="layout-confirm is-funds">
+            <CropLayoutMini layout={pendingLayoutAction.saved} label={copy.savedLayout} lang={lang} />
+            <strong>{copy.needMoreDew.replace("{amount}", pendingLayoutAction.shortfall.toLocaleString())}</strong>
+            <p>{copy.replantCostBody
+              .replace("{count}", pendingLayoutAction.cropCount.toLocaleString())
+              .replace("{cost}", pendingLayoutAction.cost.toLocaleString())
+              .replace("{balance}", garden.dew.toLocaleString())}</p>
+            <button className="btn press w-full" onClick={() => setPendingLayoutAction(null)}>{copy.gotIt}</button>
+          </div>
+        )}
+      </Sheet>
+
+      <Sheet
         open={resourceGuide !== null}
         onClose={() => setResourceGuide(null)}
         title={
@@ -903,6 +1471,43 @@ export default function GardenPage() {
           </div>
         )}
       </Sheet>
+
+      <Sheet
+        open={Boolean(targetingSpell)}
+        onClose={() => setTargetingSpell(null)}
+        title={<span className="icon-label"><AppIcon name="magic" size={20} /> {copy.chooseSpellTargets}</span>}
+      >
+        {targetingSpell && (() => {
+          const limit = typeof targetingSpell.spell.targetCount === "number" ? targetingSpell.spell.targetCount : garden.plots.length;
+          const growing = garden.plots.filter((plot) => plot.variety && !isPlotReady(plot, now));
+          return (
+            <div className="spell-target-picker">
+              <p>{copy.chooseUpTo} {limit} {copy.crops}. {targetingSpell.plotIds.length}/{limit}</p>
+              <div>
+                {growing.map((plot) => {
+                  const variety = varietyById(plot.variety!);
+                  const selectedNow = targetingSpell.plotIds.includes(plot.id);
+                  return (
+                    <button key={plot.id} className={`press ${selectedNow ? "is-selected" : ""}`} onClick={() => setTargetingSpell((current) => {
+                      if (!current) return null;
+                      const included = current.plotIds.includes(plot.id);
+                      if (!included && current.plotIds.length >= limit) return current;
+                      return { ...current, plotIds: included ? current.plotIds.filter((id) => id !== plot.id) : [...current.plotIds, plot.id] };
+                    })}>
+                      <Image src={variety.image} alt="" width={45} height={45} /><span><b>{variety.name[lang]}</b><small>{copy.field} {plot.id + 1} · {formatDuration(cropRemainingMs(plot, now), lang)}</small></span><AppIcon name={selectedNow ? "checkCircle" : "goal"} size={19} />
+                    </button>
+                  );
+                })}
+              </div>
+              <button className="btn btn-primary press w-full" disabled={!targetingSpell.plotIds.length} onClick={() => {
+                const action = targetingSpell;
+                setTargetingSpell(null);
+                castSpellNow(action.spell, action.plotIds);
+              }}>{copy.castOnSelected}</button>
+            </div>
+          );
+        })()}
+      </Sheet>
     </main>
   );
 }
@@ -936,8 +1541,8 @@ function FarmResourceGuide({
           earnTitle: "收集露珠",
           earnBody: "收成成熟的瓜，並領取農場任務與成就獎勵。",
           useTitle: "用在農場",
-          useBody: "購買種子、解鎖更多田地，以及購買魔法咒語副本。",
-          note: "露珠會被花掉；收成作物可以賺回更多露珠，並同時獲得經驗。",
+          useBody: "升級農場建築、領養夥伴、精通咒語、購買種子與解鎖田地。",
+          note: "完整農場有超過 32,000 露珠的永久升級；訂單與收成能持續補充露珠。",
           done: "懂了",
         }
       : {
@@ -947,8 +1552,8 @@ function FarmResourceGuide({
           earnTitle: "Collect Dew",
           earnBody: "Harvest ripe melons and claim garden quests and achievement rewards.",
           useTitle: "Use it on the farm",
-          useBody: "Buy seeds, unlock more fields, and purchase magic spell copies.",
-          note: "Dew is spendable. Harvests earn more Dew back and also award XP.",
+          useBody: "Upgrade buildings, adopt companions, master spells, buy seeds, and unlock fields.",
+          note: "The full farm has over 32,000 Dew of permanent progression. Orders and harvests keep it flowing.",
           done: "Got it",
         }
     : lang === "zh"
@@ -959,7 +1564,7 @@ function FarmResourceGuide({
           earnTitle: "到處都能賺經驗",
           earnBody: "記錄食物、走路與站立、收成作物，以及領取農場獎勵。",
           useTitle: "升級解鎖",
-          useBody: "提升等級可以解鎖新種子、主題與升級獎勵。",
+          useBody: "提升等級可以解鎖建築階級、夥伴、咒語精通、新種子與主題。",
           note: "經驗不會被花掉；它會永久累積並推進下一個等級。",
           done: "懂了",
         }
@@ -970,7 +1575,7 @@ function FarmResourceGuide({
           earnTitle: "Earn XP everywhere",
           earnBody: "Log food, walk and stand, harvest crops, and claim garden rewards.",
           useTitle: "Level up to unlock",
-          useBody: "Higher levels unlock new seeds, themes, and level rewards.",
+          useBody: "Higher levels unlock building tiers, companions, spell mastery, seeds, and themes.",
           note: "XP is never spent. It permanently accumulates toward your next level.",
           done: "Got it",
         };
@@ -1041,6 +1646,22 @@ function FarmResourceGuide({
   );
 }
 
+function farmOrderLabel(order: FarmOrder, lang: "en" | "zh") {
+  const variety = order.variety ? varietyById(order.variety).name[lang] : "";
+  if (lang === "zh") {
+    if (order.kind === "harvest-variety") return `收成 ${order.target} 顆${variety}`;
+    if (order.kind === "harvest-long") return `收成 ${order.target} 顆長時作物`;
+    if (order.kind === "harvest-variety-mix") return `收成 ${order.target} 種不同的瓜`;
+    if (order.kind === "cast-spell") return `施放 ${order.target} 次咒語`;
+    return `收成 ${order.target} 顆瓜`;
+  }
+  if (order.kind === "harvest-variety") return `Harvest ${order.target} ${variety}`;
+  if (order.kind === "harvest-long") return `Harvest ${order.target} long-growing crops`;
+  if (order.kind === "harvest-variety-mix") return `Harvest ${order.target} different varieties`;
+  if (order.kind === "cast-spell") return `Cast ${order.target} garden spells`;
+  return `Harvest ${order.target} melons`;
+}
+
 function useGardenClock() {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -1079,7 +1700,102 @@ const COPY = {
     farmTools: "Farm tools",
     seedShop: "Seed shop",
     seeds: "Seeds",
+    farm: "Farm",
     orders: "Orders",
+    farmBuildings: "Farm buildings",
+    farmOrders: "Farm orders",
+    livingFarm: "Living farm",
+    marketBoard: "Market board",
+    buildAndGrow: "Build & grow",
+    buildingIntro: "Upgrade real landmarks with Dew. Every tier permanently changes how your farm plays.",
+    whatItDoes: "What it does",
+    howToUse: "How to use it",
+    currentEffect: "Current effect",
+    tier: "Tier",
+    unlockAt: "Unlock at",
+    levelShort: "Lv",
+    upgrade: "Upgrade",
+    unlock: "Unlock",
+    buildingUpgraded: "Building upgraded!",
+    higherLevelNeeded: "Reach the required player level first",
+    nextUpgrade: "Next upgrade",
+    fullyUpgraded: "Fully upgraded",
+    notBuiltYet: "Build the first tier to activate this landmark.",
+    waterCrops: "Water crops",
+    cropsWatered: "The well watered your growing crops!",
+    plantBeforeWatering: "Plant crops before using the well",
+    wellUsedToday: "The well has been used today",
+    onceDaily: "Ready once per day",
+    harvestAll: "Harvest all",
+    allReadyCrops: "Collect every ripe crop",
+    noReadyCrops: "No crops are ready yet",
+    harvested: "harvested",
+    saveLayout: "Save layout",
+    layout: "Layout",
+    layoutSaved: "Planting layout saved",
+    layoutPlanted: "Layout replanted",
+    saveLayoutFirst: "Save this layout before replanting",
+    currentPlanting: "Remember current crops",
+    savedLayout: "Saved layout",
+    currentLayout: "Current layout",
+    emptyLayoutSlot: "No layout saved",
+    cropsSaved: "crops saved",
+    replaceLayout: "Replace layout",
+    replaceLayoutTitle: "Replace saved layout?",
+    replaceLayoutBody: "This will permanently replace the saved crop pattern with your current farm layout.",
+    keepSavedLayout: "Keep saved layout",
+    notEnoughDewTitle: "Not enough Dew",
+    needMoreDew: "You need {amount} more Dew",
+    replantCostBody: "Replanting {count} empty plots costs {cost} Dew. Your current balance is {balance} Dew; nothing has been planted or charged.",
+    noEmptyPlotsForLayout: "No empty matching plots to replant",
+    gotIt: "Got it",
+    replantLayout: "Replant layout",
+    openOrders: "Open farm orders",
+    companionLodge: "Companion Lodge",
+    companionIntro: "Adopt profile-preset friends with Dew, then tap an owned companion to switch your active farm ability.",
+    companionAdopted: "New companion adopted!",
+    companionActive: "Active companion switched",
+    tapToOpenFarmhouse: "Tap to open the Farmhouse",
+    buildFarmhouseFirst: "Build the Farmhouse first",
+    secondSlotLocked: "Farmhouse Tier 3 unlocks a helper slot",
+    active: "Active",
+    helper: "Helper",
+    choose: "Choose",
+    slotTwo: "Slot 2",
+    adopt: "Adopt",
+    spellMastery: "Spell mastery",
+    mastery: "Mastery",
+    crops: "crops",
+    spellUpgraded: "Spell mastery upgraded!",
+    chooseSpellTargets: "Choose spell targets",
+    chooseUpTo: "Choose up to",
+    field: "Field",
+    castOnSelected: "Cast on selected crops",
+    max: "MAX",
+    workshop: "Workshop",
+    expandFarm: "Expand fields",
+    marketRequired: "Build the Market Board",
+    marketRequiredBody: "Farm orders unlock at Level 2 after purchasing Market Tier 1.",
+    openFarm: "Open farm buildings",
+    ninetyDayJourney: "FARM STEWARDSHIP",
+    days: "days",
+    stewardshipBody: "Complete every daily order to mark a stewardship day. Milestone rewards continue through Day 90.",
+    weeklyPremium: "Weekly premium",
+    dailyOrder: "Daily order",
+    delivered: "Delivered",
+    deliver: "Deliver",
+    inProgress: "In progress",
+    orderDelivered: "Order delivered!",
+    rerollOrders: "Reroll daily orders",
+    ordersRefreshed: "Daily orders refreshed",
+    rerollBeforeProgress: "Reroll before making progress on today's orders",
+    needDewForReroll: "You need 25 Dew to refresh these orders",
+    orderResetCadence: "Daily orders reset each day. Weekly Premium progress stays until the week changes.",
+    free: "FREE",
+    sitting: "sitting",
+    walking: "walking around",
+    standing: "standing",
+    napping: "napping",
     spells: "Spells",
     available: "available",
     magicSpells: "Magic spells",
@@ -1166,7 +1882,102 @@ const COPY = {
     farmTools: "農場工具",
     seedShop: "種子商店",
     seeds: "種子",
+    farm: "農場",
     orders: "任務",
+    farmBuildings: "農場建築",
+    farmOrders: "農場訂單",
+    livingFarm: "活力農場",
+    marketBoard: "市集看板",
+    buildAndGrow: "建造與成長",
+    buildingIntro: "使用露珠升級地圖上的建築；每一階都會永久改變農場玩法。",
+    whatItDoes: "建築功能",
+    howToUse: "使用方式",
+    currentEffect: "目前效果",
+    tier: "階",
+    unlockAt: "解鎖於",
+    levelShort: "等級",
+    upgrade: "升級",
+    unlock: "解鎖",
+    buildingUpgraded: "建築升級成功！",
+    higherLevelNeeded: "請先達到所需玩家等級",
+    nextUpgrade: "下一階",
+    fullyUpgraded: "已完全升級",
+    notBuiltYet: "建造第一階即可啟用這個地標。",
+    waterCrops: "為作物澆水",
+    cropsWatered: "石井已為生長中的作物澆水！",
+    plantBeforeWatering: "請先種下作物再使用石井",
+    wellUsedToday: "今天已使用過石井",
+    onceDaily: "每天可使用一次",
+    harvestAll: "一鍵收成",
+    allReadyCrops: "收成所有成熟作物",
+    noReadyCrops: "目前沒有成熟的作物",
+    harvested: "顆已收成",
+    saveLayout: "儲存配置",
+    layout: "配置",
+    layoutSaved: "種植配置已儲存",
+    layoutPlanted: "已依配置補種",
+    saveLayoutFirst: "請先儲存這個配置",
+    currentPlanting: "記住目前作物",
+    savedLayout: "已儲存配置",
+    currentLayout: "目前配置",
+    emptyLayoutSlot: "尚未儲存配置",
+    cropsSaved: "株作物已儲存",
+    replaceLayout: "取代配置",
+    replaceLayoutTitle: "要取代已儲存配置嗎？",
+    replaceLayoutBody: "這會以目前農場配置永久取代已儲存的作物排列。",
+    keepSavedLayout: "保留已儲存配置",
+    notEnoughDewTitle: "露珠不足",
+    needMoreDew: "還需要 {amount} 露珠",
+    replantCostBody: "在 {count} 塊空田補種需要 {cost} 露珠。你目前有 {balance} 露珠；尚未種植，也不會扣款。",
+    noEmptyPlotsForLayout: "沒有符合配置的空田可補種",
+    gotIt: "知道了",
+    replantLayout: "一鍵補種",
+    openOrders: "開啟農場訂單",
+    companionLodge: "夥伴小屋",
+    companionIntro: "用露珠領養個人頭像角色，再點選已擁有的夥伴來切換農場能力。",
+    companionAdopted: "新夥伴已領養！",
+    companionActive: "已切換目前夥伴",
+    tapToOpenFarmhouse: "點擊開啟農舍",
+    buildFarmhouseFirst: "請先建造農舍",
+    secondSlotLocked: "農舍第三階會解鎖助手位置",
+    active: "使用中",
+    helper: "助手",
+    choose: "選擇",
+    slotTwo: "位置 2",
+    adopt: "領養",
+    spellMastery: "咒語精通",
+    mastery: "精通",
+    crops: "株作物",
+    spellUpgraded: "咒語精通升級！",
+    chooseSpellTargets: "選擇咒語目標",
+    chooseUpTo: "最多選擇",
+    field: "田地",
+    castOnSelected: "對所選作物施法",
+    max: "最高",
+    workshop: "工坊",
+    expandFarm: "擴建田地",
+    marketRequired: "建造市集看板",
+    marketRequiredBody: "達到等級 2 並購買市集第一階後即可開放農場訂單。",
+    openFarm: "開啟農場建築",
+    ninetyDayJourney: "90 天農場旅程",
+    days: "天",
+    stewardshipBody: "完成當天所有訂單即可記錄一天；里程碑獎勵會一路延續到第 90 天。",
+    weeklyPremium: "高級每週訂單",
+    dailyOrder: "每日訂單",
+    delivered: "已交付",
+    deliver: "交付",
+    inProgress: "進行中",
+    orderDelivered: "訂單已交付！",
+    rerollOrders: "刷新每日訂單",
+    ordersRefreshed: "每日訂單已刷新",
+    rerollBeforeProgress: "請在今天的訂單開始累積進度前刷新",
+    needDewForReroll: "需要 25 露珠才能刷新這些訂單",
+    orderResetCadence: "每日訂單每天重設；每週高級訂單的進度會保留到下週。",
+    free: "免費",
+    sitting: "坐著休息",
+    walking: "巡邏中",
+    standing: "站著發呆",
+    napping: "睡午覺",
     spells: "魔法",
     available: "可用",
     magicSpells: "魔法咒語",

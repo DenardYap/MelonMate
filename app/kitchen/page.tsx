@@ -6,23 +6,26 @@ import { CAT_LABEL, CAT_ORDER, MEAL_ORDER, translate, type DictKey } from "@/lib
 import { addDays, fmtDate, todayStr, weekDates, weekdayLabel } from "@/lib/dates";
 import { fmtNum, mulMacros } from "@/lib/nutrition";
 import { defaultMealByTime } from "@/lib/voice";
-import { EmptyState, GlassCard, Segmented, Sheet, Stepper, toast } from "@/components/ui";
+import { DecimalInput, EmptyState, GlassCard, Segmented, Sheet, Stepper, toast } from "@/components/ui";
 import { AppIcon, FoodGlyph, MealGlyph, SavedFoodGlyph, SELECTABLE_ICONS } from "@/components/icons";
 import type { GroceryItem, Ingredient, MealSlot, Recipe, RecipeCat } from "@/lib/types";
 import { recommendRecipes, selectedRecipesForProfile } from "@/lib/onboarding";
 import { mealPlanMealCount, type MealPlanApplyMode } from "@/lib/mealPlans";
 import { filterRecipes, paginateRecipes } from "@/lib/recipeDiscovery";
-import { syncNow } from "@/lib/sync";
 import { restrictionsFromProfile } from "@/lib/ingredientRestrictions";
 import { IngredientRestrictionEditor } from "@/components/IngredientRestrictionEditor";
 import { caloriesFromMacros, nutritionBasis, nutritionUnitLabel } from "@/lib/customRecipes";
 
-type Tab = "recipes" | "planner" | "groceries";
+type Tab = "recipes" | "planner" | "groceries" | "shared";
 
 export default function KitchenPage() {
   const lang = useStore((s) => s.lang);
   const t = (k: DictKey) => translate(k, lang);
   const [tab, setTab] = useState<Tab>("recipes");
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "shared") setTab("shared");
+  }, []);
 
   return (
     <main className="page">
@@ -40,12 +43,118 @@ export default function KitchenPage() {
           { value: "recipes", label: t("recipes") },
           { value: "planner", label: lang === "zh" ? "餐點計畫" : "Meal plan" },
           { value: "groceries", label: lang === "zh" ? "食材" : "Ingredients" },
+          { value: "shared", label: lang === "zh" ? "朋友" : "Friends" },
         ]}
       />
       {tab === "recipes" && <RecipesTab />}
       {tab === "planner" && <PlannerTab onBuiltList={() => setTab("groceries")} />}
       {tab === "groceries" && <GroceriesTab />}
+      {tab === "shared" && <SharedRecipesTab />}
     </main>
+  );
+}
+
+function SharedRecipesTab() {
+  const lang = useStore((state) => state.lang);
+  const friendsById = useStore((state) => state.friends);
+  const importFriendRecipe = useStore((state) => state.importFriendRecipe);
+  const markRead = useStore((state) => state.markFriendNotificationsRead);
+  const [selected, setSelected] = useState<{ friendId: string; friendName: string; recipe: Recipe } | null>(null);
+  const [focusFriendId, setFocusFriendId] = useState("");
+
+  useEffect(() => {
+    setFocusFriendId(new URLSearchParams(window.location.search).get("friend") ?? "");
+    markRead("recipe");
+  }, [markRead]);
+
+  const shared = useMemo(() => Object.values(friendsById)
+    .flatMap((friend) => (friend.sharedRecipes ?? []).map((recipe) => ({
+      friendId: friend.id,
+      friendName: friend.name,
+      friendEmoji: friend.emoji,
+      recipe,
+    })))
+    .sort((left, right) => Number(right.friendId === focusFriendId) - Number(left.friendId === focusFriendId)),
+  [focusFriendId, friendsById]);
+
+  const save = (friendId: string, recipe: Recipe) => {
+    importFriendRecipe(friendId, recipe);
+    toast(lang === "zh" ? "已儲存可編輯的食譜副本" : "Saved an editable recipe copy", "save");
+  };
+
+  return (
+    <div className="a-fadeUp">
+      <div className="mb-3">
+        <div className="t-section icon-label"><AppIcon name="friends" size={18} />{lang === "zh" ? "朋友的食譜" : "Friends’ recipes"}</div>
+        <div className="t-cap mt-1">{lang === "zh" ? "朋友儲存的食譜會自動顯示在這裡。" : "Recipes saved by your friends appear here automatically."}</div>
+      </div>
+      {shared.length ? (
+        <div className="grid grid-cols-2 gap-3">
+          {shared.map((item) => (
+            <GlassCard
+              key={`${item.friendId}-${item.recipe.id}`}
+              className={item.friendId === focusFriendId ? "recipe-card shared-friend-highlight" : "recipe-card"}
+              onClick={() => setSelected({ friendId: item.friendId, friendName: item.friendName, recipe: item.recipe })}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <SavedFoodGlyph icon={item.recipe.custom ? item.recipe.emoji : undefined} category={item.recipe.cat} size={18} compact />
+                <span className="t-cap truncate">{item.friendEmoji} {item.friendName}</span>
+              </div>
+              <div className="recipe-card-title font-bold mt-2">{item.recipe.name[lang] || item.recipe.name.en}</div>
+              <div className="recipe-card-meta t-cap tabular">
+                <span>{fmtNum(item.recipe.perServing.cal)} cal</span>
+                <span>P {fmtNum(item.recipe.perServing.protein)}g</span>
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      ) : (
+        <GlassCard>
+          <EmptyState
+            icon="friends"
+            title={lang === "zh" ? "還沒有朋友食譜" : "No friend recipes yet"}
+            hint={lang === "zh" ? "朋友儲存食譜並同步後，就會出現在這裡。" : "Recipes appear after a friend saves one and syncs."}
+          />
+        </GlassCard>
+      )}
+
+      <Sheet
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        title={selected ? <span className="icon-label"><FoodGlyph category={selected.recipe.cat} size={18} compact />{selected.recipe.name[lang] || selected.recipe.name.en}</span> : undefined}
+      >
+        {selected && (
+          <div className="flex flex-col gap-4 pb-2">
+            <div className="chip self-start icon-label"><AppIcon name="friends" size={14} />{lang === "zh" ? `來自 ${selected.friendName}` : `From ${selected.friendName}`}</div>
+            <div className="t-sub tabular">
+              {fmtNum(selected.recipe.perServing.cal)} cal · P {fmtNum(selected.recipe.perServing.protein)}g · C {fmtNum(selected.recipe.perServing.carbs)}g · F {fmtNum(selected.recipe.perServing.fat)}g
+            </div>
+            <div>
+              <div className="t-section mb-2">{lang === "zh" ? "食材" : "Ingredients"}</div>
+              <div className="glass glass-sm px-4 py-1">
+                {selected.recipe.ingredients.map((ingredient, index) => (
+                  <div className="row" key={`${ingredient.name.en}-${index}`}>
+                    <span className="flex-1">{ingredient.name[lang] || ingredient.name.en}</span>
+                    <span className="t-sub">{ingredient.amount[lang] || ingredient.amount.en}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {selected.recipe.steps?.length ? (
+              <div>
+                <div className="t-section mb-2">{lang === "zh" ? "作法" : "Method"}</div>
+                <ol className="recipe-steps glass glass-sm">
+                  {selected.recipe.steps.map((step, index) => <li key={`${step.en}-${index}`}>{step[lang] || step.en}</li>)}
+                </ol>
+              </div>
+            ) : null}
+            <button className="btn btn-primary press w-full" onClick={() => save(selected.friendId, selected.recipe)}>
+              <AppIcon name="save" size={17} />{lang === "zh" ? "儲存到我的食譜" : "Save to my recipes"}
+            </button>
+          </div>
+        )}
+      </Sheet>
+    </div>
   );
 }
 
@@ -382,21 +491,15 @@ function RecipeDetailSheet({
   const addGroceriesBulk = useStore((s) => s.addGroceriesBulk);
   const planMeal = useStore((s) => s.planMeal);
   const unselectRecipe = useStore((s) => s.unselectRecipe);
-  const friendsById = useStore((s) => s.friends);
-  const friendSharing = useStore((s) => s.friendSharing);
-  const toggleFriendSharedRecipe = useStore((s) => s.toggleFriendSharedRecipe);
   const t = (k: DictKey) => translate(k, lang);
-  const friends = useMemo(() => Object.values(friendsById), [friendsById]);
 
   const [planPick, setPlanPick] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [cookCount, setCookCount] = useState(1);
   const [cookSlot, setCookSlot] = useState<MealSlot>(defaultMealByTime());
 
   if (!recipe) return null;
   const r = recipe;
   const basis = nutritionBasis(r);
-  const sharedCount = friends.filter((friend) => friendSharing[friend.id]?.sharedRecipeIds.includes(r.id)).length;
 
   const cook = () => {
     const xp = addLog({
@@ -491,18 +594,6 @@ function RecipeDetailSheet({
               <span className="icon-label"><AppIcon name="shopping" size={17} /> {t("groceries")}</span>
             </button>
           </div>
-          <button
-            className={`btn press ${sharedCount ? "chip-on" : ""}`}
-            onClick={() => {
-              if (!friends.length) {
-                toast(lang === "zh" ? "請先在「我」加入朋友" : "Add a friend from Me first", "friends");
-                return;
-              }
-              setShareOpen(true);
-            }}
-          >
-            <span className="icon-label"><AppIcon name="upload" size={17} /> {lang === "zh" ? "分享給朋友" : "Share with friends"}{sharedCount ? ` · ${sharedCount}` : ""}</span>
-          </button>
           <button className="btn btn-ghost press" onClick={() => onEdit(r)}>
             <span className="icon-label"><AppIcon name="edit" size={17} /> {t("edit")}</span>
           </button>
@@ -531,30 +622,6 @@ function RecipeDetailSheet({
           onClose={() => setPlanPick(false)}
         />
       )}
-    </Sheet>
-    <Sheet open={shareOpen} onClose={() => setShareOpen(false)} title={<span className="icon-label"><AppIcon name="friends" size={19} /> {lang === "zh" ? "選擇朋友" : "Choose friends"}</span>}>
-      <div className="t-sub mb-3">{lang === "zh" ? "只有你選擇的朋友能在你的個人檔案中看到此食譜。" : "Only selected friends will see this recipe from your profile."}</div>
-      <div className="glass glass-sm px-3 py-1">
-        {friends.map((friend) => {
-          const checked = Boolean(friendSharing[friend.id]?.sharedRecipeIds.includes(r.id));
-          return (
-            <button
-              key={friend.id}
-              className="friend-share-row press"
-              role="switch"
-              aria-checked={checked}
-              onClick={() => {
-                toggleFriendSharedRecipe(friend.id, r.id);
-                void syncNow();
-              }}
-            >
-              <span className="profile-icon"><AppIcon name="user" size={18} /></span>
-              <span className="min-w-0 flex-1"><b>{friend.name}</b><small>{lang === "zh" ? `等級 ${friend.level}` : `Level ${friend.level}`}</small></span>
-              <span className={`friend-share-switch ${checked ? "is-on" : ""}`} aria-hidden="true"><i /></span>
-            </button>
-          );
-        })}
-      </div>
     </Sheet>
     </>
   );
@@ -758,7 +825,7 @@ function RecipeFormSheet({
           </div>
           <div>
             <div className="t-cap mb-1">{t("servings")}</div>
-            <input className="field" inputMode="numeric" value={form.servings} onChange={(e) => setF({ servings: Number(e.target.value) || 1 })} />
+            <DecimalInput className="field" min={0.01} value={form.servings} onChange={(servings) => setF({ servings })} ariaLabel={t("servings")} />
           </div>
         </div>
 

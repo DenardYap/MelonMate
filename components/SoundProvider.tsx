@@ -12,6 +12,9 @@ import {
   type SoundEffect,
   type SoundPreferences,
 } from "@/lib/soundscape";
+import { levelFromXp } from "@/lib/game";
+import { getMusicPack, isMusicPackUnlocked } from "@/lib/musicPacks";
+import { useGame } from "@/lib/store";
 
 interface SoundContextValue {
   preferences: SoundPreferences;
@@ -38,12 +41,22 @@ const SOUND_EFFECTS = new Set<SoundEffect>([
 
 export default function SoundProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState(DEFAULT_SOUND_PREFERENCES);
+  const level = levelFromXp(useGame().xp);
 
   useEffect(() => {
     const saved = readSoundPreferences();
     setPreferences(saved);
     saveSoundPreferences(saved);
   }, []);
+
+  useEffect(() => {
+    if (isMusicPackUnlocked(getMusicPack(preferences.musicPackId), level)) return;
+    setPreferences((current) => {
+      const next = { ...current, musicPackId: DEFAULT_SOUND_PREFERENCES.musicPackId };
+      saveSoundPreferences(next);
+      return next;
+    });
+  }, [level, preferences.musicPackId]);
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {

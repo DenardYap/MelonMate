@@ -3,6 +3,13 @@ import type { Plugin } from "@capacitor/core";
 export interface DailyActivityResult {
   steps: number;
   standMinutes: number;
+  workouts: {
+    id: string;
+    activityType: string;
+    durationMinutes: number;
+    activeCalories: number;
+    startedAt: number;
+  }[];
 }
 
 export interface MelonMateHealthPlugin extends Plugin {

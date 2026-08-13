@@ -1,8 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
-  <title id="title">Melon Unicorn</title><desc id="desc">A pastel unicorn floating on a melon-colored cloud.</desc>
-  <rect width="256" height="256" rx="56" fill="#EAE7F8"/><path d="m36 45 4 11 11 4-11 4-4 11-4-11-11-4 11-4zM211 78l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" fill="#FFF3AA"/>
-  <path d="M61 141c0-52 29-90 70-90 39 0 67 32 70 77 31 8 42 36 28 58-13 20-42 21-61 7-15 25-52 34-79 17-20 14-52 9-62-15-9-23 5-47 34-54z" fill="#F9F5EA" stroke="#514B60" stroke-width="8" stroke-linejoin="round"/>
-  <path d="m125 63 24-53 16 60" fill="#F2CE64" stroke="#514B60" stroke-width="7" stroke-linejoin="round"/><path d="M76 105c20-34 48-50 82-48-2 28-16 48-42 60" fill="#C4A9E8" stroke="#514B60" stroke-width="8" stroke-linecap="round"/>
-  <path d="M83 94c14 8 28 14 43 17M101 74c13 8 27 14 41 17" fill="none" stroke="#F29EA5" stroke-width="7" stroke-linecap="round"/><circle cx="133" cy="131" r="8" fill="#423D4B"/><path d="M145 151c10 8 20 8 29 0" fill="none" stroke="#423D4B" stroke-width="6" stroke-linecap="round"/><ellipse cx="118" cy="152" rx="12" ry="7" fill="#F1A7B2" opacity=".7"/>
-  <path d="M54 199c14-28 42-32 61-12 18-25 52-24 68 2 16-13 39-8 45 10-16 20-55 31-93 30-38 0-68-10-81-30z" fill="#CFE7B2"/>
+  <title id="title">Melon Unicorn</title>
+  <desc id="desc">A friendly pastel unicorn resting on a melon-colored cloud.</desc>
+  <rect width="256" height="256" rx="56" fill="#EAE7F8"/>
+  <path d="m35 47 4 11 11 4-11 4-4 11-4-11-11-4 11-4zM216 78l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" fill="#FFF2A8"/>
+
+  <path d="M92 91 75 59c-4-8 1-16 10-15 19 3 30 18 31 39z" fill="#F9F5EA" stroke="#514B60" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M164 91l17-32c4-8-1-16-10-15-19 3-30 18-31 39z" fill="#F9F5EA" stroke="#514B60" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m87 61 10 20-15-9zM169 61l-10 20 15-9z" fill="#F1B3C8"/>
+  <path d="m128 76 18-61 20 61z" fill="#F2CE64" stroke="#514B60" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m134 55 22-10M139 36l21-9" fill="none" stroke="#C4A9E8" stroke-width="7" stroke-linecap="round"/>
+
+  <ellipse cx="128" cy="137" rx="68" ry="72" fill="#F9F5EA" stroke="#514B60" stroke-width="8"/>
+  <path d="M75 108c8-31 27-49 51-47-1 28-14 47-39 59 8 9 13 21 14 36-24-7-37-24-26-48z" fill="#C4A9E8" stroke="#514B60" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M81 91c12 7 23 11 34 13M76 111c9 5 18 8 27 10" fill="none" stroke="#F19CB2" stroke-width="7" stroke-linecap="round"/>
+
+  <ellipse cx="110" cy="132" rx="7" ry="9" fill="#423D4B"/>
+  <ellipse cx="154" cy="132" rx="7" ry="9" fill="#423D4B"/>
+  <circle cx="108" cy="129" r="2.5" fill="#FFF"/>
+  <circle cx="152" cy="129" r="2.5" fill="#FFF"/>
+  <ellipse cx="132" cy="162" rx="35" ry="25" fill="#F2E6D3"/>
+  <ellipse cx="120" cy="158" rx="3.5" ry="4.5" fill="#756A72"/>
+  <ellipse cx="144" cy="158" rx="3.5" ry="4.5" fill="#756A72"/>
+  <path d="M132 164v5M132 169c-8 8-17 8-24 1M132 169c8 8 17 8 24 1" fill="none" stroke="#423D4B" stroke-width="4.5" stroke-linecap="round"/>
+  <ellipse cx="88" cy="153" rx="12" ry="7" fill="#F1A7B2" opacity=".65"/>
+  <ellipse cx="176" cy="153" rx="12" ry="7" fill="#F1A7B2" opacity=".65"/>
+
+  <path d="M38 215c5-22 29-31 47-18 9-22 37-27 53-10 18-19 50-12 55 12 21-7 40 5 40 25-27 10-59 15-96 15-38 0-70-8-99-24z" fill="#B9D98E" stroke="#514B60" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M57 219c24 7 48 11 72 11M158 228c20-1 38-4 55-9" fill="none" stroke="#E8F2B9" stroke-width="7" stroke-linecap="round"/>
 </svg>

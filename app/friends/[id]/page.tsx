@@ -1,17 +1,18 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AppIcon, FoodGlyph, MealGlyph } from "@/components/icons";
+import { AppIcon, FoodGlyph, MealGlyph, iconFromLegacy } from "@/components/icons";
 import ProfileAvatar from "@/components/ProfileAvatar";
 import { GlassCard, Segmented, Sheet, toast } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { cropProgress, cropStageImage, cropVisualStage, varietyById } from "@/lib/garden";
+import { GARDEN_ACHIEVEMENT_DEFINITIONS } from "@/lib/gardenAchievements";
 import { fmtNum } from "@/lib/nutrition";
 import { useStore } from "@/lib/store";
-import { syncNow } from "@/lib/sync";
-import type { Lang, MealSlot, MemberSnapshot, Recipe } from "@/lib/types";
+import { THEME_VISUALS } from "@/lib/themes";
+import type { Lang, LogEntry, MealSlot, MemberSnapshot, Recipe, ThemeId } from "@/lib/types";
 
 type FriendTab = "overview" | "meals" | "training" | "farm";
 const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
@@ -23,7 +24,7 @@ const COPY = {
     meals: "Meals",
     training: "Training",
     farm: "Farm",
-    sharedView: "Shared view",
+    sharedView: "Friend activity",
     updated: "Updated",
     level: "Level",
     nextLevel: "to next level",
@@ -31,16 +32,26 @@ const COPY = {
     best: "Best streak",
     harvests: "Harvests",
     workouts: "Workouts",
+    appleHealth: "Apple Health",
+    steps: "Steps",
+    stand: "Stand minutes",
+    healthWorkouts: "Health workouts",
+    noHealth: "No Apple Health activity has been synced yet.",
+    badges: "Badges",
+    noBadges: "No badges earned yet.",
+    activeTheme: "Active theme",
+    recentFoods: "Recently logged foods",
+    noFoodLogs: "No food logs are available yet.",
     today: "Today",
     calories: "Calories",
     protein: "Protein",
     consistency: "Last seven days",
     recentTraining: "Recent training",
-    noRecentTraining: "No completed workouts shared yet.",
+    noRecentTraining: "No completed workouts yet.",
     mealPlan: "Upcoming meal plan",
     noMeals: "No meals are planned for the next seven days.",
-    noSharedMeals: "No meal plan or recipes are being shared right now.",
-    sharedRecipes: "Recipes shared with you",
+    noSharedMeals: "No meal plan or saved recipes yet.",
+    sharedRecipes: "Saved recipes",
     saveRecipe: "Save to my recipes",
     recipeSaved: "Recipe saved to your Meal page",
     addMealPlan: "Add to my meal plan",
@@ -56,7 +67,7 @@ const COPY = {
     method: "Method",
     perServing: "Per serving",
     activePlan: "Active workout plan",
-    noWorkoutPlan: "No active workout plan is shared yet.",
+    noWorkoutPlan: "No active workout plan yet.",
     useWorkoutPlan: "Use this workout plan",
     workoutPlanSaved: "Workout plan copied and selected",
     completed: "Completed",
@@ -76,7 +87,6 @@ const COPY = {
     missing: "Friend not found",
     missingHint: "Refresh the Friends screen or ask them to join your circle again.",
     backFriends: "Back to friends",
-    privateNote: "Only items your friend chose to share can be copied. Their food logs, set-by-set workout history, weight, and water remain private.",
   },
   zh: {
     profile: "朋友檔案",
@@ -84,7 +94,7 @@ const COPY = {
     meals: "餐點",
     training: "訓練",
     farm: "農場",
-    sharedView: "分享內容",
+    sharedView: "朋友動態",
     updated: "更新於",
     level: "等級",
     nextLevel: "升級所需",
@@ -92,16 +102,26 @@ const COPY = {
     best: "最佳連勝",
     harvests: "收成",
     workouts: "訓練次數",
+    appleHealth: "Apple 健康",
+    steps: "步數",
+    stand: "站立分鐘",
+    healthWorkouts: "健康訓練",
+    noHealth: "尚未同步 Apple 健康活動。",
+    badges: "徽章",
+    noBadges: "尚未獲得徽章。",
+    activeTheme: "目前主題",
+    recentFoods: "最近飲食記錄",
+    noFoodLogs: "尚無飲食記錄。",
     today: "今天",
     calories: "熱量",
     protein: "蛋白質",
     consistency: "近七天",
     recentTraining: "最近訓練",
-    noRecentTraining: "尚未分享已完成的訓練。",
+    noRecentTraining: "尚無已完成的訓練。",
     mealPlan: "未來餐點計畫",
     noMeals: "未來七天尚未安排餐點。",
-    noSharedMeals: "目前沒有分享餐點計畫或食譜。",
-    sharedRecipes: "分享給你的食譜",
+    noSharedMeals: "目前沒有餐點計畫或已儲存食譜。",
+    sharedRecipes: "已儲存食譜",
     saveRecipe: "儲存到我的食譜",
     recipeSaved: "食譜已儲存到「餐點」頁",
     addMealPlan: "加入我的餐點計畫",
@@ -117,7 +137,7 @@ const COPY = {
     method: "作法",
     perServing: "每份",
     activePlan: "目前訓練計畫",
-    noWorkoutPlan: "尚未分享目前的訓練計畫。",
+    noWorkoutPlan: "目前沒有使用中的訓練計畫。",
     useWorkoutPlan: "使用此訓練計畫",
     workoutPlanSaved: "訓練計畫已複製並選用",
     completed: "已完成",
@@ -137,7 +157,6 @@ const COPY = {
     missing: "找不到朋友",
     missingHint: "請回到朋友頁重新整理，或請對方再次加入你的朋友連線。",
     backFriends: "回到朋友",
-    privateNote: "你只能複製朋友選擇分享的內容。對方的飲食明細、每組訓練記錄、體重與飲水仍保持私人。",
   },
 } as const;
 
@@ -199,11 +218,6 @@ export function FriendProfile({ friendId }: { friendId: string }) {
       {tab === "meals" && <MealsTab friend={friend} lang={lang} />}
       {tab === "training" && <TrainingTab friend={friend} lang={lang} />}
       {tab === "farm" && <FarmTab friend={friend} lang={lang} />}
-
-      <div className="friend-private-note icon-label">
-        <AppIcon name="lock" size={15} />
-        <span>{copy.privateNote}</span>
-      </div>
     </main>
   );
 }
@@ -248,6 +262,10 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
   const calProgress = friend.today.calGoal > 0 ? friend.today.cal / friend.today.calGoal : 0;
   const proteinProgress = friend.today.proteinGoal > 0 ? friend.today.protein / friend.today.proteinGoal : 0;
   const recent = friend.workouts?.recent ?? (friend.lastWorkout ? [friend.lastWorkout] : []);
+  const activeTheme = friend.theme ?? "honeydew";
+  const health = friend.health?.[0];
+  const earnedBadgeIds = new Set(friend.badges ?? []);
+  const badges = GARDEN_ACHIEVEMENT_DEFINITIONS.filter((badge) => earnedBadgeIds.has(badge.id));
 
   return (
     <div className="a-fadeUp">
@@ -258,7 +276,54 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
         <MiniStat icon="gym" label={copy.workouts} value={friend.workouts?.completed ?? (friend.lastWorkout ? 1 : 0)} />
       </div>
 
-      <FriendSharingPanel friend={friend} lang={lang} />
+      <div className="friend-social-showcase mb-4">
+        <GlassCard className="friend-theme-card">
+          <span className={`theme-fruit theme-fruit-${activeTheme}`} aria-hidden="true" />
+          <div className="min-w-0">
+            <small>{copy.activeTheme}</small>
+            <b>{themeName(activeTheme, lang)}</b>
+            <span className="friend-theme-swatches" aria-hidden="true">
+              {THEME_VISUALS[activeTheme].colors.map((color) => <i key={color} style={{ background: color }} />)}
+            </span>
+          </div>
+        </GlassCard>
+        <GlassCard className="friend-badge-summary">
+          <AppIcon name="medal" size={25} />
+          <div><small>{copy.badges}</small><b>{badges.length}</b></div>
+        </GlassCard>
+      </div>
+
+      <SectionTitle icon="heart" text={copy.appleHealth} />
+      {health ? (
+        <>
+          <div className="friend-health-grid mb-3">
+            <MiniStat icon="heart" label={copy.steps} value={fmtNum(health.steps)} />
+            <MiniStat icon="timer" label={copy.stand} value={fmtNum(health.standMinutes)} />
+            <MiniStat icon="gym" label={copy.healthWorkouts} value={health.workouts?.length ?? 0} />
+          </div>
+          <GlassCard className="friend-health-history mb-4">
+            {(friend.health ?? []).map((day) => (
+              <div key={day.date}>
+                <span><b>{fmtDate(day.date, lang)}</b><small>{fmtNum(day.steps)} {copy.steps.toLocaleLowerCase()}</small></span>
+                <span><b>{fmtNum(day.standMinutes)} min</b><small>{day.workouts?.length ?? 0} {copy.healthWorkouts.toLocaleLowerCase()}</small></span>
+              </div>
+            ))}
+          </GlassCard>
+        </>
+      ) : <GlassCard className="friend-empty-copy mb-4">{copy.noHealth}</GlassCard>}
+
+      <SectionTitle icon="medal" text={copy.badges} />
+      {badges.length ? (
+        <div className="friend-badge-grid mb-4">
+          {badges.map((badge) => (
+            <GlassCard className={`friend-badge-card tone-${badge.tone}`} key={badge.id}>
+              <span><AppIcon name={badge.icon} size={21} /></span>
+              <b>{badge.name[lang]}</b>
+              <small>{badge.description[lang]}</small>
+            </GlassCard>
+          ))}
+        </div>
+      ) : <GlassCard className="friend-empty-copy mb-4">{copy.noBadges}</GlassCard>}
 
       <SectionTitle icon="goal" text={copy.today} />
       <GlassCard className="p-4 mb-4">
@@ -287,133 +352,13 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
               <div className="t-cap">{fmtDate(workout.date, lang)}</div>
             </div>
             <div className="t-cap tabular text-right">
-              {fmtNum(workout.volume)} {friend.workouts?.unit ?? ""}
+              {fmtNum(workout.volume)} {friend.workouts?.unit ?? ""}·{copy.sets === "sets" ? "reps" : "下"}
               {workout.prs > 0 && <span className="icon-label justify-end"><AppIcon name="medal" size={13} /> {workout.prs}</span>}
             </div>
           </div>
         )) : <div className="friend-empty-copy">{copy.noRecentTraining}</div>}
       </GlassCard>
     </div>
-  );
-}
-
-function FriendSharingPanel({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
-  const settings = useStore((state) => state.friendSharing[friend.id]) ?? {
-    shareMealPlan: false,
-    shareWorkoutPlan: false,
-    sharedRecipeIds: [],
-  };
-  const recipes = useStore((state) => state.recipes);
-  const profile = useStore((state) => state.profiles.find((item) => item.id === state.activeProfileId));
-  const updateFriendSharing = useStore((state) => state.updateFriendSharing);
-  const toggleFriendSharedRecipe = useStore((state) => state.toggleFriendSharedRecipe);
-  const [recipesOpen, setRecipesOpen] = useState(false);
-  const selectedRecipeIds = new Set(profile?.selectedRecipeIds ?? []);
-  const shareableRecipes = recipes.filter((recipe) => recipe.custom || selectedRecipeIds.has(recipe.id));
-
-  const update = (patch: Partial<typeof settings>, message: string) => {
-    updateFriendSharing(friend.id, patch);
-    toast(message, "upload");
-    void syncNow();
-  };
-
-  const toggleRecipe = (recipeId: string) => {
-    toggleFriendSharedRecipe(friend.id, recipeId);
-    void syncNow();
-  };
-
-  return (
-    <>
-      <SectionTitle icon="upload" text={lang === "zh" ? `分享給 ${friend.name}` : `Share with ${friend.name}`} />
-      <GlassCard className="friend-sharing-card mb-4">
-        <div className="friend-sharing-head">
-          <span className="icon-tile"><AppIcon name="lock" size={18} /></span>
-          <div className="min-w-0 flex-1">
-            <div className="font-bold">{lang === "zh" ? "你決定朋友能看到什麼" : "You control what this friend can see"}</div>
-            <div className="t-cap">{lang === "zh" ? "進度、等級和農場會分享；私人紀錄不會分享。" : "Progress, level, and farm are shared. Private logs stay private."}</div>
-          </div>
-        </div>
-        <FriendShareRow
-          icon="calendar"
-          label={lang === "zh" ? "未來 7 天餐點計畫" : "Upcoming 7-day meal plan"}
-          hint={lang === "zh" ? "包括計畫中使用的食譜" : "Includes recipes used by the plan"}
-          checked={settings.shareMealPlan}
-          onChange={() => update(
-            { shareMealPlan: !settings.shareMealPlan },
-            lang === "zh" ? "餐點計畫分享設定已更新" : "Meal-plan sharing updated"
-          )}
-        />
-        <FriendShareRow
-          icon="gym"
-          label={lang === "zh" ? "目前訓練計畫" : "Active workout plan"}
-          hint={lang === "zh" ? "每組訓練紀錄仍為私人資料" : "Set-by-set history stays private"}
-          checked={settings.shareWorkoutPlan}
-          onChange={() => update(
-            settings.shareWorkoutPlan
-              ? { shareWorkoutPlan: false, workoutPlanId: undefined }
-              : { shareWorkoutPlan: true, workoutPlanId: profile?.planId },
-            lang === "zh" ? "訓練計畫分享設定已更新" : "Workout-plan sharing updated"
-          )}
-        />
-        <button className="friend-share-row press" onClick={() => setRecipesOpen(true)}>
-          <AppIcon name="kitchen" size={18} />
-          <span className="min-w-0 flex-1">
-            <b>{lang === "zh" ? "食譜" : "Recipes"}</b>
-            <small>{lang === "zh" ? "選擇要分享給這位朋友的食譜" : "Choose recipes for this friend"}</small>
-          </span>
-          <span className="chip">{settings.sharedRecipeIds.length}</span>
-          <AppIcon name="next" size={16} />
-        </button>
-      </GlassCard>
-
-      <Sheet
-        open={recipesOpen}
-        onClose={() => setRecipesOpen(false)}
-        title={<span className="icon-label"><AppIcon name="kitchen" size={19} /> {lang === "zh" ? `分享食譜給 ${friend.name}` : `Recipes for ${friend.name}`}</span>}
-      >
-        <div className="t-sub mb-3">{lang === "zh" ? "朋友會看到你選擇的食譜，並可儲存自己的副本。" : "Your friend can view these recipes and save an editable copy."}</div>
-        <div className="glass glass-sm px-3 py-1">
-          {shareableRecipes.length ? shareableRecipes.map((recipe) => {
-            const checked = settings.sharedRecipeIds.includes(recipe.id);
-            return (
-              <button
-                key={recipe.id}
-                className="friend-share-row press"
-                role="switch"
-                aria-checked={checked}
-                onClick={() => toggleRecipe(recipe.id)}
-              >
-                <FoodGlyph category={recipe.cat} size={18} compact />
-                <span className="min-w-0 flex-1"><b>{recipe.name[lang] || recipe.name.en}</b><small>{recipe.perServing.cal} cal · {recipe.perServing.protein}g {lang === "zh" ? "蛋白質" : "protein"}</small></span>
-                <span className={`friend-share-switch ${checked ? "is-on" : ""}`} aria-hidden="true"><i /></span>
-              </button>
-            );
-          }) : <div className="friend-empty-copy">{lang === "zh" ? "先在餐點頁儲存或建立食譜。" : "Save or create recipes from the Meal page first."}</div>}
-        </div>
-      </Sheet>
-    </>
-  );
-}
-
-function FriendShareRow({
-  icon,
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  icon: Parameters<typeof AppIcon>[0]["name"];
-  label: string;
-  hint: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button className="friend-share-row press" role="switch" aria-checked={checked} onClick={onChange}>
-      <AppIcon name={icon} size={18} />
-      <span className="min-w-0 flex-1"><b>{label}</b><small>{hint}</small></span>
-      <span className={`friend-share-switch ${checked ? "is-on" : ""}`} aria-hidden="true"><i /></span>
-    </button>
   );
 }
 
@@ -426,8 +371,9 @@ function MealsTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
   const recipes = useMemo(() => new Map((mealPlan?.recipes ?? []).map((recipe) => [recipe.id, recipe])), [mealPlan]);
   const plannedDays = (mealPlan?.days ?? []).filter(({ plan }) => MEAL_SLOTS.some((slot) => (plan[slot]?.length ?? 0) > 0));
   const sharedRecipes = friend.sharedRecipes ?? [];
+  const foodLogs = friend.foodLogs ?? [];
 
-  if (!mealPlan && sharedRecipes.length === 0) {
+  if (!mealPlan && sharedRecipes.length === 0 && foodLogs.length === 0) {
     return <LegacyEmpty icon="kitchen" text={friend.version === 3 ? copy.noSharedMeals : copy.legacy} />;
   }
 
@@ -440,6 +386,27 @@ function MealsTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
 
   return (
     <div className="a-fadeUp">
+      <SectionTitle icon="cutlery" text={copy.recentFoods} />
+      {foodLogs.length ? (
+        <GlassCard className="friend-food-log mb-5">
+          {foodLogs.map((entry, index) => (
+            <Fragment key={entry.id}>
+              {(index === 0 || foodLogs[index - 1].date !== entry.date) && (
+                <div className="friend-food-log-day">{fmtDate(entry.date, lang)}</div>
+              )}
+              <div className="friend-food-log-row">
+                <span><AppIcon name={iconFromLegacy(entry.emoji, "cutlery")} size={18} /></span>
+                <div className="min-w-0">
+                  <b>{entry.name[lang] || entry.name.en}</b>
+                  <small>{friendFoodAmount(entry, lang)} · {mealName(entry.meal, lang)}</small>
+                </div>
+                <strong>{fmtNum(entry.macros.cal)} cal</strong>
+              </div>
+            </Fragment>
+          ))}
+        </GlassCard>
+      ) : <GlassCard className="friend-empty-copy mb-5">{copy.noFoodLogs}</GlassCard>}
+
       {mealPlan && (
         <>
           <div className="friend-plan-heading">
@@ -535,7 +502,7 @@ function TrainingTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
         <div className="friend-stat-grid friend-stat-grid-three mb-4">
           <MiniStat icon="checkCircle" label={copy.completed} value={progress.completed} />
           <MiniStat icon="medal" label={copy.prs} value={progress.totalPrs} />
-          <MiniStat icon="weight" label={copy.volume} value={fmtNum(progress.totalVolume)} />
+          <MiniStat icon="weight" label={copy.volume} value={`${fmtNum(progress.totalVolume)} ${progress.unit}·${lang === "zh" ? "下" : "reps"}`} />
         </div>
       )}
 
@@ -726,6 +693,48 @@ function LegacyEmpty({ icon, text }: { icon: Parameters<typeof AppIcon>[0]["name
 
 function shortDay(date: string, lang: Lang) {
   return new Intl.DateTimeFormat(lang === "zh" ? "zh-TW" : "en-US", { weekday: "narrow", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+}
+
+function themeName(theme: ThemeId, lang: Lang): string {
+  const names: Record<ThemeId, { en: string; zh: string }> = {
+    honeydew: { en: "Honeydew", zh: "蜜瓜" },
+    watermelon: { en: "Watermelon", zh: "西瓜" },
+    cantaloupe: { en: "Cantaloupe", zh: "香瓜" },
+    canary: { en: "Canary", zh: "黃金瓜" },
+    hami: { en: "Hami", zh: "哈密瓜" },
+    chamoe: { en: "Korean Chamoe", zh: "韓國香瓜" },
+    "moon-gold": { en: "Moon Gold", zh: "月金瓜" },
+    densuke: { en: "Densuke Obsidian", zh: "田助黑曜" },
+  };
+  return names[theme][lang];
+}
+
+function mealName(meal: MealSlot, lang: Lang): string {
+  const names: Record<MealSlot, { en: string; zh: string }> = {
+    breakfast: { en: "Breakfast", zh: "早餐" },
+    lunch: { en: "Lunch", zh: "午餐" },
+    dinner: { en: "Dinner", zh: "晚餐" },
+    snack: { en: "Snack", zh: "點心" },
+  };
+  return names[meal][lang];
+}
+
+function friendFoodAmount(entry: LogEntry, lang: Lang): string {
+  if (entry.amount != null && entry.amountUnit) {
+    const units = {
+      serving: lang === "zh" ? "份" : entry.amount === 1 ? "serving" : "servings",
+      g: "g",
+      ml: "ml",
+      oz: "oz",
+      fl_oz: "fl oz",
+      cup: lang === "zh" ? "杯" : entry.amount === 1 ? "cup" : "cups",
+      scoop: lang === "zh" ? "勺" : entry.amount === 1 ? "scoop" : "scoops",
+      piece: lang === "zh" ? "個" : entry.amount === 1 ? "piece" : "pieces",
+    } as const;
+    return `${fmtNum(entry.amount)} ${units[entry.amountUnit]}`;
+  }
+  if (entry.grams != null) return `${fmtNum(entry.grams)} g`;
+  return lang === "zh" ? "1 份" : "1 serving";
 }
 
 function formatUpdated(timestamp: number, lang: Lang) {

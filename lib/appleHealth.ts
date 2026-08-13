@@ -1,18 +1,19 @@
 "use client";
 
 import { todayStr } from "./dates";
-import { healthRewardBetweenTiers, standTierFromMinutes, stepTierFromCount } from "./game";
+import { healthRewardBetweenTiers, healthWorkoutXp, standTierFromMinutes, stepTierFromCount } from "./game";
 import { useHealthRewardQueue } from "./healthRewards";
 import { useStore } from "./store";
 import { Capacitor } from "@capacitor/core";
 import { MelonMateHealth } from "@melonmate/capacitor-health";
+import type { HealthWorkout } from "./types";
 
 const HEALTH_CONNECTED_KEY = "melonmate-health-connected";
 
 export type AppleHealthSyncResult =
   | { status: "unavailable" | "denied"; xp: 0 }
   | { status: "error"; xp: 0; error: string }
-  | { status: "synced"; xp: number; steps: number; standMinutes: number };
+  | { status: "synced"; xp: number; steps: number; standMinutes: number; workouts: HealthWorkout[] };
 
 const activeHealthSyncs = new Map<string, Promise<AppleHealthSyncResult>>();
 
@@ -23,7 +24,7 @@ const activeHealthSyncs = new Map<string, Promise<AppleHealthSyncResult>>();
 export interface AppleHealthBridge {
   isAvailable: () => Promise<boolean>;
   requestActivityAuthorization: () => Promise<boolean>;
-  readDailyActivity: (date: string) => Promise<{ steps: number; standMinutes: number }>;
+  readDailyActivity: (date: string) => Promise<{ steps: number; standMinutes: number; workouts?: HealthWorkout[] }>;
 }
 
 declare global {
@@ -56,7 +57,7 @@ function healthSyncError(error: unknown): string {
 
 async function performAppleHealthSync(date: string): Promise<AppleHealthSyncResult> {
   try {
-    let activity: { steps: number; standMinutes: number };
+    let activity: { steps: number; standMinutes: number; workouts?: HealthWorkout[] };
     const alreadyConnected = shouldAutoSyncAppleHealth();
     if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("MelonMateHealth")) {
       const availability = await MelonMateHealth.isAvailable();
@@ -79,6 +80,16 @@ async function performAppleHealthSync(date: string): Promise<AppleHealthSyncResu
 
     const steps = Number.isFinite(activity.steps) ? Math.max(0, Math.round(activity.steps)) : 0;
     const standMinutes = Number.isFinite(activity.standMinutes) ? Math.max(0, Math.round(activity.standMinutes)) : 0;
+    const workouts = (activity.workouts ?? []).filter((workout) =>
+      Boolean(workout.id)
+      && Number.isFinite(workout.durationMinutes)
+      && workout.durationMinutes > 0
+    ).map((workout) => ({
+      ...workout,
+      durationMinutes: Math.max(0, workout.durationMinutes),
+      activeCalories: Number.isFinite(workout.activeCalories) ? Math.max(0, workout.activeCalories) : 0,
+      startedAt: Number.isFinite(workout.startedAt) ? workout.startedAt : 0,
+    }));
     rememberAppleHealthConnection();
 
     const state = useStore.getState();
@@ -88,17 +99,25 @@ async function performAppleHealthSync(date: string): Promise<AppleHealthSyncResu
       stepTier: stepTierFromCount(steps),
       standTier: standTierFromMinutes(standMinutes),
     });
-    const xp = state.applyHealthActivity({ date, steps, standMinutes });
+    const alreadyRewardedWorkoutIds = new Set(previous.workoutIds ?? []);
+    const newlyCompletedWorkouts = workouts.filter((workout) => !alreadyRewardedWorkoutIds.has(workout.id));
+    const workoutXp = newlyCompletedWorkouts.reduce(
+      (total, workout) => total + healthWorkoutXp(workout.durationMinutes),
+      0
+    );
+    const xp = state.applyHealthActivity({ date, steps, standMinutes, workouts });
     if (xp > 0) {
       useHealthRewardQueue.getState().enqueue({
         ...reward,
+        workoutXp,
+        workouts: newlyCompletedWorkouts,
         totalXp: xp,
         date,
         steps,
         standMinutes,
       });
     }
-    return { status: "synced", xp, steps, standMinutes };
+    return { status: "synced", xp, steps, standMinutes, workouts };
   } catch (error) {
     return { status: "error", xp: 0, error: healthSyncError(error) };
   }

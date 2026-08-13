@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, todayStr } from "./dates";
-import { DAILY_XP_REWARD, FOOD_LOG_XP_REWARD, MAX_DAILY_REWARDED_FOOD_LOGS } from "./game";
+import {
+  DAILY_XP_REWARD,
+  FOOD_LOG_XP_REWARD,
+  MAX_DAILY_REWARDED_FOOD_LOGS,
+  WEIGHT_LOG_XP_REWARD,
+} from "./game";
 import { migrateHealthXpClaimTiers, useStore } from "./store";
 
 const PROFILE = "p-me";
@@ -61,12 +66,52 @@ describe("healthy-action XP store", () => {
     expect(useStore.getState().game[PROFILE].xp).toBe(3 * FOOD_LOG_XP_REWARD + DAILY_XP_REWARD);
   });
 
+  it("awards weight logging XP only once per local day", () => {
+    const store = useStore.getState();
+
+    expect(store.logWeight(170)).toBe(WEIGHT_LOG_XP_REWARD);
+    expect(useStore.getState().logWeight(169.5)).toBe(0);
+    expect(useStore.getState().weights[PROFILE]).toEqual([
+      { date: todayStr(), value: 169.5 },
+    ]);
+    expect(useStore.getState().game[PROFILE].xp).toBe(WEIGHT_LOG_XP_REWARD);
+    expect(useStore.getState().game[PROFILE].weightXpClaims).toEqual({
+      [todayStr()]: true,
+    });
+  });
+
   it("awards only newly crossed steps and standing milestones", () => {
     const store = useStore.getState();
     expect(store.applyHealthActivity({ date: todayStr(), steps: 9_500, standMinutes: 60 })).toBe(107);
     expect(useStore.getState().applyHealthActivity({ date: todayStr(), steps: 9_500, standMinutes: 60 })).toBe(0);
     expect(useStore.getState().applyHealthActivity({ date: todayStr(), steps: 12_000, standMinutes: 90 })).toBe(61);
     expect(useStore.getState().game[PROFILE].xp).toBe(168);
+  });
+
+  it("awards XP when an in-app workout session is finished", () => {
+    const store = useStore.getState();
+    const sessionId = store.startSession({
+      date: todayStr(),
+      planId: "test-plan",
+      weekIdx: 0,
+      dayIdx: 0,
+      dayName: { en: "Test workout", zh: "測試訓練" },
+      entries: [{
+        key: "squat",
+        name: { en: "Squat", zh: "深蹲" },
+        targetSets: 2,
+        targetReps: "5",
+        sets: [
+          { w: 100, reps: 5, done: true },
+          { w: 100, reps: 5, done: true },
+        ],
+      }],
+    });
+
+    const result = useStore.getState().finishSession(sessionId);
+
+    expect(result).toMatchObject({ xp: 18, completedSets: 2, completedExercises: 1 });
+    expect(useStore.getState().game[PROFILE].xp).toBe(18);
   });
 
   it("preserves already-claimed Health XP when upgrading to smaller milestones", () => {

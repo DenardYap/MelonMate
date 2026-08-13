@@ -31,6 +31,7 @@ public final class MelonMateHealthPlugin: CAPPlugin, CAPBridgedPlugin {
         if let standTime = HKObjectType.quantityType(forIdentifier: .appleStandTime) {
             readTypes.insert(standTime)
         }
+        readTypes.insert(HKObjectType.workoutType())
 
         healthStore.requestAuthorization(toShare: [], read: readTypes) { success, error in
             DispatchQueue.main.async {
@@ -66,8 +67,10 @@ public final class MelonMateHealthPlugin: CAPPlugin, CAPBridgedPlugin {
         let group = DispatchGroup()
         var steps = 0.0
         var standMinutes = 0.0
+        var workouts: [HKWorkout] = []
         var stepQueryError: Error?
         var standQueryError: Error?
+        var workoutQueryError: Error?
         let resultLock = NSLock()
 
         group.enter()
@@ -88,6 +91,15 @@ public final class MelonMateHealthPlugin: CAPPlugin, CAPBridgedPlugin {
             group.leave()
         }
 
+        group.enter()
+        readWorkouts(interval: interval) { value, error in
+            resultLock.lock()
+            workouts = value
+            workoutQueryError = error
+            resultLock.unlock()
+            group.leave()
+        }
+
         group.notify(queue: .main) {
             if let stepQueryError {
                 call.reject("Step count query failed", "STEP_QUERY_FAILED", stepQueryError)
@@ -98,9 +110,13 @@ public final class MelonMateHealthPlugin: CAPPlugin, CAPBridgedPlugin {
             if let standQueryError {
                 NSLog("MelonMateHealth: Apple Stand Time query failed: %@", standQueryError.localizedDescription)
             }
+            if let workoutQueryError {
+                NSLog("MelonMateHealth: workout query failed: %@", workoutQueryError.localizedDescription)
+            }
             call.resolve([
                 "steps": max(0, Int(steps.rounded(.down))),
-                "standMinutes": standQueryError == nil ? max(0, Int(standMinutes.rounded(.down))) : 0
+                "standMinutes": standQueryError == nil ? max(0, Int(standMinutes.rounded(.down))) : 0,
+                "workouts": workoutQueryError == nil ? workouts.map(self.serializeWorkout) : []
             ])
         }
     }
@@ -134,5 +150,60 @@ public final class MelonMateHealthPlugin: CAPPlugin, CAPBridgedPlugin {
             completion(statistics?.sumQuantity()?.doubleValue(for: unit) ?? 0, error)
         }
         healthStore.execute(query)
+    }
+
+    private func readWorkouts(
+        interval: DateInterval,
+        completion: @escaping ([HKWorkout], Error?) -> Void
+    ) {
+        let predicate = HKQuery.predicateForSamples(
+            withStart: interval.start,
+            end: interval.end,
+            options: [.strictStartDate, .strictEndDate]
+        )
+        let query = HKSampleQuery(
+            sampleType: HKObjectType.workoutType(),
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+        ) { _, samples, error in
+            completion((samples as? [HKWorkout]) ?? [], error)
+        }
+        healthStore.execute(query)
+    }
+
+    private func serializeWorkout(_ workout: HKWorkout) -> [String: Any] {
+        [
+            "id": workout.uuid.uuidString,
+            "activityType": workoutName(workout.workoutActivityType),
+            "durationMinutes": max(0, workout.duration / 60),
+            "activeCalories": max(0, workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) ?? 0),
+            "startedAt": Int(workout.startDate.timeIntervalSince1970 * 1000)
+        ]
+    }
+
+    private func workoutName(_ type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .pilates: return "Pilates"
+        case .yoga: return "Yoga"
+        case .running: return "Running"
+        case .walking: return "Walking"
+        case .cycling: return "Cycling"
+        case .swimming: return "Swimming"
+        case .dance: return "Dance"
+        case .functionalStrengthTraining: return "Functional Strength Training"
+        case .traditionalStrengthTraining: return "Strength Training"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .coreTraining: return "Core Training"
+        case .hiking: return "Hiking"
+        case .rowing: return "Rowing"
+        case .elliptical: return "Elliptical"
+        case .stairClimbing: return "Stair Climbing"
+        case .flexibility: return "Flexibility"
+        case .cooldown: return "Cooldown"
+        case .crossTraining: return "Cross Training"
+        case .mixedCardio: return "Mixed Cardio"
+        default: return "Workout"
+        }
     }
 }

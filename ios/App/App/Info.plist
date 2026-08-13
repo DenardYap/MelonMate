@@ -47,7 +47,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>MelonMate uses the camera to scan food barcodes and estimate meals from photos.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>MelonMate reads your daily steps and Apple stand time to update your activity progress and award XP.</string>
+	<string>MelonMate reads your daily steps, stand time, and completed workouts—including workout type, duration, and active calories—to update your activity progress and award XP.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>MelonMate requests Health access only to sync your activity progress and does not write data to Apple Health.</string>
 	<key>NSMicrophoneUsageDescription</key>

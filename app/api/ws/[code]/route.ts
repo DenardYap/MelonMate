@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadDoc, saveDoc, storageAvailable } from "@/lib/server/wsdb";
 import type { MemberSnapshot, WorkspaceShared } from "@/lib/types";
+import { detectFriendShareNotifications } from "@/lib/friendNotifications";
+import { sendFriendSharePushes } from "@/lib/server/friendPush";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,15 +54,30 @@ export async function PUT(
       doc.rev += 1;
     }
 
+    let sharePush: {
+      source: MemberSnapshot;
+      recipients: MemberSnapshot[];
+      notifications: ReturnType<typeof detectFriendShareNotifications>;
+    } | undefined;
     if (body.member && typeof body.member.id === "string") {
       const isNew = !doc.members[body.member.id];
       if (isNew && Object.keys(doc.members).length >= MAX_MEMBERS) {
         return bad(409, "space-full");
       }
-      doc.members[body.member.id] = { ...body.member, updatedAt: Date.now() };
+      const previous = doc.members[body.member.id];
+      const member = { ...body.member, updatedAt: Date.now() };
+      doc.members[body.member.id] = member;
+      if (previous) {
+        const notifications = detectFriendShareNotifications(previous, member);
+        const recipients = Object.values(doc.members).filter((candidate) => candidate.id !== member.id);
+        sharePush = { source: member, recipients, notifications };
+      }
     }
 
     await saveDoc(code, doc);
+    if (sharePush) {
+      await sendFriendSharePushes(sharePush.source, sharePush.recipients, sharePush.notifications);
+    }
     return NextResponse.json(doc);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "storage-error";

@@ -205,7 +205,7 @@ const dict = {
   finishWorkout: { en: "Finish workout", zh: "完成訓練" },
   workoutDone: { en: "Workout complete!", zh: "訓練完成！" },
   duration: { en: "Duration", zh: "時長" },
-  volume: { en: "Volume", zh: "總容量" },
+  volume: { en: "Training load", zh: "訓練負荷" },
   prsToday: { en: "PRs", zh: "破紀錄" },
   newPr: { en: "New PR!", zh: "新紀錄！" },
   restTimer: { en: "Rest", zh: "休息" },

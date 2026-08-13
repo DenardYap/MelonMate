@@ -350,6 +350,8 @@ export async function sendHealthRewardNotification(
     standXp: number;
     stepMilestones: number;
     standMilestones: number;
+    workoutXp: number;
+    workouts: { id: string; activityType: string }[];
   },
   lang: Lang
 ): Promise<boolean> {
@@ -364,10 +366,12 @@ export async function sendHealthRewardNotification(
     ? [
       reward.stepXp > 0 ? `${reward.stepMilestones} 個步數里程碑` : "",
       reward.standXp > 0 ? `${reward.standMilestones} 個站立里程碑` : "",
+      reward.workoutXp > 0 ? `${reward.workouts.length} 次訓練` : "",
     ].filter(Boolean)
     : [
       reward.stepXp > 0 ? `${reward.stepMilestones} step milestone${reward.stepMilestones === 1 ? "" : "s"}` : "",
       reward.standXp > 0 ? `${reward.standMilestones} standing milestone${reward.standMilestones === 1 ? "" : "s"}` : "",
+      reward.workoutXp > 0 ? `${reward.workouts.length} workout${reward.workouts.length === 1 ? "" : "s"}` : "",
     ].filter(Boolean);
   const numericId = HEALTH_REWARD_NOTIFICATION_ID_BASE
     + (Array.from(reward.id).reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0) % 100_000_000);

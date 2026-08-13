@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { lastSetsFor, makeSessionEntries, newId, openSession, useActiveProfile, useStore } from "@/lib/store";
 import { translate, type DictKey } from "@/lib/i18n";
@@ -11,12 +11,11 @@ import { EmptyState, GlassCard, Segmented, Sheet, toast } from "@/components/ui"
 import { BarChart, LineChart } from "@/components/charts";
 import { AppIcon } from "@/components/icons";
 import { ExercisePickerSheet } from "@/components/ExercisePickerSheet";
-import { exerciseProgressSeries } from "@/lib/workouts";
-import { syncNow } from "@/lib/sync";
+import { exerciseProgressSeries, seedWeightInUnit } from "@/lib/workouts";
 import type { ExerciseSpec, WorkoutPlan, WorkoutSession, WorkoutWeek } from "@/lib/types";
 import { recommendWorkoutPlans } from "@/lib/onboarding";
 
-type Tab = "train" | "plans" | "progress";
+type Tab = "train" | "plans" | "progress" | "shared";
 
 function optionalNumber(value: string, min = 0, max = Number.POSITIVE_INFINITY) {
   if (!value.trim()) return undefined;
@@ -60,6 +59,10 @@ export default function GymPage() {
   const t = (k: DictKey) => translate(k, lang);
   const [tab, setTab] = useState<Tab>("train");
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "shared") setTab("shared");
+  }, []);
+
   return (
     <main className="page">
       <header className="flex items-center justify-between mb-4">
@@ -73,12 +76,89 @@ export default function GymPage() {
           { value: "train", label: t("train") },
           { value: "plans", label: t("plans") },
           { value: "progress", label: t("progress") },
+          { value: "shared", label: lang === "zh" ? "朋友" : "Friends" },
         ]}
       />
       {tab === "train" && <TrainTab onChoosePlan={() => setTab("plans")} />}
       {tab === "plans" && <PlansTab />}
       {tab === "progress" && <ProgressTab />}
+      {tab === "shared" && <SharedWorkoutsTab />}
     </main>
+  );
+}
+
+function SharedWorkoutsTab() {
+  const lang = useStore((state) => state.lang);
+  const friendsById = useStore((state) => state.friends);
+  const importFriendWorkoutPlan = useStore((state) => state.importFriendWorkoutPlan);
+  const markRead = useStore((state) => state.markFriendNotificationsRead);
+  const [focusFriendId, setFocusFriendId] = useState("");
+
+  useEffect(() => {
+    setFocusFriendId(new URLSearchParams(window.location.search).get("friend") ?? "");
+    markRead("workout");
+  }, [markRead]);
+
+  const shared = useMemo(() => Object.values(friendsById)
+    .flatMap((friend) => friend.workoutPlan ? [{
+      friendId: friend.id,
+      friendName: friend.name,
+      friendEmoji: friend.emoji,
+      plan: friend.workoutPlan.plan,
+      unit: friend.workoutPlan.unit,
+    }] : [])
+    .sort((left, right) => Number(right.friendId === focusFriendId) - Number(left.friendId === focusFriendId)),
+  [focusFriendId, friendsById]);
+
+  const copyPlan = (friendId: string, plan: WorkoutPlan) => {
+    importFriendWorkoutPlan(friendId, plan);
+    toast(lang === "zh" ? "訓練計畫已複製並選用" : "Workout plan copied and selected", "checkCircle");
+  };
+
+  return (
+    <div className="a-fadeUp">
+      <div className="mb-3">
+        <div className="t-section icon-label"><AppIcon name="friends" size={18} />{lang === "zh" ? "朋友的訓練" : "Friends’ workout plans"}</div>
+        <div className="t-cap mt-1">{lang === "zh" ? "朋友目前使用的訓練計畫會自動顯示在這裡。" : "Your friends’ active workout plans appear here automatically."}</div>
+      </div>
+      {shared.length ? (
+        <div className="flex flex-col gap-3">
+          {shared.map(({ friendId, friendName, friendEmoji, plan, unit }) => {
+            const week = plan.weeks[0];
+            const days = week?.days ?? [];
+            return (
+              <GlassCard strong={friendId === focusFriendId} className={friendId === focusFriendId ? "p-4 shared-friend-highlight" : "p-4"} key={`${friendId}-${plan.id}`}>
+                <div className="flex items-start gap-3">
+                  <span className="icon-tile"><AppIcon name="gym" size={20} /></span>
+                  <div className="flex-1 min-w-0">
+                    <div className="t-cap">{friendEmoji} {lang === "zh" ? `來自 ${friendName}` : `From ${friendName}`}</div>
+                    <div className="t-title mt-1">{plan.name[lang] || plan.name.en}</div>
+                    <div className="t-sub mt-1">{plan.weeks.length} {lang === "zh" ? "週" : plan.weeks.length === 1 ? "week" : "weeks"} · {days.length} {lang === "zh" ? "天／週" : "days/week"} · {unit}</div>
+                  </div>
+                </div>
+                {days.length ? (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {days.slice(0, 5).map((day) => <span className="chip" key={day.id}>{day.name[lang] || day.name.en}</span>)}
+                    {days.length > 5 && <span className="t-cap self-center">+{days.length - 5}</span>}
+                  </div>
+                ) : null}
+                <button className="btn btn-primary press w-full mt-3" onClick={() => copyPlan(friendId, plan)}>
+                  <AppIcon name="download" size={17} />{lang === "zh" ? "使用這個訓練計畫" : "Use this workout plan"}
+                </button>
+              </GlassCard>
+            );
+          })}
+        </div>
+      ) : (
+        <GlassCard>
+          <EmptyState
+            icon="friends"
+            title={lang === "zh" ? "還沒有朋友訓練計畫" : "No friend workout plans yet"}
+            hint={lang === "zh" ? "朋友選擇訓練計畫並同步後，就會出現在這裡。" : "Plans appear after a friend selects one and syncs."}
+          />
+        </GlassCard>
+      )}
+    </div>
   );
 }
 
@@ -366,7 +446,6 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
   const [editDay, setEditDay] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const activeWeekIdx = Math.min(weekIdx, Math.max(0, plan.weeks.length - 1));
@@ -393,9 +472,6 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
       <div className="plan-editor-nav mb-3">
         <button className="chip press icon-label" onClick={onBack}><AppIcon name="back" size={16} /> {t("back")}</button>
         <div className="flex gap-2">
-          <button className="ibtn press plan-editor-icon" onClick={() => setShareOpen(true)} aria-label={lang === "zh" ? "分享計畫" : "Share plan"}>
-            <AppIcon name="upload" size={17} />
-          </button>
           <button className="ibtn press plan-editor-icon" onClick={() => setSettingsOpen(true)} aria-label={lang === "zh" ? "計畫設定" : "Plan settings"}>
             <AppIcon name="edit" size={17} />
           </button>
@@ -450,7 +526,7 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate" style={{ fontSize: 15 }}>{e.name[lang]}</div>
                 <div className="t-cap tabular">
-                  {(e.targetWeight ?? e.seedWeight) != null ? `${e.targetWeight ?? e.seedWeight} ${profile.unit} · ` : ""}
+                  {(e.targetWeight ?? seedWeightInUnit(e.seedWeight, profile.unit)) != null ? `${e.targetWeight ?? seedWeightInUnit(e.seedWeight, profile.unit)} ${profile.unit} · ` : ""}
                   {e.sets} × {e.reps}
                   {e.rpe ? ` @ RPE ${e.rpe}` : ""}
                   {e.restMin ? ` · ${t("rest")} ${e.restMin}'` : ""}
@@ -536,8 +612,6 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
           }}
         />
       )}
-
-      {shareOpen && <SharePlanSheet plan={plan} onClose={() => setShareOpen(false)} />}
 
       {deleteOpen && (
         <Sheet open onClose={() => setDeleteOpen(false)} title={<span className="icon-label"><AppIcon name="warning" />{lang === "zh" ? "刪除訓練計畫？" : "Delete workout plan?"}</span>}>
@@ -699,52 +773,6 @@ function DayEditSheet({ plan, weekIdx, dayIdx, onClose }: { plan: WorkoutPlan; w
   );
 }
 
-function SharePlanSheet({ plan, onClose }: { plan: WorkoutPlan; onClose: () => void }) {
-  const router = useRouter();
-  const lang = useStore((state) => state.lang);
-  const friends = useStore((state) => Object.values(state.friends));
-  const sharing = useStore((state) => state.friendSharing);
-  const updateFriendSharing = useStore((state) => state.updateFriendSharing);
-  const profile = useActiveProfile();
-
-  const toggle = (friendId: string) => {
-    const current = sharing[friendId] ?? { shareMealPlan: false, shareWorkoutPlan: false, sharedRecipeIds: [] };
-    const checked = current.shareWorkoutPlan && (current.workoutPlanId ?? profile.planId) === plan.id;
-    updateFriendSharing(friendId, checked
-      ? { shareWorkoutPlan: false, workoutPlanId: undefined }
-      : { shareWorkoutPlan: true, workoutPlanId: plan.id });
-    toast(checked ? (lang === "zh" ? "已停止分享" : "Sharing stopped") : (lang === "zh" ? "計畫已分享" : "Plan shared"), "upload");
-    void syncNow();
-  };
-
-  return (
-    <Sheet open onClose={onClose} title={<span className="icon-label"><AppIcon name="friends" />{lang === "zh" ? "分享訓練計畫" : "Share workout plan"}</span>}>
-      <div className="t-sub mb-3">{lang === "zh" ? "朋友可以查看並儲存自己的副本。每組訓練紀錄和重量仍為私人資料。" : "Friends can view this plan and save an editable copy. Your set history and body weight stay private."}</div>
-      {friends.length ? (
-        <div className="glass glass-sm px-3 py-1 mb-3">
-          {friends.map((friend) => {
-            const current = sharing[friend.id];
-            const checked = Boolean(current?.shareWorkoutPlan && (current.workoutPlanId ?? profile.planId) === plan.id);
-            return (
-              <button key={friend.id} className="share-plan-friend press" onClick={() => toggle(friend.id)}>
-                <span className="friend-avatar-small">{friend.emoji}</span>
-                <span className="flex-1 min-w-0"><b className="truncate block">{friend.name}</b><small>{checked ? (lang === "zh" ? "可以查看此計畫" : "Can view this plan") : (lang === "zh" ? "未分享" : "Not shared")}</small></span>
-                <span className={`share-check ${checked ? "checked" : ""}`}>{checked && <AppIcon name="check" size={15} />}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="preset-banner text-center mb-3">
-          <div className="font-semibold">{lang === "zh" ? "還沒有朋友" : "No friends yet"}</div>
-          <div className="t-cap mt-1">{lang === "zh" ? "先用邀請碼新增朋友，再回來分享計畫。" : "Add a friend with an invite code, then come back to share."}</div>
-        </div>
-      )}
-      {!friends.length && <button className="btn btn-primary press w-full" onClick={() => router.push("/me")}><AppIcon name="addUser" />{lang === "zh" ? "前往新增朋友" : "Add friends"}</button>}
-    </Sheet>
-  );
-}
-
 function ExerciseEditSheet({
   plan,
   weekIdx,
@@ -770,7 +798,7 @@ function ExerciseEditSheet({
   const [rpe, setRpe] = useState(ex?.rpe != null ? String(ex.rpe) : "");
   const [weight, setWeight] = useState(
     ex?.targetWeight != null || ex?.seedWeight != null
-      ? String(ex.targetWeight ?? ex.seedWeight)
+      ? String(ex.targetWeight ?? seedWeightInUnit(ex.seedWeight, profile.unit))
       : ""
   );
   const [rest, setRest] = useState(ex?.restMin != null ? String(ex.restMin) : "");
@@ -1031,7 +1059,7 @@ function ProgressTab() {
       </div>
 
       <GlassCard className="p-4">
-        <div className="t-section mb-2">{t("volume")} / {t("week")} ({profile.unit})</div>
+        <div className="t-section mb-2">{t("volume")} / {t("week")} ({profile.unit}·{t("reps")})</div>
         <BarChart
           values={weekly.weeks.map(([, v]) => v)}
           labels={weekly.weeks.map(([k]) => `W${k.split("-")[1]}`)}

@@ -3,6 +3,8 @@ import {
   DAILY_XP_REWARD,
   combinedXp,
   healthRewardBetweenTiers,
+  healthWorkoutXp,
+  inAppWorkoutXp,
   isDailyXpEligible,
   levelFromXp,
   levelProgressFromXp,
@@ -56,6 +58,20 @@ describe("Apple Health XP milestones", () => {
       standMilestones: 0,
       totalXp: 7,
     });
+  });
+
+  it("scales completed workout XP with duration", () => {
+    expect(healthWorkoutXp(20)).toBe(40);
+    expect(healthWorkoutXp(45)).toBe(90);
+  });
+});
+
+describe("in-app workout XP", () => {
+  it("rewards completed sets and fully finished exercises", () => {
+    expect(inAppWorkoutXp([
+      { sets: [{ done: true }, { done: true }] },
+      { sets: [{ done: true }, { done: false }] },
+    ])).toEqual({ xp: 21, completedSets: 3, completedExercises: 1 });
   });
 });
 

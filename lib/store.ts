@@ -15,6 +15,7 @@ import type {
   MealSlot,
   MemberSnapshot,
   FriendMealPlanSnapshot,
+  FriendShareNotification,
   FriendSharingSettings,
   Profile,
   Recipe,
@@ -34,15 +35,18 @@ import {
   DAILY_XP_REWARD,
   FOOD_LOG_XP_REWARD,
   healthRewardBetweenTiers,
+  healthWorkoutXp,
+  inAppWorkoutXp,
   isDailyXpEligible,
   levelFromXp,
   MAX_DAILY_REWARDED_FOOD_LOGS,
   standTierFromMinutes,
   stepTierFromCount,
+  WEIGHT_LOG_XP_REWARD,
 } from "./game";
 import { useGardenStore } from "./gardenStore";
 import { isThemeUnlocked } from "./themes";
-import { completedSets, lastCompletedSessionForDay, recommendExercisePreset } from "./workouts";
+import { completedSets, lastCompletedSessionForDay, recommendExercisePreset, seedWeightInUnit } from "./workouts";
 import { migrateLegacyCalorieData, repairInflatedCalorieData } from "./calories";
 import {
   applyMealPlanTemplate as applyMealPlanToWeek,
@@ -69,6 +73,7 @@ const freshGame = (): GameState => ({
   lastEval: addDays(todayStr(), -1),
   history: {},
   foodLogXpClaims: {},
+  weightXpClaims: {},
   healthXpClaims: {},
 });
 
@@ -134,6 +139,7 @@ export interface Store {
   /** Connection code and outbound sharing preferences, keyed by friend member id. */
   friendCodes: Record<string, string>;
   friendSharing: Record<string, FriendSharingSettings>;
+  friendNotifications: FriendShareNotification[];
 
   // actions
   setLang: (l: Lang) => void;
@@ -165,6 +171,9 @@ export interface Store {
     mode: MealPlanApplyMode
   ) => { meals: number; recipes: number };
   importFriendWorkoutPlan: (friendId: string, plan: WorkoutPlan) => string;
+  addFriendNotifications: (notifications: FriendShareNotification[]) => void;
+  markFriendNotificationRead: (id: string) => void;
+  markFriendNotificationsRead: (kind?: FriendShareNotification["kind"]) => void;
 
   planMeal: (date: string, slot: MealSlot, recipeId: string, servings: number) => void;
   unplanMeal: (date: string, slot: MealSlot, idx: number) => void;
@@ -186,12 +195,12 @@ export interface Store {
 
   startSession: (s: Omit<WorkoutSession, "id" | "startedAt" | "prs">) => string;
   updateSession: (sessionId: string, mut: (s: WorkoutSession) => WorkoutSession) => void;
-  finishSession: (sessionId: string) => { volume: number; prs: number; durationMs: number };
+  finishSession: (sessionId: string) => { volume: number; prs: number; durationMs: number; xp: number; completedSets: number; completedExercises: number };
   discardSession: (sessionId: string) => void;
 
-  logWeight: (value: number) => void;
+  logWeight: (value: number) => number;
   addWater: (date: string, delta: number) => void;
-  applyHealthActivity: (snapshot: Pick<HealthActivitySnapshot, "date" | "steps" | "standMinutes">) => number;
+  applyHealthActivity: (snapshot: Pick<HealthActivitySnapshot, "date" | "steps" | "standMinutes"> & { workouts?: HealthActivitySnapshot["workouts"] }) => number;
 
   setWs: (patch: Partial<Store["ws"]>) => void;
   applyShared: (shared: WorkspaceShared, rev: number) => void;
@@ -218,6 +227,7 @@ export function migrateHealthXpClaimTiers(state: Partial<Store>): Partial<Store>
               {
                 stepTier: claim.stepTier * 3,
                 standTier: claim.standTier * 3,
+                ...(claim.workoutIds ? { workoutIds: claim.workoutIds } : {}),
               },
             ])
           ),
@@ -259,6 +269,7 @@ export const useStore = create<Store>()(
       friends: {},
       friendCodes: {},
       friendSharing: {},
+      friendNotifications: [],
 
       setLang: (l) => set({ lang: l }),
       setTheme: (theme) =>
@@ -479,6 +490,38 @@ export const useStore = create<Store>()(
               },
             },
             sharedDirty: true,
+          };
+        }),
+
+      addFriendNotifications: (notifications) =>
+        set((s) => {
+          const known = new Set(s.friendNotifications.map((notification) => notification.id));
+          return {
+            friendNotifications: [
+              ...notifications.filter((notification) => !known.has(notification.id)),
+              ...s.friendNotifications,
+            ].sort((left, right) => right.createdAt - left.createdAt).slice(0, 100),
+          };
+        }),
+
+      markFriendNotificationRead: (id) =>
+        set((s) => ({
+          friendNotifications: s.friendNotifications.map((notification) =>
+            notification.id === id && !notification.readAt
+              ? { ...notification, readAt: Date.now() }
+              : notification
+          ),
+        })),
+
+      markFriendNotificationsRead: (kind) =>
+        set((s) => {
+          const readAt = Date.now();
+          return {
+            friendNotifications: s.friendNotifications.map((notification) =>
+              (!kind || notification.kind === kind) && !notification.readAt
+                ? { ...notification, readAt }
+                : notification
+            ),
           };
         }),
 
@@ -713,7 +756,7 @@ export const useStore = create<Store>()(
         const s = get();
         const pid = s.activeProfileId;
         const session = (s.sessions[pid] ?? []).find((x) => x.id === sessionId);
-        if (!session) return { volume: 0, prs: 0, durationMs: 0 };
+        if (!session || session.endedAt) return { volume: 0, prs: 0, durationMs: 0, xp: 0, completedSets: 0, completedExercises: 0 };
 
         // compute PRs vs all previous sessions
         const prior = (s.sessions[pid] ?? []).filter((x) => x.id !== sessionId && x.endedAt);
@@ -740,6 +783,7 @@ export const useStore = create<Store>()(
         }
         const endedAt = Date.now();
         const durationMs = endedAt - session.startedAt;
+        const workoutReward = inAppWorkoutXp(session.entries);
         set((st) => {
           const g = st.game[pid] ?? freshGame();
           return {
@@ -751,11 +795,11 @@ export const useStore = create<Store>()(
             },
             game: {
               ...st.game,
-              [pid]: { ...g, golden: g.golden + prs },
+              [pid]: { ...g, golden: g.golden + prs, xp: g.xp + workoutReward.xp },
             },
           };
         });
-        return { volume, prs, durationMs };
+        return { volume, prs, durationMs, ...workoutReward };
       },
 
       discardSession: (sessionId) =>
@@ -769,14 +813,30 @@ export const useStore = create<Store>()(
           };
         }),
 
-      logWeight: (value) =>
+      logWeight: (value) => {
+        let awardedXp = 0;
         set((s) => {
           const pid = s.activeProfileId;
-          const cur = (s.weights[pid] ?? []).filter((w) => w.date !== todayStr());
+          const date = todayStr();
+          const cur = (s.weights[pid] ?? []).filter((w) => w.date !== date);
+          const game = s.game[pid] ?? freshGame();
+          const claims = { ...(game.weightXpClaims ?? {}) };
+          awardedXp = claims[date] ? 0 : WEIGHT_LOG_XP_REWARD;
+          if (awardedXp > 0) claims[date] = true;
           return {
-            weights: { ...s.weights, [pid]: [...cur, { date: todayStr(), value }] },
+            weights: { ...s.weights, [pid]: [...cur, { date, value }] },
+            game: {
+              ...s.game,
+              [pid]: {
+                ...game,
+                xp: game.xp + awardedXp,
+                weightXpClaims: claims,
+              },
+            },
           };
-        }),
+        });
+        return awardedXp;
+      },
 
       addWater: (date, delta) =>
         set((s) => {
@@ -795,16 +855,22 @@ export const useStore = create<Store>()(
           const prior = claims[snapshot.date] ?? { stepTier: 0, standTier: 0 };
           const stepTier = stepTierFromCount(snapshot.steps);
           const standTier = standTierFromMinutes(snapshot.standMinutes);
-          awardedXp = healthRewardBetweenTiers(prior, { stepTier, standTier }).totalXp;
+          const workouts = snapshot.workouts ?? [];
+          const claimedWorkoutIds = new Set(prior.workoutIds ?? []);
+          const newWorkouts = workouts.filter((workout) => !claimedWorkoutIds.has(workout.id));
+          awardedXp = healthRewardBetweenTiers(prior, { stepTier, standTier }).totalXp
+            + newWorkouts.reduce((total, workout) => total + healthWorkoutXp(workout.durationMinutes), 0);
           claims[snapshot.date] = {
             stepTier: Math.max(prior.stepTier, stepTier),
             standTier: Math.max(prior.standTier, standTier),
+            workoutIds: Array.from(new Set([...(prior.workoutIds ?? []), ...workouts.map((workout) => workout.id)])),
           };
 
           const activity: HealthActivitySnapshot = {
             date: snapshot.date,
             steps: Math.max(0, Math.round(snapshot.steps)),
             standMinutes: Math.max(0, Math.round(snapshot.standMinutes)),
+            workouts,
             syncedAt: Date.now(),
             source: "apple-health",
           };
@@ -906,11 +972,12 @@ export const useStore = create<Store>()(
           friends: {},
           friendCodes: {},
           friendSharing: {},
+          friendNotifications: [],
         })),
     }),
     {
       name: "melonmate-v1",
-      version: 14,
+      version: 15,
       migrate: (persisted, version) => {
         let state = version < 11
           ? migrateLegacyCalorieData(persisted as Partial<Store>)
@@ -1011,6 +1078,7 @@ export const useStore = create<Store>()(
             ),
           };
         }
+        if (version < 15) state = { ...state, friendNotifications: state.friendNotifications ?? [] };
         return state;
       },
     }
@@ -1135,7 +1203,7 @@ export function makeSessionEntries(
       suggestedWeight ??
       previousSets[previousSets.length - 1]?.w ??
       last?.sets[last.sets.length - 1]?.w ??
-      spec.seedWeight ??
+      seedWeightInUnit(spec.seedWeight, profile.unit) ??
       0;
     return {
       key,

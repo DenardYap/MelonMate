@@ -25,29 +25,19 @@ describe("friend content sharing", () => {
     useStore.getState().resetAll();
   });
 
-  it("keeps plans private by default and publishes only opted-in content", () => {
+  it("always publishes the active meal plan, workout plan, and saved recipes", () => {
     const store = useStore.getState();
     const planId = store.plans[0].id;
     store.addRecipe(RECIPE);
     store.planMeal(todayStr(), "breakfast", RECIPE.id, 1);
     store.updateProfile("p-me", { planId });
 
-    const privateSnapshot = buildMemberSnapshot();
-    expect(privateSnapshot.version).toBe(6);
-    expect(privateSnapshot.mealPlan).toBeUndefined();
-    expect(privateSnapshot.workoutPlan).toBeUndefined();
-    expect(privateSnapshot.sharedRecipes).toBeUndefined();
-
-    useStore.getState().toggleSharedRecipe(RECIPE.id);
-    useStore.getState().updateProfile("p-me", {
-      shareMealPlan: true,
-      shareWorkoutPlan: true,
-    });
-
-    const sharedSnapshot = buildMemberSnapshot();
-    expect(sharedSnapshot.mealPlan?.recipes.map((recipe) => recipe.id)).toContain(RECIPE.id);
-    expect(sharedSnapshot.sharedRecipes?.map((recipe) => recipe.id)).toEqual([RECIPE.id]);
-    expect(sharedSnapshot.workoutPlan?.plan.id).toBe(planId);
+    const snapshot = buildMemberSnapshot();
+    expect(snapshot.version).toBe(8);
+    expect(snapshot.notificationDeviceId).toBe(store.ws.deviceId);
+    expect(snapshot.mealPlan?.recipes.map((recipe) => recipe.id)).toContain(RECIPE.id);
+    expect(snapshot.sharedRecipes?.map((recipe) => recipe.id)).toEqual([RECIPE.id]);
+    expect(snapshot.workoutPlan?.plan.id).toBe(planId);
   });
 
   it("publishes the selected profile photo with friend progress", () => {
@@ -64,30 +54,24 @@ describe("friend content sharing", () => {
     expect(buildMemberSnapshot("friend-with-avatar").photoDataUrl).toBe(photoDataUrl);
   });
 
-  it("publishes different optional content to each friend", () => {
+  it("publishes the same complete content to every friend without per-friend selection", () => {
     const store = useStore.getState();
     const planId = store.plans[0].id;
     store.addRecipe(RECIPE);
     store.planMeal(todayStr(), "breakfast", RECIPE.id, 1);
     store.updateProfile("p-me", { planId });
-    store.updateFriendSharing("friend-with-plans", {
-      shareMealPlan: true,
-      shareWorkoutPlan: true,
-      sharedRecipeIds: [RECIPE.id],
-    });
+    const first = buildMemberSnapshot("friend-with-plans");
+    const second = buildMemberSnapshot("friend-progress-only");
 
-    const shared = buildMemberSnapshot("friend-with-plans");
-    const privateSnapshot = buildMemberSnapshot("friend-progress-only");
-
-    expect(shared.mealPlan?.recipes.map((recipe) => recipe.id)).toContain(RECIPE.id);
-    expect(shared.workoutPlan?.plan.id).toBe(planId);
-    expect(shared.sharedRecipes?.map((recipe) => recipe.id)).toEqual([RECIPE.id]);
-    expect(privateSnapshot.mealPlan).toBeUndefined();
-    expect(privateSnapshot.workoutPlan).toBeUndefined();
-    expect(privateSnapshot.sharedRecipes).toBeUndefined();
+    expect(first.mealPlan?.recipes.map((recipe) => recipe.id)).toContain(RECIPE.id);
+    expect(first.workoutPlan?.plan.id).toBe(planId);
+    expect(first.sharedRecipes?.map((recipe) => recipe.id)).toEqual([RECIPE.id]);
+    expect(second.mealPlan).toEqual(first.mealPlan);
+    expect(second.workoutPlan).toEqual(first.workoutPlan);
+    expect(second.sharedRecipes).toEqual(first.sharedRecipes);
   });
 
-  it("can share a specific workout plan without changing the active plan", () => {
+  it("always publishes the active workout plan rather than an old sharing selection", () => {
     const store = useStore.getState();
     const activePlanId = store.plans[0].id;
     const sharedPlanId = store.plans[1].id;
@@ -97,8 +81,28 @@ describe("friend content sharing", () => {
       workoutPlanId: sharedPlanId,
     });
 
-    expect(buildMemberSnapshot("training-friend").workoutPlan?.plan.id).toBe(sharedPlanId);
+    expect(buildMemberSnapshot("training-friend").workoutPlan?.plan.id).toBe(activePlanId);
     expect(useStore.getState().profiles[0].planId).toBe(activePlanId);
+  });
+
+  it("publishes bounded food logs, Apple Health activity, theme, and badges", () => {
+    const store = useStore.getState();
+    store.addLog({
+      date: todayStr(),
+      meal: "lunch",
+      name: { en: "Apple", zh: "蘋果" },
+      emoji: "🍎",
+      grams: 100,
+      macros: { cal: 52, protein: 0.3, carbs: 14, fat: 0.2 },
+      src: "food",
+    });
+    store.applyHealthActivity({ date: todayStr(), steps: 8_000, standMinutes: 90, workouts: [] });
+
+    const snapshot = buildMemberSnapshot();
+    expect(snapshot.theme).toBe("honeydew");
+    expect(snapshot.badges).toEqual([]);
+    expect(snapshot.foodLogs?.[0].name.en).toBe("Apple");
+    expect(snapshot.health?.[0]).toMatchObject({ steps: 8_000, standMinutes: 90 });
   });
 
   it("adds and deletes a workout plan while clearing active sharing safely", () => {
