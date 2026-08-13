@@ -7,7 +7,7 @@ import {
   MAX_DAILY_REWARDED_FOOD_LOGS,
   WEIGHT_LOG_XP_REWARD,
 } from "./game";
-import { migrateHealthXpClaimTiers, useStore } from "./store";
+import { migrateHealthActivityWorkouts, migrateHealthXpClaimTiers, useStore } from "./store";
 import { STREAK_MILESTONES } from "./streakRewards";
 
 const PROFILE = "p-me";
@@ -181,5 +181,23 @@ describe("healthy-action XP store", () => {
       stepTier: 9,
       standTier: 6,
     });
+  });
+
+  it("repairs Health history saved before workouts were available", () => {
+    const migrated = migrateHealthActivityWorkouts({
+      health: {
+        [PROFILE]: {
+          "2026-08-09": {
+            date: "2026-08-09",
+            steps: 8_200,
+            standMinutes: 75,
+            syncedAt: 1,
+            source: "apple-health",
+          },
+        },
+      },
+    } as unknown as Partial<ReturnType<typeof useStore.getState>>);
+
+    expect(migrated.health?.[PROFILE]["2026-08-09"].workouts).toEqual([]);
   });
 });

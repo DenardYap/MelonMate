@@ -242,6 +242,28 @@ export function migrateHealthXpClaimTiers(state: Partial<Store>): Partial<Store>
   };
 }
 
+/** Repair Health snapshots saved before workout history was added in v17. */
+export function migrateHealthActivityWorkouts(state: Partial<Store>): Partial<Store> {
+  return {
+    ...state,
+    health: Object.fromEntries(
+      Object.entries(state.health ?? {}).map(([profileId, days]) => [
+        profileId,
+        Object.fromEntries(
+          Object.entries(days ?? {}).map(([date, snapshot]) => [
+            date,
+            {
+              ...snapshot,
+              date: snapshot.date || date,
+              workouts: Array.isArray(snapshot.workouts) ? snapshot.workouts : [],
+            },
+          ])
+        ),
+      ])
+    ),
+  };
+}
+
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({
@@ -992,7 +1014,9 @@ export const useStore = create<Store>()(
           return { game: out };
         }),
 
-      importAll: (data) => set(() => ({ ...migrateLegacyCalorieData(data as Store) })),
+      importAll: (data) => set(() => ({
+        ...migrateHealthActivityWorkouts(migrateLegacyCalorieData(data as Store)),
+      })),
 
       resetAll: () =>
         set(() => ({
@@ -1026,7 +1050,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: "melonmate-v1",
-      version: 17,
+      version: 18,
       migrate: (persisted, version) => {
         let state = version < 11
           ? migrateLegacyCalorieData(persisted as Partial<Store>)
@@ -1150,6 +1174,7 @@ export const useStore = create<Store>()(
             ])),
           };
         }
+        if (version < 18) state = migrateHealthActivityWorkouts(state);
         return state;
       },
     }

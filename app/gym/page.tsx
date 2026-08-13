@@ -325,7 +325,7 @@ function AppleHealthStatsCard() {
     .sort((left, right) => right.date.localeCompare(left.date)), [healthByDate, today]);
   const todayActivity = healthByDate?.[today];
   const recentWorkouts = useMemo(() => recentDays
-    .flatMap((day) => day.workouts.map((workout) => ({ date: day.date, workout })))
+    .flatMap((day) => (day.workouts ?? []).map((workout) => ({ date: day.date, workout })))
     .sort((left, right) => right.workout.startedAt - left.workout.startedAt), [recentDays]);
   const workoutMinutes = recentWorkouts.reduce((total, item) => total + item.workout.durationMinutes, 0);
   const activeCalories = recentWorkouts.reduce((total, item) => total + item.workout.activeCalories, 0);
