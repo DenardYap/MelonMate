@@ -194,5 +194,6 @@ final class MelonMateAudioPlugin: CAPPlugin, CAPBridgedPlugin {
 final class MelonMateBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(MelonMateAudioPlugin())
+        bridge?.registerPluginInstance(MelonMateAppearancePlugin())
     }
 }
