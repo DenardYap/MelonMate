@@ -299,6 +299,8 @@ export interface GameState {
   melons: number; // grown melons (goal days)
   golden: number; // PR melons
   xp: number;
+  /** Historical Farm XP already folded into player XP during the Dew-only migration. */
+  legacyFarmXpConverted?: number;
   lastEval: string; // last date evaluated (YYYY-MM-DD)
   history: Record<string, boolean>; // date -> goal hit
   /** Lifetime per-day claims prevent add/delete food-log XP farming. */

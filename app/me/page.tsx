@@ -428,6 +428,7 @@ export default function MePage() {
           onClick={() => {
             if (window.confirm(t("resetConfirm"))) {
               localStorage.removeItem("melonmate-v1");
+              localStorage.removeItem("melonmate-garden-v1");
               window.location.reload();
             }
           }}

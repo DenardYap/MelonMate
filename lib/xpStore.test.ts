@@ -5,6 +5,7 @@ import {
   DAILY_XP_CAP,
   FOOD_LOG_XP_REWARD,
   MAX_DAILY_REWARDED_FOOD_LOGS,
+  MAX_TOTAL_XP,
   WEIGHT_LOG_XP_REWARD,
 } from "./game";
 import { migrateHealthActivityWorkouts, migrateHealthXpClaimTiers, useStore } from "./store";
@@ -25,6 +26,46 @@ function foodLog(date = todayStr()) {
 describe("healthy-action XP store", () => {
   beforeEach(() => {
     useStore.getState().resetAll();
+  });
+
+  it("grandfathers historical Farm XP exactly once", () => {
+    useStore.setState((state) => ({
+      game: {
+        ...state.game,
+        [PROFILE]: {
+          ...state.game[PROFILE],
+          xp: 700,
+        },
+      },
+    }));
+
+    expect(useStore.getState().grandfatherLegacyFarmXp({ [PROFILE]: 2_500 })).toBe(2_500);
+    expect(useStore.getState().game[PROFILE]).toMatchObject({
+      xp: 3_200,
+      legacyFarmXpConverted: 2_500,
+    });
+    expect(useStore.getState().grandfatherLegacyFarmXp({ [PROFILE]: 2_500 })).toBe(0);
+    expect(useStore.getState().game[PROFILE].xp).toBe(3_200);
+  });
+
+  it("only converts newly discovered historical Farm XP and respects the total cap", () => {
+    useStore.setState((state) => ({
+      game: {
+        ...state.game,
+        [PROFILE]: {
+          ...state.game[PROFILE],
+          xp: MAX_TOTAL_XP - 100,
+          legacyFarmXpConverted: 2_000,
+        },
+      },
+    }));
+
+    expect(useStore.getState().grandfatherLegacyFarmXp({ [PROFILE]: 2_500 })).toBe(100);
+    expect(useStore.getState().game[PROFILE]).toMatchObject({
+      xp: MAX_TOTAL_XP,
+      legacyFarmXpConverted: 2_500,
+    });
+    expect(useStore.getState().grandfatherLegacyFarmXp({ [PROFILE]: 2_250 })).toBe(0);
   });
 
   it("awards each allowed food log and prevents add/delete farming", () => {

@@ -47,7 +47,16 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // zustand/persist rehydrates synchronously from localStorage on first client render
     setHydrated(true);
-    const reconcile = () => useStore.getState().reconcileGame();
+    const reconcile = () => {
+      const legacyFarmXp = Object.fromEntries(
+        Object.entries(useGardenStore.getState().gardens).map(([profileId, garden]) => [
+          profileId,
+          garden.gardenXp,
+        ])
+      );
+      useStore.getState().grandfatherLegacyFarmXp(legacyFarmXp);
+      useStore.getState().reconcileGame();
+    };
     const reconcileWhenVisible = () => {
       if (document.visibilityState === "visible") reconcile();
     };

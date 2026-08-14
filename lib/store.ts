@@ -41,6 +41,7 @@ import {
   isDailyXpEligible,
   levelFromXp,
   MAX_DAILY_REWARDED_FOOD_LOGS,
+  MAX_TOTAL_XP,
   standTierFromMinutes,
   stepTierFromCount,
   WEIGHT_LOG_XP_REWARD,
@@ -211,6 +212,8 @@ export interface Store {
   applyMembers: (members: Record<string, MemberSnapshot>) => void;
 
   reconcileGame: () => void;
+  /** Permanently preserves Farm XP earned before Farm rewards became Dew-only. */
+  grandfatherLegacyFarmXp: (legacyXpByProfile: Record<string, number>) => number;
   acknowledgeStreakReward: (days: number) => void;
   awardGolden: (n: number) => void;
 
@@ -1014,6 +1017,41 @@ export const useStore = create<Store>()(
           return { game: out };
         }),
 
+      grandfatherLegacyFarmXp: (legacyXpByProfile) => {
+        let totalAwarded = 0;
+        set((s) => {
+          const game = { ...s.game };
+          const profileIds = new Set(s.profiles.map((profile) => profile.id));
+          let changed = false;
+          for (const [profileId, rawLegacyXp] of Object.entries(legacyXpByProfile)) {
+            if (!profileIds.has(profileId)) continue;
+            const saved = game[profileId] ?? freshGame();
+            const legacyXp = Number.isFinite(rawLegacyXp)
+              ? Math.max(0, Math.floor(rawLegacyXp))
+              : 0;
+            const alreadyConverted = Number.isFinite(saved.legacyFarmXpConverted)
+              ? Math.max(0, Math.floor(saved.legacyFarmXpConverted ?? 0))
+              : 0;
+            const unconvertedXp = Math.max(0, legacyXp - alreadyConverted);
+            if (unconvertedXp === 0) continue;
+            const currentXp = Math.min(MAX_TOTAL_XP, Math.max(0, saved.xp));
+            const awardedXp = Math.min(unconvertedXp, MAX_TOTAL_XP - currentXp);
+
+            changed = true;
+            totalAwarded += awardedXp;
+            game[profileId] = {
+              ...saved,
+              xp: currentXp + awardedXp,
+              // Keep the highest observed value so restoring an older Farm save
+              // cannot grant the same historical XP for a second time.
+              legacyFarmXpConverted: Math.max(alreadyConverted, legacyXp),
+            };
+          }
+          return changed ? { game } : s;
+        });
+        return totalAwarded;
+      },
+
       importAll: (data) => set(() => ({
         ...migrateHealthActivityWorkouts(migrateLegacyCalorieData(data as Store)),
       })),
@@ -1050,7 +1088,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: "melonmate-v1",
-      version: 18,
+      version: 19,
       migrate: (persisted, version) => {
         let state = version < 11
           ? migrateLegacyCalorieData(persisted as Partial<Store>)
