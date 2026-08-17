@@ -8,6 +8,7 @@ import { useHealthRewardQueue } from "@/lib/healthRewards";
 import { sendHealthRewardNotification, successHaptic } from "@/lib/nativeApp";
 import { playSound } from "@/lib/soundscape";
 import { useStore } from "@/lib/store";
+import { healthWorkoutXp } from "@/lib/game";
 
 export default function HealthRewardCelebration() {
   const lang = useStore((state) => state.lang);
@@ -112,6 +113,7 @@ export default function HealthRewardCelebration() {
                 <AppIcon name="gym" size={18} />
                 <b>{workout.activityType}</b>
                 <small>{Math.round(workout.durationMinutes)} min · {Math.round(workout.activeCalories)} {copy.calories}</small>
+                <em className="health-workout-xp">+{workout.earnedXp ?? healthWorkoutXp(workout.durationMinutes)} XP</em>
               </span>
             ))}
           </div>

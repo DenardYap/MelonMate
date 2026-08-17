@@ -6,6 +6,7 @@ import type {
   DayPlan,
   CustomExercise,
   FoodItem,
+  FriendDailyProgress,
   GameState,
   GroceryItem,
   HealthActivitySnapshot,
@@ -19,8 +20,10 @@ import type {
   FriendSharingSettings,
   Profile,
   Recipe,
+  SetLog,
   SessionExercise,
   ThemeId,
+  WeightUnit,
   WeightEntry,
   WorkoutPlan,
   WorkoutSession,
@@ -29,7 +32,7 @@ import type {
 import { BUILTIN_RECIPES } from "./recipes";
 import { buildAllPlans, EXERCISE_LIBRARY } from "./plans";
 import { addDays, todayStr } from "./dates";
-import { est1RM, exKey, sumMacros } from "./nutrition";
+import { exKey, sumMacros } from "./nutrition";
 import {
   combinedXp,
   dailyXpAward,
@@ -39,6 +42,7 @@ import {
   healthWorkoutXp,
   inAppWorkoutXp,
   isDailyXpEligible,
+  isTrackingDay,
   levelFromXp,
   MAX_DAILY_REWARDED_FOOD_LOGS,
   MAX_TOTAL_XP,
@@ -48,7 +52,16 @@ import {
 } from "./game";
 import { isThemeUnlocked } from "./themes";
 import { earnedStreakMilestones, streakMilestoneAt } from "./streakRewards";
-import { completedSets, lastCompletedSessionForDay, recommendExercisePreset, seedWeightInUnit } from "./workouts";
+import {
+  compareSetPerformance,
+  completedSets,
+  convertWeightUnit,
+  convertWorkoutPlanWeights,
+  lastCompletedSessionForDay,
+  recommendExercisePreset,
+  seedWeightInUnit,
+  topCompletedSet,
+} from "./workouts";
 import { migrateLegacyCalorieData, repairInflatedCalorieData } from "./calories";
 import {
   applyMealPlanTemplate as applyMealPlanToWeek,
@@ -100,6 +113,22 @@ function defaultProfiles(): Profile[] {
   ];
 }
 
+function convertSessionWeights(session: WorkoutSession, from: WeightUnit, to: WeightUnit): WorkoutSession {
+  return {
+    ...session,
+    entries: session.entries.map((entry) => ({
+      ...entry,
+      targetWeight: entry.targetWeight == null
+        ? undefined
+        : convertWeightUnit(entry.targetWeight, from, to),
+      sets: entry.sets.map((set) => ({
+        ...set,
+        w: convertWeightUnit(set.w, from, to),
+      })),
+    })),
+  };
+}
+
 export interface Store {
   // settings
   lang: Lang;
@@ -130,8 +159,11 @@ export interface Store {
 
   // shared workspace (friends sync)
   ws: {
+    /** Legacy newest connection code. Kept so existing one-to-one friendships continue syncing. */
     code: string | null;
-    /** Every one-to-one invite this device created or joined. `code` is the newest invite. */
+    /** This person's reusable six-digit friend code. */
+    personalCode: string | null;
+    /** Every permanent or legacy friend code this device owns or joined. */
     codes: string[];
     deviceId: string;
     lastSync: number | null;
@@ -144,6 +176,8 @@ export interface Store {
   /** Connection code and outbound sharing preferences, keyed by friend member id. */
   friendCodes: Record<string, string>;
   friendSharing: Record<string, FriendSharingSettings>;
+  /** Latest explicit daily check-in sent to each friend. */
+  friendDailyProgress: Record<string, FriendDailyProgress>;
   friendNotifications: FriendShareNotification[];
 
   // actions
@@ -168,6 +202,7 @@ export interface Store {
   unselectRecipe: (id: string) => void;
   toggleSharedRecipe: (id: string) => void;
   updateFriendSharing: (friendId: string, patch: Partial<FriendSharingSettings>) => void;
+  shareDailyProgress: (friendId: string) => FriendDailyProgress;
   toggleFriendSharedRecipe: (friendId: string, recipeId: string) => void;
   importFriendRecipe: (friendId: string, recipe: Recipe) => string;
   importFriendMealPlan: (
@@ -175,7 +210,7 @@ export interface Store {
     snapshot: FriendMealPlanSnapshot,
     mode: MealPlanApplyMode
   ) => { meals: number; recipes: number };
-  importFriendWorkoutPlan: (friendId: string, plan: WorkoutPlan) => string;
+  importFriendWorkoutPlan: (friendId: string, plan: WorkoutPlan, sourceUnit: WeightUnit) => string;
   addFriendNotifications: (notifications: FriendShareNotification[]) => void;
   markFriendNotificationRead: (id: string) => void;
   markFriendNotificationsRead: (kind?: FriendShareNotification["kind"]) => void;
@@ -194,7 +229,7 @@ export interface Store {
   addGroceriesBulk: (items: Omit<GroceryItem, "id">[]) => void;
 
   updatePlan: (planId: string, mut: (p: WorkoutPlan) => WorkoutPlan) => void;
-  addPlan: (plan: WorkoutPlan) => void;
+  addPlan: (plan: WorkoutPlan, select?: boolean) => void;
   deletePlan: (planId: string) => void;
   addCustomExercise: (exercise: CustomExercise) => void;
 
@@ -293,12 +328,13 @@ export const useStore = create<Store>()(
 
       game: {},
 
-      ws: { code: null, codes: [], deviceId: newId(), lastSync: null, error: null, syncing: false },
+      ws: { code: null, personalCode: null, codes: [], deviceId: newId(), lastSync: null, error: null, syncing: false },
       sharedRev: 0,
       sharedDirty: false,
       friends: {},
       friendCodes: {},
       friendSharing: {},
+      friendDailyProgress: {},
       friendNotifications: [],
 
       setLang: (l) => set({ lang: l }),
@@ -326,33 +362,80 @@ export const useStore = create<Store>()(
           });
 
           const unit = patch.unit ?? active.unit;
+          const unitChanged = unit !== active.unit;
           const displayWeight =
             patch.weightKg == null
               ? null
               : unit === "kg"
                 ? patch.weightKg
                 : Math.round(patch.weightKg * 2.20462 * 10) / 10;
-          const priorWeights = (s.weights[active.id] ?? []).filter((entry) => entry.date !== todayStr());
+          const convertedWeights = (s.weights[active.id] ?? []).map((entry) => ({
+            ...entry,
+            value: unitChanged ? convertWeightUnit(entry.value, active.unit, unit) : entry.value,
+          }));
+          const priorWeights = convertedWeights.filter((entry) => entry.date !== todayStr());
 
           return {
             onboarded: true,
             lang,
             profiles: s.profiles.map((p) => (p.id === active.id ? { ...p, ...patch } : p)),
             planner,
-            weights:
-              displayWeight == null
-                ? s.weights
-                : { ...s.weights, [active.id]: [...priorWeights, { date: todayStr(), value: displayWeight }] },
+            plans: unitChanged
+              ? s.plans.map((plan) => convertWorkoutPlanWeights(plan, active.unit, unit))
+              : s.plans,
+            sessions: unitChanged
+              ? {
+                  ...s.sessions,
+                  [active.id]: (s.sessions[active.id] ?? []).map((session) =>
+                    convertSessionWeights(session, active.unit, unit)
+                  ),
+                }
+              : s.sessions,
+            weights: unitChanged || displayWeight != null
+              ? {
+                  ...s.weights,
+                  [active.id]: displayWeight == null
+                    ? convertedWeights
+                    : [...priorWeights, { date: todayStr(), value: displayWeight }],
+                }
+              : s.weights,
           };
         }),
 
       skipOnboarding: () => set({ onboarded: true }),
 
       updateProfile: (id, patch) =>
-        set((s) => ({
-          profiles: s.profiles.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-          sharedDirty: true,
-        })),
+        set((s) => {
+          const current = s.profiles.find((profile) => profile.id === id);
+          if (!current) return s;
+          const nextUnit = patch.unit ?? current.unit;
+          const unitChanged = nextUnit !== current.unit;
+          const convertPlans = unitChanged && id === s.activeProfileId;
+          return {
+            profiles: s.profiles.map((profile) => profile.id === id ? { ...profile, ...patch } : profile),
+            plans: convertPlans
+              ? s.plans.map((plan) => convertWorkoutPlanWeights(plan, current.unit, nextUnit))
+              : s.plans,
+            sessions: unitChanged
+              ? {
+                  ...s.sessions,
+                  [id]: (s.sessions[id] ?? []).map((session) =>
+                    convertSessionWeights(session, current.unit, nextUnit)
+                  ),
+                }
+              : s.sessions,
+            weights: unitChanged
+              ? {
+                  ...s.weights,
+                  [id]: (s.weights[id] ?? []).map((entry) => ({
+                    ...entry,
+                    value: convertWeightUnit(entry.value, current.unit, nextUnit),
+                  })),
+                }
+              : s.weights,
+            sharedDirty: true,
+          };
+        }),
 
       addLog: (e) => {
         let awardedXp = 0;
@@ -491,6 +574,12 @@ export const useStore = create<Store>()(
       updateFriendSharing: (friendId, patch) =>
         set((s) => {
           const current = s.friendSharing[friendId] ?? {
+            shareNutrition: false,
+            shareFoodLogs: false,
+            shareWorkoutHistory: false,
+            shareHealth: false,
+            shareFarm: false,
+            shareWeightTrend: false,
             shareMealPlan: false,
             shareWorkoutPlan: false,
             sharedRecipeIds: [],
@@ -504,9 +593,46 @@ export const useStore = create<Store>()(
           };
         }),
 
+      shareDailyProgress: (friendId) => {
+        const s = get();
+        const profile = s.profiles.find((item) => item.id === s.activeProfileId) ?? s.profiles[0];
+        const date = todayStr();
+        const totals = sumMacros((s.logs[profile.id] ?? []).filter((entry) => entry.date === date).map((entry) => entry.macros));
+        const health = s.health[profile.id]?.[date];
+        const workouts = (s.sessions[profile.id] ?? []).filter((session) => session.date === date && session.endedAt).length
+          + (health?.workouts?.length ?? 0);
+        const sharedAt = Date.now();
+        const progress: FriendDailyProgress = {
+          id: `${date}:${sharedAt}`,
+          date,
+          sharedAt,
+          calories: Math.round(totals.cal),
+          calorieGoal: profile.goals.cal,
+          protein: Math.round(totals.protein),
+          proteinGoal: profile.goals.protein,
+          waterCups: s.water[profile.id]?.[date] ?? 0,
+          waterGoal: profile.waterGoal ?? 8,
+          workouts,
+          steps: health?.steps ?? 0,
+          standMinutes: health?.standMinutes ?? 0,
+          streak: s.game[profile.id]?.streak ?? 0,
+        };
+        set((current) => ({
+          friendDailyProgress: { ...current.friendDailyProgress, [friendId]: progress },
+          sharedDirty: true,
+        }));
+        return progress;
+      },
+
       toggleFriendSharedRecipe: (friendId, recipeId) =>
         set((s) => {
           const current = s.friendSharing[friendId] ?? {
+            shareNutrition: false,
+            shareFoodLogs: false,
+            shareWorkoutHistory: false,
+            shareHealth: false,
+            shareFarm: false,
+            shareWeightTrend: false,
             shareMealPlan: false,
             shareWorkoutPlan: false,
             sharedRecipeIds: [],
@@ -641,17 +767,25 @@ export const useStore = create<Store>()(
         return result;
       },
 
-      importFriendWorkoutPlan: (friendId, plan) => {
+      importFriendWorkoutPlan: (friendId, plan, sourceUnit) => {
         const copiedId = friendCopyId(friendId, "workout", plan.id);
-        set((s) => ({
-          plans: s.plans.some((saved) => saved.id === copiedId)
-            ? s.plans
-            : [{ ...structuredClone(plan), id: copiedId }, ...s.plans],
-          profiles: s.profiles.map((profile) =>
-            profile.id === s.activeProfileId ? { ...profile, planId: copiedId } : profile
-          ),
-          sharedDirty: true,
-        }));
+        set((s) => {
+          const active = s.profiles.find((profile) => profile.id === s.activeProfileId) ?? s.profiles[0];
+          const converted = {
+            ...convertWorkoutPlanWeights(plan, sourceUnit, active.unit),
+            id: copiedId,
+          };
+          const exists = s.plans.some((saved) => saved.id === copiedId);
+          return {
+            plans: exists
+              ? s.plans.map((saved) => saved.id === copiedId ? converted : saved)
+              : [converted, ...s.plans],
+            profiles: s.profiles.map((profile) =>
+              profile.id === s.activeProfileId ? { ...profile, planId: copiedId } : profile
+            ),
+            sharedDirty: true,
+          };
+        });
         return copiedId;
       },
 
@@ -726,9 +860,14 @@ export const useStore = create<Store>()(
           sharedDirty: true,
         })),
 
-      addPlan: (plan) =>
+      addPlan: (plan, select = false) =>
         set((s) => ({
           plans: [structuredClone(plan), ...s.plans],
+          profiles: select
+            ? s.profiles.map((profile) =>
+                profile.id === s.activeProfileId ? { ...profile, planId: plan.id } : profile
+              )
+            : s.profiles,
           sharedDirty: true,
         })),
 
@@ -793,26 +932,25 @@ export const useStore = create<Store>()(
 
         // compute PRs vs all previous sessions
         const prior = (s.sessions[pid] ?? []).filter((x) => x.id !== sessionId && x.endedAt);
-        const bestByKey: Record<string, number> = {};
+        const bestByKey: Record<string, SetLog> = {};
         for (const ps of prior) {
           for (const e of ps.entries) {
-            for (const st of e.sets) {
-              if (!st.done || st.w <= 0) continue;
-              const k = e.key;
-              bestByKey[k] = Math.max(bestByKey[k] ?? 0, est1RM(st.w, st.reps));
-            }
+            const topSet = topCompletedSet(e.sets);
+            if (!topSet) continue;
+            const previousBest = bestByKey[e.key];
+            if (!previousBest || compareSetPerformance(topSet, previousBest) > 0) bestByKey[e.key] = topSet;
           }
         }
         let prs = 0;
         let volume = 0;
         for (const e of session.entries) {
-          let bestThis = 0;
           for (const st of e.sets) {
             if (!st.done) continue;
             volume += st.w * st.reps;
-            bestThis = Math.max(bestThis, est1RM(st.w, st.reps));
           }
-          if (bestThis > 0 && bestThis > (bestByKey[e.key] ?? 0) && (bestByKey[e.key] ?? 0) > 0) prs += 1;
+          const bestThis = topCompletedSet(e.sets);
+          const previousBest = bestByKey[e.key];
+          if (bestThis && previousBest && compareSetPerformance(bestThis, previousBest) > 0) prs += 1;
         }
         const endedAt = Date.now();
         const durationMs = endedAt - session.startedAt;
@@ -899,10 +1037,35 @@ export const useStore = create<Store>()(
           const workouts = snapshot.workouts ?? [];
           const claimedWorkoutIds = new Set(prior.workoutIds ?? []);
           const newWorkouts = workouts.filter((workout) => !claimedWorkoutIds.has(workout.id));
-          const requestedXp = healthRewardBetweenTiers(prior, { stepTier, standTier }).totalXp
+          const milestoneReward = healthRewardBetweenTiers(prior, { stepTier, standTier });
+          const requestedXp = milestoneReward.totalXp
             + newWorkouts.reduce((total, workout) => total + healthWorkoutXp(workout.durationMinutes), 0);
           awardedXp = dailyXpAward(g.xp, dailyXpEarned[snapshot.date] ?? 0, requestedXp);
           if (awardedXp > 0) dailyXpEarned[snapshot.date] = (dailyXpEarned[snapshot.date] ?? 0) + awardedXp;
+          let remainingAwardedXp = awardedXp;
+          remainingAwardedXp -= Math.min(milestoneReward.stepXp, remainingAwardedXp);
+          remainingAwardedXp -= Math.min(milestoneReward.standXp, remainingAwardedXp);
+          const newWorkoutXp = new Map<string, number>();
+          for (const workout of newWorkouts) {
+            const earnedXp = Math.min(healthWorkoutXp(workout.durationMinutes), remainingAwardedXp);
+            newWorkoutXp.set(workout.id, earnedXp);
+            remainingAwardedXp -= earnedXp;
+          }
+          const savedWorkoutXp = new Map(
+            (s.health?.[pid]?.[snapshot.date]?.workouts ?? [])
+              .filter((workout) => Number.isFinite(workout.earnedXp))
+              .map((workout) => [workout.id, workout.earnedXp as number])
+          );
+          const workoutsWithXp = workouts.map((workout) => ({
+            ...workout,
+            ...(
+              newWorkoutXp.has(workout.id)
+                ? { earnedXp: newWorkoutXp.get(workout.id) }
+                : savedWorkoutXp.has(workout.id)
+                  ? { earnedXp: savedWorkoutXp.get(workout.id) }
+                  : {}
+            ),
+          }));
           claims[snapshot.date] = {
             stepTier: Math.max(prior.stepTier, stepTier),
             standTier: Math.max(prior.standTier, standTier),
@@ -913,7 +1076,7 @@ export const useStore = create<Store>()(
             date: snapshot.date,
             steps: Math.max(0, Math.round(snapshot.steps)),
             standMinutes: Math.max(0, Math.round(snapshot.standMinutes)),
-            workouts,
+            workouts: workoutsWithXp,
             syncedAt: Date.now(),
             source: "apple-health",
           };
@@ -965,7 +1128,7 @@ export const useStore = create<Store>()(
           return { game: { ...s.game, [pid]: { ...g, golden: g.golden + n } } };
         }),
 
-      /** Walk unevaluated past days and grow melons for goal-hit days. */
+      /** Evaluate past food bonuses and consecutive tracking days. */
       reconcileGame: () =>
         set((s) => {
           const out: Record<string, GameState> = { ...s.game };
@@ -976,38 +1139,35 @@ export const useStore = create<Store>()(
             let guard = 0;
             while (cursor <= yesterday && guard < 400) {
               const entries = (s.logs[p.id] ?? []).filter((e) => e.date === cursor);
-              if (entries.length > 0) {
-                const tot = sumMacros(entries.map((e) => e.macros));
-                const hit = isDailyXpEligible(entries.length, tot.cal, p.goals.cal);
-                g.history[cursor] = hit;
-                if (hit) {
-                  const dailyXpEarned = { ...(g.dailyXpEarned ?? {}) };
-                  const awardedDailyXp = dailyXpAward(g.xp, dailyXpEarned[cursor] ?? 0, DAILY_XP_REWARD);
-                  if (awardedDailyXp > 0) dailyXpEarned[cursor] = (dailyXpEarned[cursor] ?? 0) + awardedDailyXp;
-                  g.streak += 1;
-                  g.melons += 1;
-                  g.xp += awardedDailyXp;
-                  const milestone = streakMilestoneAt(g.streak);
-                  const streakClaims = g.streakMilestoneClaims ?? [];
-                  if (milestone && !streakClaims.includes(milestone.days)) {
-                    const awardedStreakXp = dailyXpAward(g.xp, dailyXpEarned[cursor] ?? 0, milestone.xp);
-                    if (awardedStreakXp > 0) dailyXpEarned[cursor] = (dailyXpEarned[cursor] ?? 0) + awardedStreakXp;
-                    g.xp += awardedStreakXp;
-                    g.streakMilestoneClaims = [...streakClaims, milestone.days];
-                    g.pendingStreakRewards = [
-                      ...(g.pendingStreakRewards ?? []),
-                      { days: milestone.days, xp: awardedStreakXp, date: cursor },
-                    ];
-                  }
-                  g.dailyXpEarned = dailyXpEarned;
-                  g.best = Math.max(g.best, g.streak);
-                } else {
-                  g.streak = 0;
-                }
-              } else {
-                // nothing logged: streak pauses (kind, not punishing)
-                g.history[cursor] = false;
+              const hit = isDailyXpEligible(entries.length);
+              const tracked = isTrackingDay(entries.length);
+              const dailyXpEarned = { ...(g.dailyXpEarned ?? {}) };
+              g.history[cursor] = hit;
+              if (hit) {
+                const awardedDailyXp = dailyXpAward(g.xp, dailyXpEarned[cursor] ?? 0, DAILY_XP_REWARD);
+                if (awardedDailyXp > 0) dailyXpEarned[cursor] = (dailyXpEarned[cursor] ?? 0) + awardedDailyXp;
+                g.melons += 1;
+                g.xp += awardedDailyXp;
               }
+              if (tracked) {
+                g.streak += 1;
+                const milestone = streakMilestoneAt(g.streak);
+                const streakClaims = g.streakMilestoneClaims ?? [];
+                if (milestone && !streakClaims.includes(milestone.days)) {
+                  const awardedStreakXp = dailyXpAward(g.xp, dailyXpEarned[cursor] ?? 0, milestone.xp);
+                  if (awardedStreakXp > 0) dailyXpEarned[cursor] = (dailyXpEarned[cursor] ?? 0) + awardedStreakXp;
+                  g.xp += awardedStreakXp;
+                  g.streakMilestoneClaims = [...streakClaims, milestone.days];
+                  g.pendingStreakRewards = [
+                    ...(g.pendingStreakRewards ?? []),
+                    { days: milestone.days, xp: awardedStreakXp, date: cursor },
+                  ];
+                }
+                g.best = Math.max(g.best, g.streak);
+              } else {
+                g.streak = 0;
+              }
+              g.dailyXpEarned = dailyXpEarned;
               g.lastEval = cursor;
               cursor = addDays(cursor, 1);
               guard += 1;
@@ -1077,18 +1237,19 @@ export const useStore = create<Store>()(
           water: {},
           health: {},
           game: {},
-          ws: { code: null, codes: [], deviceId: newId(), lastSync: null, error: null, syncing: false },
+          ws: { code: null, personalCode: null, codes: [], deviceId: newId(), lastSync: null, error: null, syncing: false },
           sharedRev: 0,
           sharedDirty: false,
           friends: {},
           friendCodes: {},
           friendSharing: {},
+          friendDailyProgress: {},
           friendNotifications: [],
         })),
     }),
     {
       name: "melonmate-v1",
-      version: 19,
+      version: 23,
       migrate: (persisted, version) => {
         let state = version < 11
           ? migrateLegacyCalorieData(persisted as Partial<Store>)
@@ -1182,6 +1343,12 @@ export const useStore = create<Store>()(
             ),
             friendSharing: Object.fromEntries(
               Object.keys(existingFriends).map((friendId) => [friendId, {
+                shareNutrition: false,
+                shareFoodLogs: false,
+                shareWorkoutHistory: false,
+                shareHealth: false,
+                shareFarm: false,
+                shareWeightTrend: false,
                 shareMealPlan: Boolean(activeProfile?.shareMealPlan),
                 shareWorkoutPlan: Boolean(activeProfile?.shareWorkoutPlan),
                 sharedRecipeIds: [...(activeProfile?.sharedRecipeIds ?? [])],
@@ -1213,6 +1380,48 @@ export const useStore = create<Store>()(
           };
         }
         if (version < 18) state = migrateHealthActivityWorkouts(state);
+        if (version < 20) {
+          state = {
+            ...state,
+            friendSharing: Object.fromEntries(
+              Object.entries(state.friendSharing ?? {}).map(([friendId, settings]) => [
+                friendId,
+                {
+                  ...settings,
+                  shareNutrition: settings.shareNutrition ?? false,
+                  shareFoodLogs: settings.shareFoodLogs ?? false,
+                  shareWorkoutHistory: settings.shareWorkoutHistory ?? false,
+                  shareHealth: settings.shareHealth ?? false,
+                  shareFarm: settings.shareFarm ?? false,
+                },
+              ])
+            ),
+          };
+        }
+        if (version < 21) {
+          const legacyCode = state.ws?.code ?? null;
+          state = {
+            ...state,
+            ws: state.ws ? {
+              ...state.ws,
+              // Old MELON-* invites remain connected, but users receive a new
+              // permanent six-digit code instead of advertising a legacy room.
+              personalCode: legacyCode && /^\d{6}$/.test(legacyCode) ? legacyCode : null,
+            } : state.ws,
+          };
+        }
+        if (version < 22) {
+          state = {
+            ...state,
+            friendSharing: Object.fromEntries(
+              Object.entries(state.friendSharing ?? {}).map(([friendId, settings]) => [
+                friendId,
+                { ...settings, shareWeightTrend: settings.shareWeightTrend ?? false },
+              ])
+            ),
+          };
+        }
+        if (version < 23) state = { ...state, friendDailyProgress: state.friendDailyProgress ?? {} };
         return state;
       },
     }

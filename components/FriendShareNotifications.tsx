@@ -19,7 +19,7 @@ export function FriendShareNotifier() {
     }
     const incoming = notifications.filter((notification) => !knownIds.current?.has(notification.id));
     incoming.slice(0, 3).reverse().forEach((notification) => {
-      toast(friendShareNotificationText(notification, lang), notification.kind === "recipe" ? "kitchen" : "gym");
+      toast(friendShareNotificationText(notification, lang), notification.kind === "recipe" ? "kitchen" : notification.kind === "progress" ? "goal" : "gym");
     });
     notifications.forEach((notification) => knownIds.current?.add(notification.id));
   }, [lang, notifications]);
@@ -77,7 +77,7 @@ export function FriendNotificationButton() {
                     key={notification.id}
                     onClick={() => openNotification(notification.id, notification.path)}
                   >
-                    <span className="icon-tile"><AppIcon name={notification.kind === "recipe" ? "kitchen" : "gym"} size={18} /></span>
+                    <span className="icon-tile"><AppIcon name={notification.kind === "recipe" ? "kitchen" : notification.kind === "progress" ? "goal" : "gym"} size={18} /></span>
                     <span className="min-w-0 flex-1">
                       <b>{friendShareNotificationText(notification, lang)}</b>
                       <small>{new Intl.DateTimeFormat(lang === "zh" ? "zh-Hant" : "en", { dateStyle: "medium", timeStyle: "short" }).format(notification.createdAt)}</small>

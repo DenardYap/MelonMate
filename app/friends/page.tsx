@@ -1,23 +1,14 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FriendProfile } from "./[id]/page";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import FriendsHub from "@/components/FriendsHub";
 
-function QueryFriendProfile() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const friendId = params.get("id");
-  useEffect(() => {
-    if (!friendId) router.replace("/me");
-  }, [friendId, router]);
-  return friendId ? <FriendProfile friendId={friendId} /> : null;
+function FriendsPageContent() {
+  const searchParams = useSearchParams();
+  return <FriendsHub autoOpenShare={searchParams.get("share") === "daily"} />;
 }
 
-export default function StaticFriendProfilePage() {
-  return (
-    <Suspense fallback={null}>
-      <QueryFriendProfile />
-    </Suspense>
-  );
+export default function FriendsPage() {
+  return <Suspense fallback={null}><FriendsPageContent /></Suspense>;
 }

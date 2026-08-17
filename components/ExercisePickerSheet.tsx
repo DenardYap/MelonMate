@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { AppIcon } from "@/components/icons";
+import { ExerciseGlyph } from "@/components/ExerciseGlyph";
 import { Sheet } from "@/components/ui";
 import { translate, type DictKey } from "@/lib/i18n";
 import { exKey } from "@/lib/nutrition";
@@ -217,7 +218,7 @@ export function ExercisePickerSheet({
           <div className="exercise-picker-results hide-scroll">
             {visible.map((choice) => (
               <button key={`${choice.custom ? "custom" : "built-in"}-${choice.id}`} className="row press exercise-result" onClick={() => choose(choice)}>
-                <span className="exercise-result-icon"><AppIcon name="gym" size={18} /></span>
+                <ExerciseGlyph name={choice.name} group={choice.group} size={19} />
                 <span className="flex-1 min-w-0 text-left">
                   <span className="font-semibold block truncate" style={{ fontSize: 15 }}>{choice.name[lang]}</span>
                   <span className="t-cap block truncate">

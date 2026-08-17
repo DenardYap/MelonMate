@@ -9,10 +9,12 @@ import { GlassCard, Segmented, Sheet, toast } from "@/components/ui";
 import { fmtDate } from "@/lib/dates";
 import { cropProgress, cropStageImage, cropVisualStage, varietyById } from "@/lib/garden";
 import { GARDEN_ACHIEVEMENT_DEFINITIONS } from "@/lib/gardenAchievements";
-import { fmtNum } from "@/lib/nutrition";
-import { useStore } from "@/lib/store";
+import { fmt1, fmtNum } from "@/lib/nutrition";
+import { useActiveProfile, useStore } from "@/lib/store";
 import { THEME_VISUALS } from "@/lib/themes";
 import type { Lang, LogEntry, MealSlot, MemberSnapshot, Recipe, ThemeId } from "@/lib/types";
+import { convertWeightUnit, seedWeightInUnit } from "@/lib/workouts";
+import { syncNow } from "@/lib/sync";
 
 type FriendTab = "overview" | "meals" | "training" | "farm";
 const MEAL_SLOTS: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
@@ -37,11 +39,19 @@ const COPY = {
     stand: "Stand minutes",
     healthWorkouts: "Health workouts",
     noHealth: "No Apple Health activity has been synced yet.",
+    noSharedMeals: "No meal content is shared.",
+    noSharedTraining: "No training content is shared.",
+    noSharedFarm: "Farm activity is not shared.",
     badges: "Badges",
     noBadges: "No badges earned yet.",
     activeTheme: "Active theme",
     recentFoods: "Recently logged foods",
     noFoodLogs: "No food logs are available yet.",
+    weightTrend: "Weight trend",
+    weightGained: "Gained",
+    weightLost: "Lost",
+    weightUnchanged: "No change",
+    actualWeightPrivate: "Only the change is shared. Their actual weight stays private.",
     today: "Today",
     calories: "Calories",
     protein: "Protein",
@@ -50,7 +60,6 @@ const COPY = {
     noRecentTraining: "No completed workouts yet.",
     mealPlan: "Upcoming meal plan",
     noMeals: "No meals are planned for the next seven days.",
-    noSharedMeals: "No meal plan or saved recipes yet.",
     sharedRecipes: "Saved recipes",
     saveRecipe: "Save to my recipes",
     recipeSaved: "Recipe saved to your Meal page",
@@ -107,11 +116,19 @@ const COPY = {
     stand: "站立分鐘",
     healthWorkouts: "健康訓練",
     noHealth: "尚未同步 Apple 健康活動。",
+    noSharedMeals: "目前沒有分享餐點內容。",
+    noSharedTraining: "目前沒有分享訓練內容。",
+    noSharedFarm: "目前沒有分享農場活動。",
     badges: "徽章",
     noBadges: "尚未獲得徽章。",
     activeTheme: "目前主題",
     recentFoods: "最近飲食記錄",
     noFoodLogs: "尚無飲食記錄。",
+    weightTrend: "體重趨勢",
+    weightGained: "增加",
+    weightLost: "減少",
+    weightUnchanged: "沒有變化",
+    actualWeightPrivate: "只分享增減幅度，實際體重保持私密。",
     today: "今天",
     calories: "熱量",
     protein: "蛋白質",
@@ -120,7 +137,6 @@ const COPY = {
     noRecentTraining: "尚無已完成的訓練。",
     mealPlan: "未來餐點計畫",
     noMeals: "未來七天尚未安排餐點。",
-    noSharedMeals: "目前沒有餐點計畫或已儲存食譜。",
     sharedRecipes: "已儲存食譜",
     saveRecipe: "儲存到我的食譜",
     recipeSaved: "食譜已儲存到「餐點」頁",
@@ -169,13 +185,14 @@ export function FriendProfile({ friendId }: { friendId: string }) {
   const router = useRouter();
   const lang = useStore((state) => state.lang);
   const friend = useStore((state) => state.friends[friendId]);
+  const shareDailyProgress = useStore((state) => state.shareDailyProgress);
   const [tab, setTab] = useState<FriendTab>("overview");
   const copy = COPY[lang];
 
   if (!friend) {
     return (
       <main className="page friend-profile-page">
-        <button className="chip press icon-label mb-4" onClick={() => router.push("/me")}>
+        <button className="chip press icon-label mb-4" onClick={() => router.push("/friends")}>
           <AppIcon name="back" size={16} /> {copy.backFriends}
         </button>
         <GlassCard className="p-6 text-center">
@@ -190,14 +207,22 @@ export function FriendProfile({ friendId }: { friendId: string }) {
   return (
     <main className="page friend-profile-page">
       <header className="friend-profile-topbar">
-        <button className="ibtn press" onClick={() => router.push("/me")} aria-label={copy.backFriends}>
+        <button className="ibtn press" onClick={() => router.push("/friends")} aria-label={copy.backFriends}>
           <AppIcon name="back" size={20} />
         </button>
         <div className="min-w-0">
           <div className="t-section">{copy.profile}</div>
           <div className="font-bold truncate">{friend.name}</div>
         </div>
-        <span className="chip icon-label friend-readonly"><AppIcon name="friends" size={13} /> {copy.sharedView}</span>
+        <button className="chip chip-on press icon-label friend-detail-share" onClick={() => {
+          shareDailyProgress(friend.id);
+          void syncNow().then(
+            () => toast(lang === "zh" ? `已與 ${friend.name} 分享今日進度` : `Today’s progress shared with ${friend.name}`, "goal"),
+            () => toast(lang === "zh" ? "進度已儲存，稍後會再同步" : "Progress saved; sync will retry shortly", "warning")
+          );
+        }}>
+          <AppIcon name="upload" size={14} /> {lang === "zh" ? "分享今日進度" : "Share today"}
+        </button>
       </header>
 
       <FriendHero friend={friend} lang={lang} />
@@ -259,21 +284,28 @@ function FriendHero({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
 
 function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
   const copy = COPY[lang];
-  const calProgress = friend.today.calGoal > 0 ? friend.today.cal / friend.today.calGoal : 0;
-  const proteinProgress = friend.today.proteinGoal > 0 ? friend.today.protein / friend.today.proteinGoal : 0;
+  const displayUnit = useActiveProfile().unit;
+  const today = friend.today;
+  const calProgress = today && today.calGoal > 0 ? today.cal / today.calGoal : 0;
+  const proteinProgress = today && today.proteinGoal > 0 ? today.protein / today.proteinGoal : 0;
   const recent = friend.workouts?.recent ?? (friend.lastWorkout ? [friend.lastWorkout] : []);
   const activeTheme = friend.theme ?? "honeydew";
   const health = friend.health?.[0];
+  const weightTrend = friend.weightTrend;
+  const weightChange = weightTrend
+    ? convertWeightUnit(weightTrend.change, weightTrend.unit, displayUnit)
+    : undefined;
   const earnedBadgeIds = new Set(friend.badges ?? []);
   const badges = GARDEN_ACHIEVEMENT_DEFINITIONS.filter((badge) => earnedBadgeIds.has(badge.id));
+  const dailyProgress = friend.dailyProgress;
 
   return (
     <div className="a-fadeUp">
       <div className="friend-stat-grid mb-4">
         <MiniStat icon="fire" label={copy.streak} value={friend.streak} />
         <MiniStat icon="trophy" label={copy.best} value={friend.best} />
-        <MiniStat icon="fruit" label={copy.harvests} value={friend.farm?.totalHarvests ?? friend.melons} />
-        <MiniStat icon="gym" label={copy.workouts} value={friend.workouts?.completed ?? (friend.lastWorkout ? 1 : 0)} />
+        <MiniStat icon="fruit" label={copy.harvests} value={friend.farm ? friend.farm.totalHarvests : "—"} />
+        <MiniStat icon="gym" label={copy.workouts} value={friend.workouts ? friend.workouts.completed : friend.lastWorkout ? 1 : "—"} />
       </div>
 
       <div className="friend-social-showcase mb-4">
@@ -289,12 +321,53 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
         </GlassCard>
         <GlassCard className="friend-badge-summary">
           <AppIcon name="medal" size={25} />
-          <div><small>{copy.badges}</small><b>{badges.length}</b></div>
+          <div><small>{copy.badges}</small><b>{friend.badges ? badges.length : "—"}</b></div>
         </GlassCard>
       </div>
 
-      <SectionTitle icon="heart" text={copy.appleHealth} />
-      {health ? (
+      {dailyProgress && <>
+        <SectionTitle icon="goal" text={lang === "zh" ? "分享的每日進度" : "Shared daily progress"} />
+        <GlassCard className="friend-daily-progress mb-4">
+          <div className="friend-daily-progress-head">
+            <div><b>{fmtDate(dailyProgress.date, lang)}</b><small>{lang === "zh" ? "每日摘要" : "Daily snapshot"}</small></div>
+            <span className="chip icon-label"><AppIcon name="refresh" size={13} />{formatUpdated(dailyProgress.sharedAt, lang)}</span>
+          </div>
+          <div className="friend-daily-progress-grid">
+            <MiniStat icon="goal" label={copy.calories} value={`${fmtNum(dailyProgress.calories)} / ${fmtNum(dailyProgress.calorieGoal)}`} />
+            <MiniStat icon="cutlery" label={copy.protein} value={`${fmtNum(dailyProgress.protein)}g`} />
+            <MiniStat icon="water" label={lang === "zh" ? "飲水" : "Water"} value={`${dailyProgress.waterCups} / ${dailyProgress.waterGoal}`} />
+            <MiniStat icon="gym" label={copy.workouts} value={dailyProgress.workouts} />
+            <MiniStat icon="heart" label={copy.steps} value={fmtNum(dailyProgress.steps)} />
+            <MiniStat icon="fire" label={copy.streak} value={dailyProgress.streak} />
+          </div>
+        </GlassCard>
+      </>}
+
+      {weightTrend && weightChange !== undefined && <>
+        <SectionTitle icon="weight" text={copy.weightTrend} />
+        <GlassCard className="p-4 mb-4">
+          <div className="flex items-center gap-3">
+            <span className="icon-tile"><AppIcon name="weight" size={20} /></span>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold">
+                {weightChange > 0
+                  ? `${copy.weightGained} ${fmt1(Math.abs(weightChange))} ${displayUnit}`
+                  : weightChange < 0
+                    ? `${copy.weightLost} ${fmt1(Math.abs(weightChange))} ${displayUnit}`
+                    : copy.weightUnchanged}
+              </div>
+              <div className="t-cap">
+                {lang === "zh" ? `過去 ${weightTrend.days} 天 · 截至 ${fmtDate(weightTrend.asOf, lang)}` : `Over the past ${weightTrend.days} days · through ${fmtDate(weightTrend.asOf, lang)}`}
+              </div>
+            </div>
+          </div>
+          <div className="t-cap icon-label mt-3"><AppIcon name="lock" size={13} /> {copy.actualWeightPrivate}</div>
+        </GlassCard>
+      </>}
+
+      {friend.health !== undefined && <>
+        <SectionTitle icon="heart" text={copy.appleHealth} />
+        {health ? (
         <>
           <div className="friend-health-grid mb-3">
             <MiniStat icon="heart" label={copy.steps} value={fmtNum(health.steps)} />
@@ -310,10 +383,12 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
             ))}
           </GlassCard>
         </>
-      ) : <GlassCard className="friend-empty-copy mb-4">{copy.noHealth}</GlassCard>}
+        ) : <GlassCard className="friend-empty-copy mb-4">{copy.noHealth}</GlassCard>}
+      </>}
 
-      <SectionTitle icon="medal" text={copy.badges} />
-      {badges.length ? (
+      {friend.badges !== undefined && <>
+        <SectionTitle icon="medal" text={copy.badges} />
+        {badges.length ? (
         <div className="friend-badge-grid mb-4">
           {badges.map((badge) => (
             <GlassCard className={`friend-badge-card tone-${badge.tone}`} key={badge.id}>
@@ -323,27 +398,33 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
             </GlassCard>
           ))}
         </div>
-      ) : <GlassCard className="friend-empty-copy mb-4">{copy.noBadges}</GlassCard>}
+        ) : <GlassCard className="friend-empty-copy mb-4">{copy.noBadges}</GlassCard>}
+      </>}
 
-      <SectionTitle icon="goal" text={copy.today} />
-      <GlassCard className="p-4 mb-4">
-        <ProgressMetric label={copy.calories} value={friend.today.cal} goal={friend.today.calGoal} progress={calProgress} color="linear-gradient(90deg,var(--cal-from),var(--cal-to))" unit="cal" />
-        <div className="divider my-3" />
-        <ProgressMetric label={copy.protein} value={friend.today.protein} goal={friend.today.proteinGoal} progress={proteinProgress} color="var(--protein)" unit="g" />
-      </GlassCard>
+      {today && <>
+        <SectionTitle icon="goal" text={copy.today} />
+        <GlassCard className="p-4 mb-4">
+          <ProgressMetric label={copy.calories} value={today.cal} goal={today.calGoal} progress={calProgress} color="linear-gradient(90deg,var(--cal-from),var(--cal-to))" unit="cal" />
+          <div className="divider my-3" />
+          <ProgressMetric label={copy.protein} value={today.protein} goal={today.proteinGoal} progress={proteinProgress} color="var(--protein)" unit="g" />
+        </GlassCard>
+      </>}
 
-      <SectionTitle icon="chart" text={copy.consistency} />
-      <GlassCard className="friend-consistency mb-4">
-        {friend.garden.map((day) => (
+      {friend.garden && <>
+        <SectionTitle icon="chart" text={copy.consistency} />
+        <GlassCard className="friend-consistency mb-4">
+          {friend.garden.map((day) => (
           <div key={day.date} className={day.hit ? "is-hit" : ""}>
             <span>{day.hit && <AppIcon name="leaf" size={15} />}</span>
             <small>{shortDay(day.date, lang)}</small>
           </div>
-        ))}
-      </GlassCard>
+          ))}
+        </GlassCard>
+      </>}
 
-      <SectionTitle icon="gym" text={copy.recentTraining} />
-      <GlassCard className="px-4 py-1">
+      {(friend.workouts !== undefined || friend.lastWorkout) && <>
+        <SectionTitle icon="gym" text={copy.recentTraining} />
+        <GlassCard className="px-4 py-1">
         {recent.length ? recent.map((workout, index) => (
           <div className="row" key={`${workout.date}-${index}`}>
             <span className="icon-tile friend-row-icon"><AppIcon name="gym" size={18} /></span>
@@ -352,12 +433,15 @@ function OverviewTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
               <div className="t-cap">{fmtDate(workout.date, lang)}</div>
             </div>
             <div className="t-cap tabular text-right">
-              {fmtNum(workout.volume)} {friend.workouts?.unit ?? ""}·{copy.sets === "sets" ? "reps" : "下"}
+              {fmtNum(friend.workouts
+                ? convertWeightUnit(workout.volume, friend.workouts.unit, displayUnit)
+                : workout.volume)} {friend.workouts ? displayUnit : ""}·{copy.sets === "sets" ? "reps" : "下"}
               {workout.prs > 0 && <span className="icon-label justify-end"><AppIcon name="medal" size={13} /> {workout.prs}</span>}
             </div>
           </div>
         )) : <div className="friend-empty-copy">{copy.noRecentTraining}</div>}
-      </GlassCard>
+        </GlassCard>
+      </>}
     </div>
   );
 }
@@ -372,9 +456,10 @@ function MealsTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
   const plannedDays = (mealPlan?.days ?? []).filter(({ plan }) => MEAL_SLOTS.some((slot) => (plan[slot]?.length ?? 0) > 0));
   const sharedRecipes = friend.sharedRecipes ?? [];
   const foodLogs = friend.foodLogs ?? [];
+  const foodLogsShared = friend.foodLogs !== undefined;
 
-  if (!mealPlan && sharedRecipes.length === 0 && foodLogs.length === 0) {
-    return <LegacyEmpty icon="kitchen" text={friend.version === 3 ? copy.noSharedMeals : copy.legacy} />;
+  if (!mealPlan && sharedRecipes.length === 0 && !foodLogsShared) {
+    return <LegacyEmpty icon="kitchen" text={friend.version === 3 || friend.version === 9 ? copy.noSharedMeals : copy.legacy} />;
   }
 
   const importPlan = (mode: "merge" | "replace") => {
@@ -386,8 +471,9 @@ function MealsTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
 
   return (
     <div className="a-fadeUp">
-      <SectionTitle icon="cutlery" text={copy.recentFoods} />
-      {foodLogs.length ? (
+      {foodLogsShared && <>
+        <SectionTitle icon="cutlery" text={copy.recentFoods} />
+        {foodLogs.length ? (
         <GlassCard className="friend-food-log mb-5">
           {foodLogs.map((entry, index) => (
             <Fragment key={entry.id}>
@@ -405,7 +491,8 @@ function MealsTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
             </Fragment>
           ))}
         </GlassCard>
-      ) : <GlassCard className="friend-empty-copy mb-5">{copy.noFoodLogs}</GlassCard>}
+        ) : <GlassCard className="friend-empty-copy mb-5">{copy.noFoodLogs}</GlassCard>}
+      </>}
 
       {mealPlan && (
         <>
@@ -487,14 +574,17 @@ function MealsTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
 
 function TrainingTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
   const copy = COPY[lang];
+  const displayUnit = useActiveProfile().unit;
   const [weekIndex, setWeekIndex] = useState(0);
   const importFriendWorkoutPlan = useStore((state) => state.importFriendWorkoutPlan);
   const snapshot = friend.workoutPlan;
   const progress = friend.workouts;
 
-  if (!snapshot) return <LegacyEmpty icon="gym" text={friend.version === 2 || friend.version === 3 ? copy.noWorkoutPlan : copy.legacy} />;
-  const plan = snapshot.plan;
-  const week = plan.weeks[Math.min(weekIndex, Math.max(0, plan.weeks.length - 1))];
+  if (!snapshot && !progress) {
+    return <LegacyEmpty icon="gym" text={friend.version === 9 ? copy.noSharedTraining : friend.version === 2 || friend.version === 3 ? copy.noWorkoutPlan : copy.legacy} />;
+  }
+  const plan = snapshot?.plan;
+  const week = plan?.weeks[Math.min(weekIndex, Math.max(0, plan.weeks.length - 1))];
 
   return (
     <div className="a-fadeUp">
@@ -502,60 +592,64 @@ function TrainingTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
         <div className="friend-stat-grid friend-stat-grid-three mb-4">
           <MiniStat icon="checkCircle" label={copy.completed} value={progress.completed} />
           <MiniStat icon="medal" label={copy.prs} value={progress.totalPrs} />
-          <MiniStat icon="weight" label={copy.volume} value={`${fmtNum(progress.totalVolume)} ${progress.unit}·${lang === "zh" ? "下" : "reps"}`} />
+          <MiniStat icon="weight" label={copy.volume} value={`${fmtNum(convertWeightUnit(progress.totalVolume, progress.unit, displayUnit))} ${displayUnit}·${lang === "zh" ? "下" : "reps"}`} />
         </div>
       )}
 
-      <SectionTitle icon="gym" text={copy.activePlan} />
-      <GlassCard strong className="friend-workout-plan-head mb-3">
-        <div className="icon-tile"><AppIcon name="gym" size={21} /></div>
-        <div className="min-w-0 flex-1">
-          <h2>{plan.name[lang]}</h2>
-          <div className="t-cap">{plan.weeks.length} {lang === "zh" ? "週" : plan.weeks.length === 1 ? "week" : "weeks"} · {plan.weeks[0]?.days.length ?? 0} {lang === "zh" ? "天／週" : "days/week"}</div>
-        </div>
-      </GlassCard>
-      <button
-        className="btn btn-primary press w-full mb-3"
-        onClick={() => {
-          importFriendWorkoutPlan(friend.id, plan);
-          toast(copy.workoutPlanSaved, "gym");
-        }}
-      >
-        <AppIcon name="copy" size={17} /> {copy.useWorkoutPlan}
-      </button>
+      {snapshot && plan && <>
+        <SectionTitle icon="gym" text={copy.activePlan} />
+        <GlassCard strong className="friend-workout-plan-head mb-3">
+          <div className="icon-tile"><AppIcon name="gym" size={21} /></div>
+          <div className="min-w-0 flex-1">
+            <h2>{plan.name[lang]}</h2>
+            <div className="t-cap">{plan.weeks.length} {lang === "zh" ? "週" : plan.weeks.length === 1 ? "week" : "weeks"} · {plan.weeks[0]?.days.length ?? 0} {lang === "zh" ? "天／週" : "days/week"}</div>
+          </div>
+        </GlassCard>
+        <button
+          className="btn btn-primary press w-full mb-3"
+          onClick={() => {
+            importFriendWorkoutPlan(friend.id, plan, snapshot.unit);
+            toast(copy.workoutPlanSaved, "gym");
+          }}
+        >
+          <AppIcon name="copy" size={17} /> {copy.useWorkoutPlan}
+        </button>
 
-      {plan.weeks.length > 1 && (
-        <div className="flex gap-2 mb-3 overflow-x-auto hide-scroll pb-1">
-          {plan.weeks.map((_, index) => (
-            <button key={index} className={`chip press ${weekIndex === index ? "chip-on" : ""}`} onClick={() => setWeekIndex(index)}>
-              {lang === "zh" ? `${copy.week} ${index + 1} 週` : `${copy.week} ${index + 1}`}
-            </button>
+        {plan.weeks.length > 1 && (
+          <div className="flex gap-2 mb-3 overflow-x-auto hide-scroll pb-1">
+            {plan.weeks.map((_, index) => (
+              <button key={index} className={`chip press ${weekIndex === index ? "chip-on" : ""}`} onClick={() => setWeekIndex(index)}>
+                {lang === "zh" ? `${copy.week} ${index + 1} 週` : `${copy.week} ${index + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          {week?.days.map((day, dayIndex) => (
+            <GlassCard className="friend-workout-day" key={`${day.id}-${dayIndex}`}>
+              <div className="friend-workout-day-title"><span>{dayIndex + 1}</span><b>{day.name[lang]}</b></div>
+              {day.exercises.map((exercise, exerciseIndex) => {
+                const targetWeight = exercise.targetWeight != null
+                  ? convertWeightUnit(exercise.targetWeight, snapshot.unit, displayUnit)
+                  : seedWeightInUnit(exercise.seedWeight, displayUnit);
+                return (
+                  <div className="friend-exercise-row" key={`${exercise.id}-${exerciseIndex}`}>
+                    <div className="min-w-0 flex-1">
+                      <b>{exercise.name[lang]}</b>
+                      {exercise.cue?.[lang] && <small>{exercise.cue[lang]}</small>}
+                    </div>
+                    <span className="tabular">
+                      {exercise.sets} {copy.sets} × {exercise.reps}
+                      {targetWeight != null ? <small>{fmt1(targetWeight)} {displayUnit}</small> : null}
+                    </span>
+                  </div>
+                );
+              })}
+            </GlassCard>
           ))}
         </div>
-      )}
-
-      <div className="flex flex-col gap-3">
-        {week?.days.map((day, dayIndex) => (
-          <GlassCard className="friend-workout-day" key={`${day.id}-${dayIndex}`}>
-            <div className="friend-workout-day-title"><span>{dayIndex + 1}</span><b>{day.name[lang]}</b></div>
-            {day.exercises.map((exercise, exerciseIndex) => {
-              const targetWeight = exercise.targetWeight ?? exercise.seedWeight;
-              return (
-                <div className="friend-exercise-row" key={`${exercise.id}-${exerciseIndex}`}>
-                  <div className="min-w-0 flex-1">
-                    <b>{exercise.name[lang]}</b>
-                    {exercise.cue?.[lang] && <small>{exercise.cue[lang]}</small>}
-                  </div>
-                  <span className="tabular">
-                    {exercise.sets} {copy.sets} × {exercise.reps}
-                    {targetWeight != null ? <small>{targetWeight} {snapshot.unit}</small> : null}
-                  </span>
-                </div>
-              );
-            })}
-          </GlassCard>
-        ))}
-      </div>
+      </>}
     </div>
   );
 }
@@ -564,7 +658,7 @@ function FarmTab({ friend, lang }: { friend: MemberSnapshot; lang: Lang }) {
   const copy = COPY[lang];
   const farm = friend.farm;
   const now = Date.now();
-  if (!farm) return <LegacyEmpty icon="soil" text={copy.legacy} />;
+  if (!farm) return <LegacyEmpty icon="soil" text={friend.version === 9 ? copy.noSharedFarm : copy.legacy} />;
   const harvests = Object.entries(farm.harvests).filter(([, count]) => (count ?? 0) > 0);
 
   return (

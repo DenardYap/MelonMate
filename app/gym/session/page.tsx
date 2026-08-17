@@ -5,14 +5,26 @@ import { useRouter } from "next/navigation";
 import { makeSessionEntries, openSession, useActiveProfile, useStore } from "@/lib/store";
 import { translate, type DictKey } from "@/lib/i18n";
 import { fmtDate, fmtDuration } from "@/lib/dates";
-import { est1RM, fmtNum } from "@/lib/nutrition";
-import { completedSets, exerciseProgressSeries, lastCompletedSessionForDay } from "@/lib/workouts";
+import { fmtNum } from "@/lib/nutrition";
+import {
+  compareSetPerformance,
+  completedSets,
+  exerciseHistory,
+  exerciseProgressSeries,
+  lastCompletedSessionForDay,
+  topCompletedSet,
+  type ExerciseHistoryItem,
+} from "@/lib/workouts";
+import { historyIndexAfterSwipe } from "@/lib/workoutHistory";
 import { DecimalInput, fireConfetti, GlassCard, Sheet, toast } from "@/components/ui";
 import { AppIcon } from "@/components/icons";
 import { LineChart } from "@/components/charts";
 import { ExercisePickerSheet } from "@/components/ExercisePickerSheet";
-import type { SessionExercise, WorkoutSession } from "@/lib/types";
+import { ExerciseGlyph } from "@/components/ExerciseGlyph";
+import type { SessionExercise, SetLog, WorkoutSession } from "@/lib/types";
+import { groupOf } from "@/lib/plans";
 import { playSound } from "@/lib/soundscape";
+import { endWorkoutLiveActivity, syncWorkoutLiveActivity } from "@/lib/workoutLiveActivity";
 
 export default function SessionPage() {
   const router = useRouter();
@@ -39,17 +51,16 @@ export default function SessionPage() {
     [store.sessions, profile.id]
   );
 
-  // previous bests per exercise key (for live PR detection)
+  // Previous top sets per exercise key, using directly logged weight and reps.
   const prevBest = useMemo(() => {
-    const map: Record<string, number> = {};
+    const map: Record<string, SetLog> = {};
     if (!session) return map;
     for (const s of store.sessions[profile.id] ?? []) {
       if (!s.endedAt || s.id === session.id) continue;
       for (const e of s.entries) {
-        for (const st of e.sets) {
-          if (!st.done || st.w <= 0) continue;
-          map[e.key] = Math.max(map[e.key] ?? 0, est1RM(st.w, st.reps));
-        }
+        const topSet = topCompletedSet(e.sets);
+        if (!topSet) continue;
+        if (!map[e.key] || compareSetPerformance(topSet, map[e.key]) > 0) map[e.key] = topSet;
       }
     }
     return map;
@@ -64,6 +75,23 @@ export default function SessionPage() {
       session.startedAt
     );
   }, [store.sessions, profile.id, session]);
+
+  const liveCompletedSets = session?.entries.reduce((n, entry) => n + entry.sets.filter((set) => set.done).length, 0) ?? 0;
+  const liveTotalSets = session?.entries.reduce((n, entry) => n + entry.sets.length, 0) ?? 0;
+  const liveWorkoutName = session?.dayName[lang] ?? "";
+
+  useEffect(() => {
+    if (!session) return;
+    syncWorkoutLiveActivity({
+      sessionId: session.id,
+      workoutName: liveWorkoutName,
+      startedAt: session.startedAt,
+      completedSets: liveCompletedSets,
+      totalSets: liveTotalSets,
+      restEndsAt: rest?.endsAt,
+      language: lang,
+    });
+  }, [lang, liveCompletedSets, liveTotalSets, liveWorkoutName, rest?.endsAt, session]);
 
   const prFiredRef = useRef<Set<string>>(new Set());
 
@@ -81,8 +109,8 @@ export default function SessionPage() {
     );
   }
 
-  const doneSets = session?.entries.reduce((n, e) => n + e.sets.filter((x) => x.done).length, 0) ?? 0;
-  const totalSets = session?.entries.reduce((n, e) => n + e.sets.length, 0) ?? 0;
+  const doneSets = liveCompletedSets;
+  const totalSets = liveTotalSets;
   const allDone = doneSets === totalSets && totalSets > 0;
 
   const mutateSession = (fn: (s: WorkoutSession) => void) => {
@@ -105,14 +133,16 @@ export default function SessionPage() {
       // rest timer
       const mins = entry.restMin ?? 1.5;
       setRest({ total: mins * 60, endsAt: Date.now() + mins * 60 * 1000 });
-      // live PR check
-      if (st.w > 0 && st.reps > 0) {
-        const rm = est1RM(st.w, st.reps);
-        const best = prevBest[entry.key] ?? 0;
-        if (best > 0 && rm > best && !prFiredRef.current.has(entry.key)) {
+      // A top-set PR is a heavier completed set, or more reps at the same weight.
+      if (st.reps > 0) {
+        const best = prevBest[entry.key];
+        if (best && compareSetPerformance(st, best) > 0 && !prFiredRef.current.has(entry.key)) {
           prFiredRef.current.add(entry.key);
           fireConfetti();
-          toast(`${t("newPr")} ${entry.name[lang]} ${fmtNum(rm)} ${profile.unit}`, "medal");
+          const performance = st.w > 0
+            ? `${fmtNum(st.w)} ${profile.unit} × ${st.reps}`
+            : `${st.reps} ${t("reps")}`;
+          toast(`${t("newPr")} ${entry.name[lang]} ${performance}`, "medal");
         }
       }
     }
@@ -120,6 +150,7 @@ export default function SessionPage() {
 
   const finish = () => {
     if (!session) return;
+    endWorkoutLiveActivity(session.id);
     const res = store.finishSession(session.id);
     setRest(null);
     setSummary(res);
@@ -131,14 +162,24 @@ export default function SessionPage() {
     <main className="page workout-session-page">
       {/* header */}
       <header className="flex items-center justify-between mb-3">
-        <div>
-          <div className="t-cap">{session ? `${t("week")} ${session.weekIdx + 1}` : ""}</div>
-          <h1 className="t-title">{session?.dayName[lang]}</h1>
-          {previousDaySession && (
-            <div className="t-cap mt-1">
-              {t("previousWorkout")}: {fmtDate(previousDaySession.date, lang)}
-            </div>
-          )}
+        <div className="flex items-start gap-2 min-w-0">
+          <button
+            type="button"
+            className="ibtn press shrink-0"
+            onClick={() => router.push("/gym")}
+            aria-label={t("back")}
+          >
+            <AppIcon name="back" size={19} />
+          </button>
+          <div className="min-w-0">
+            <div className="t-cap">{session ? `${t("week")} ${session.weekIdx + 1}` : ""}</div>
+            <h1 className="t-title">{session?.dayName[lang]}</h1>
+            {previousDaySession && (
+              <div className="t-cap mt-1">
+                {t("previousWorkout")}: {fmtDate(previousDaySession.date, lang)}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <ElapsedClock startedAt={session?.startedAt ?? Date.now()} />
@@ -172,6 +213,7 @@ export default function SessionPage() {
           key={ei}
           e={e}
           ei={ei}
+          group={store.customExercises.find((custom) => custom.historyKey === e.key)?.group ?? groupOf(e.name.en)}
           unit={profile.unit}
           onToggle={toggleSet}
           onMutate={mutateSession}
@@ -179,6 +221,7 @@ export default function SessionPage() {
           previous={previousDaySession?.entries.find((entry) => entry.key === e.key)}
           previousDate={previousDaySession?.date}
           progress={exerciseProgressSeries(completedSessions, e.key)}
+          history={exerciseHistory(completedSessions, e.key)}
         />
       ))}
 
@@ -224,7 +267,10 @@ export default function SessionPage() {
           <button
             className="btn btn-ghost btn-danger press flex-1"
             onClick={() => {
-              if (session) store.discardSession(session.id);
+              if (session) {
+                endWorkoutLiveActivity(session.id);
+                store.discardSession(session.id);
+              }
               setConfirmDiscard(false);
               router.push("/gym");
             }}
@@ -270,6 +316,7 @@ export default function SessionPage() {
 function ExerciseCard({
   e,
   ei,
+  group,
   unit,
   onToggle,
   onMutate,
@@ -277,20 +324,24 @@ function ExerciseCard({
   previous,
   previousDate,
   progress,
+  history,
 }: {
   e: SessionExercise;
   ei: number;
+  group: ReturnType<typeof groupOf>;
   unit: string;
   onToggle: (ei: number, si: number) => void;
   onMutate: (fn: (s: WorkoutSession) => void) => void;
-  prevBest?: number;
+  prevBest?: SetLog;
   previous?: SessionExercise;
   previousDate?: string;
   progress: ReturnType<typeof exerciseProgressSeries>;
+  history: ExerciseHistoryItem[];
 }) {
   const lang = useStore((s) => s.lang);
   const t = (k: DictKey) => translate(k, lang);
   const [showCue, setShowCue] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const complete = e.sets.every((x) => x.done);
   const actualSets = e.sets.filter((set) => set.done).length;
   const previousSets = previous ? completedSets(previous.sets) : [];
@@ -298,27 +349,43 @@ function ExerciseCard({
   return (
     <GlassCard className="px-4 py-3 mb-3" strong={!complete && e.sets.some((x) => x.done)}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-bold icon-label" style={{ fontSize: 16, opacity: complete ? 0.55 : 1 }}>
-            {complete && <AppIcon name="checkCircle" size={18} />}{e.name[lang]}
-          </div>
-          <div className="t-cap tabular">
-            {t("targets")}: {e.targetWeight != null ? `${e.targetWeight} ${unit} · ` : ""}{e.targetSets} × {e.targetReps}
-            {e.targetRpe ? ` @ RPE ${e.targetRpe}` : ""}
-            {prevBest ? ` · ${t("est1rm")} ${fmtNum(prevBest)}` : ""}
+        <div className="flex items-start gap-2 min-w-0">
+          <ExerciseGlyph name={e.name} group={group} size={20} />
+          <div className="min-w-0">
+            <div className="font-bold icon-label" style={{ fontSize: 16, opacity: complete ? 0.55 : 1 }}>
+              {complete && <AppIcon name="checkCircle" size={18} />}{e.name[lang]}
+            </div>
+            <div className="t-cap tabular">
+              {t("targets")}: {e.targetWeight != null ? `${e.targetWeight} ${unit} · ` : ""}{e.targetSets} × {e.targetReps}
+              {e.targetRpe ? ` @ RPE ${e.targetRpe}` : ""}
+              {prevBest
+                ? ` · ${t("bestSet")} ${prevBest.w > 0 ? `${fmtNum(prevBest.w)} ${unit} × ` : ""}${prevBest.reps}`
+                : ""}
+            </div>
           </div>
         </div>
-        {e.cue && (
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
-            className="ibtn press shrink-0"
-            style={{ width: 30, height: 30, fontSize: 14 }}
-            onClick={() => setShowCue(!showCue)}
-            aria-label={`${showCue ? (lang === "zh" ? "隱藏" : "Hide") : (lang === "zh" ? "顯示" : "Show")} ${e.name[lang]} ${lang === "zh" ? "提示" : "cue"}`}
-            aria-expanded={showCue}
+            className="chip press exercise-history-button"
+            onClick={() => setShowHistory(true)}
+            aria-label={`${e.name[lang]} ${t("sessionHistory")}`}
           >
-            <AppIcon name="idea" size={17} />
+            <AppIcon name="calendar" size={15} />
+            <span>{t("sessionHistory")}</span>
+            {history.length > 0 && <b className="tabular">{history.length}</b>}
           </button>
-        )}
+          {e.cue && (
+            <button
+              className="ibtn press shrink-0"
+              style={{ width: 30, height: 30, fontSize: 14 }}
+              onClick={() => setShowCue(!showCue)}
+              aria-label={`${showCue ? (lang === "zh" ? "隱藏" : "Hide") : (lang === "zh" ? "顯示" : "Show")} ${e.name[lang]} ${lang === "zh" ? "提示" : "cue"}`}
+              aria-expanded={showCue}
+            >
+              <AppIcon name="idea" size={17} />
+            </button>
+          )}
+        </div>
       </div>
       {e.description?.[lang] && <div className="t-sub mt-2">{e.description[lang]}</div>}
       {showCue && e.cue && <div className="t-cap icon-label mt-1 a-fadeUp"><AppIcon name="idea" size={16} />{e.cue[lang]}</div>}
@@ -327,7 +394,7 @@ function ExerciseCard({
         <div className="flex items-center justify-between gap-2">
           <div className="t-cap font-semibold">{t("progress")}</div>
           <div className="t-cap">
-            {progress.metric === "est1rm" ? `${t("est1rm")} (${unit})` : t("bestReps")}
+            {progress.metric === "topWeight" ? `${t("topSetWeight")} (${unit})` : t("bestReps")}
           </div>
         </div>
         {progress.points.length > 0 ? (
@@ -337,7 +404,7 @@ function ExerciseCard({
               index === 0 || index === items.length - 1 ? fmtDate(point.date, lang) : ""
             )}
             height={76}
-            unit={progress.metric === "est1rm" ? unit : ""}
+            unit={progress.metric === "topWeight" ? unit : ""}
           />
         ) : (
           <div className="t-cap py-2">{lang === "zh" ? "完成此動作後，進度圖會顯示在這裡。" : "Your graph starts after you complete this exercise."}</div>
@@ -348,7 +415,7 @@ function ExerciseCard({
         <div className="previous-sets mt-3">
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="t-cap font-semibold">{t("previousSets")} · {fmtDate(previousDate, lang)}</div>
-            <span className="t-cap tabular">{previousSets.length} {t("sets")}</span>
+            <span className="t-cap tabular">{previousSets.length} {previousSets.length === 1 ? t("set") : t("sets")}</span>
           </div>
           <div className="flex gap-1.5 flex-wrap">
             {previousSets.map((set, index) => (
@@ -441,7 +508,126 @@ function ExerciseCard({
           </button>
         )}
       </div>
+
+      <ExerciseHistorySheet
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+        exerciseName={e.name[lang]}
+        history={history}
+        unit={unit}
+        lang={lang}
+      />
     </GlassCard>
+  );
+}
+
+function ExerciseHistorySheet({
+  open,
+  onClose,
+  exerciseName,
+  history,
+  unit,
+  lang,
+}: {
+  open: boolean;
+  onClose: () => void;
+  exerciseName: string;
+  history: ExerciseHistoryItem[];
+  unit: string;
+  lang: "en" | "zh";
+}) {
+  const [index, setIndex] = useState(0);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const t = (key: DictKey) => translate(key, lang);
+  const item = history[index];
+
+  useEffect(() => {
+    if (open) setIndex(0);
+  }, [open]);
+
+  const startSwipe = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    swipeStart.current = { x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const finishSwipe = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start) return;
+    setIndex((current) => historyIndexAfterSwipe(
+      current,
+      history.length,
+      event.clientX - start.x,
+      event.clientY - start.y
+    ));
+  };
+
+  return (
+    <Sheet open={open} onClose={onClose} title={exerciseName}>
+      {item ? (
+        <>
+          <div className="exercise-history-nav">
+            <button
+              className="chip press"
+              onClick={() => setIndex((current) => Math.max(0, current - 1))}
+              disabled={index === 0}
+            >
+              <AppIcon name="back" size={15} />{lang === "zh" ? "較新" : "Newer"}
+            </button>
+            <span className="t-cap tabular">{index + 1} / {history.length}</span>
+            <button
+              className="chip press"
+              onClick={() => setIndex((current) => Math.min(history.length - 1, current + 1))}
+              disabled={index === history.length - 1}
+            >
+              {lang === "zh" ? "較舊" : "Older"}<AppIcon name="next" size={15} />
+            </button>
+          </div>
+
+          <div
+            className="exercise-history-swipe"
+            onPointerDown={startSwipe}
+            onPointerUp={finishSwipe}
+            onPointerCancel={() => { swipeStart.current = null; }}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <div className="font-bold">{fmtDate(item.date, lang)}</div>
+                <div className="t-cap">{item.workoutName[lang]}</div>
+              </div>
+              <span className="chip tabular">{item.sets.length} {item.sets.length === 1 ? t("set") : t("sets")}</span>
+            </div>
+
+            <div className="exercise-history-grid exercise-history-grid-head">
+              <span>{t("set")}</span>
+              <span>{t("weight")} ({unit})</span>
+              <span>{t("reps")}</span>
+              <span>RPE</span>
+            </div>
+            {item.sets.map((set, setIndex) => (
+              <div className="exercise-history-grid exercise-history-grid-row" key={setIndex}>
+                <span className="tabular">{setIndex + 1}</span>
+                <b className="tabular">{set.w > 0 ? fmtNum(set.w) : "—"}</b>
+                <b className="tabular">{set.reps}</b>
+                <b className="tabular">{set.rpe ?? "—"}</b>
+              </div>
+            ))}
+          </div>
+          {history.length > 1 && (
+            <div className="t-cap text-center mt-3">
+              {lang === "zh" ? "向左滑查看更早的訓練紀錄" : "Swipe left for an older workout"}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="exercise-history-empty">
+          <AppIcon name="calendar" size={28} />
+          <div className="font-bold">{lang === "zh" ? "還沒有歷史紀錄" : "No exercise history yet"}</div>
+          <div className="t-cap">{lang === "zh" ? "完成這個動作後會顯示在這裡。" : "Completed sets will appear here after this workout."}</div>
+        </div>
+      )}
+    </Sheet>
   );
 }
 
@@ -507,7 +693,7 @@ function RestTimer({
       if (Date.now() >= endsAt && !doneRef.current) {
         doneRef.current = true;
         playSound("timer");
-        setTimeout(onDone, 1_200);
+        setTimeout(onDone, 2_000);
       }
     }, 250);
     return () => clearInterval(id);
@@ -520,21 +706,29 @@ function RestTimer({
   const ss = String(Math.floor(remain % 60)).padStart(2, "0");
 
   return (
-    <div className="resttimer glass-strong a-pop" role="status" aria-live="polite">
-      <div style={{ position: "absolute", inset: 0, width: `${(1 - p) * 100}%`, background: "rgba(143,186,97,0.16)", transition: "width 0.25s linear" }} />
-      <div className="flex items-center justify-between px-4 py-3" style={{ position: "relative" }}>
-        <div className="flex items-center gap-2">
-          <AppIcon name="stretch" size={22} />
-          <span className="font-bold">{isDone ? (lang === "zh" ? "開始！" : "GO!") : translate("restTimer", lang)}</span>
-          <span className="t-num font-extrabold tabular" style={{ fontSize: 22 }}>
-            {isDone ? <AppIcon name="spark" size={24} /> : `${mm}:${ss}`}
-          </span>
+    <div className={`resttimer glass-strong a-pop${isDone ? " is-done" : ""}`} role="status" aria-live="polite">
+      {isDone ? (
+        <div className="resttimer-go">
+          <AppIcon name="spark" size={30} />
+          <span>{lang === "zh" ? "開始！！！" : "GO!!!"}</span>
+          <AppIcon name="spark" size={30} />
         </div>
-        {!isDone && <div className="flex gap-2">
-          <button className="chip press" onClick={onExtend}>+15s</button>
-          <button className="chip press" onClick={onDone}>{translate("skipRest", lang)}</button>
-        </div>}
-      </div>
+      ) : (
+        <>
+          <div className="resttimer-progress" style={{ width: `${(1 - p) * 100}%` }} />
+          <div className="flex items-center justify-between px-4 py-3 resttimer-row">
+            <div className="flex items-center gap-2">
+              <AppIcon name="stretch" size={22} />
+              <span className="font-bold">{translate("restTimer", lang)}</span>
+              <span className="t-num font-extrabold tabular" style={{ fontSize: 22 }}>{mm}:{ss}</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="chip press" onClick={onExtend}>+15s</button>
+              <button className="chip press" onClick={onDone}>{translate("skipRest", lang)}</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

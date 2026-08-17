@@ -17,6 +17,7 @@ import {
   CoffeeCup,
   Community,
   Copy,
+  Cycling,
   Cutlery,
   Download,
   Droplet,
@@ -52,6 +53,7 @@ import {
   Play,
   Plus,
   RefreshCircle,
+  Running,
   ScanBarcode,
   Search,
   Settings,
@@ -73,6 +75,7 @@ import {
   WarningTriangle,
   Weight,
   Xmark,
+  Yoga,
 } from "iconoir-react";
 import type { FoodCat, MealSlot, RecipeCat } from "@/lib/types";
 import type { ThemeId } from "@/lib/types";
@@ -83,6 +86,9 @@ const ICONS = {
   kitchen: Cutlery,
   cutlery: Cutlery,
   gym: Gym,
+  running: Running,
+  cycling: Cycling,
+  yoga: Yoga,
   user: UserCircle,
   addUser: UserPlus,
   plus: Plus,

@@ -12,9 +12,10 @@ afterEach(async () => {
 });
 
 describe("workspace creation", () => {
-  it("atomically lets only one creator reserve an invite code", async () => {
+  it("atomically lets only one creator reserve a friend code", async () => {
     vi.stubEnv("NODE_ENV", "development");
-    const code = `MELON-TEST${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
+    const randomValue = Number.parseInt(crypto.randomUUID().replaceAll("-", "").slice(0, 10), 16);
+    const code = (randomValue % 1_000_000).toString().padStart(6, "0");
     createdFiles.push(path.join(process.cwd(), ".data", "ws", `${code}.json`));
     const doc: WorkspaceDoc = { rev: 0, shared: null, members: {} };
 

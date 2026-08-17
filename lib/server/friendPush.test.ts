@@ -27,4 +27,20 @@ describe("friend share push copy", () => {
     const workout = { ...recipe, id: "two", kind: "workout" as const, itemId: "plan" };
     expect(friendSharePushCopy(SOURCE, [recipe, workout], "en").body).toBe("1 recipe and 1 workout");
   });
+
+  it("links a daily progress alert to the friend detail page", () => {
+    const progress: FriendShareNotification = {
+      ...recipe,
+      id: "progress-one",
+      kind: "progress",
+      itemId: "2026-08-17:10",
+      itemName: { en: "Today’s progress", zh: "今日進度" },
+      path: "/friends/mina",
+    };
+    expect(friendSharePushCopy(SOURCE, [progress], "en")).toEqual({
+      title: "Mina shared today’s progress",
+      body: "Today’s progress",
+      path: "/friends/mina",
+    });
+  });
 });

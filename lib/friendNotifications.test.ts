@@ -44,6 +44,34 @@ describe("friend share notifications", () => {
     expect(detectFriendShareNotifications(previous, { ...previous, updatedAt: 200 })).toEqual([]);
   });
 
+  it("notifies once for each new daily progress snapshot", () => {
+    const dailyProgress = {
+      id: "2026-08-17:100",
+      date: "2026-08-17",
+      sharedAt: 100,
+      calories: 1800,
+      calorieGoal: 2200,
+      protein: 125,
+      proteinGoal: 140,
+      waterCups: 7,
+      waterGoal: 8,
+      workouts: 1,
+      steps: 9_000,
+      standMinutes: 100,
+      streak: 6,
+    };
+    const incoming = snapshot({ dailyProgress, updatedAt: 200 });
+    const notifications = detectFriendShareNotifications(snapshot(), incoming);
+
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      kind: "progress",
+      itemId: dailyProgress.id,
+      path: "/friends/friend.device",
+    });
+    expect(detectFriendShareNotifications(incoming, { ...incoming, updatedAt: 300 })).toEqual([]);
+  });
+
   it("deduplicates persisted inbox entries", () => {
     const notification = detectFriendShareNotifications(undefined, snapshot({ sharedRecipes: [recipe] }))[0];
     expect(mergeFriendShareNotifications([notification], [notification])).toEqual([notification]);

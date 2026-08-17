@@ -434,7 +434,7 @@ function DiscoverRecipesSheet({ open, onClose }: { open: boolean; onClose: () =>
             </span>
             {hasFilters && <button className="chip press" onClick={clearFilters}>{lang === "zh" ? "清除篩選" : "Clear filters"}</button>}
           </div>
-          <div style={{ maxHeight: "42dvh", overflowY: "auto" }}>
+          <div>
             {paginated.items.map((recipe) => <DiscoverRecipeRow key={recipe.id} recipe={recipe} onAdd={() => add(recipe)} />)}
             {paginated.totalItems === 0 && (
               <EmptyState
@@ -1250,7 +1250,7 @@ function RecipeQuickPick({ onPick }: { onPick: (r: Recipe) => void }) {
   return (
     <div className="pb-2">
       <input className="field mb-3" placeholder={translate("searchFoodPh", lang)} value={q} onChange={(e) => setQ(e.target.value)} />
-      <div style={{ maxHeight: "44dvh", overflowY: "auto" }}>
+      <div>
         {list.length === 0 && <EmptyState icon="kitchen" title={lang === "zh" ? "還沒有加入食譜" : "No recipes added yet"} hint={lang === "zh" ? "先到食譜頁尋找並加入食譜。" : "Find and add recipes from the Recipes tab first."} />}
         {list.map((r) => (
           <button key={r.id} type="button" className="row row-button press cursor-pointer" onClick={() => onPick(r)}>

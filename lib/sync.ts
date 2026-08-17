@@ -1,7 +1,7 @@
 "use client";
 
 import { useStore } from "./store";
-import { addDays, todayStr } from "./dates";
+import { addDays, diffDays, todayStr } from "./dates";
 import { sumMacros } from "./nutrition";
 import { combinedXp, levelFromXp } from "./game";
 import { useGardenStore } from "./gardenStore";
@@ -14,9 +14,9 @@ import { detectFriendShareNotifications } from "./friendNotifications";
 /**
  * Client sync engine for friend progress.
  *
- * Each invite code represents one friend connection. A device may create or
- * join many codes, publishes a bounded social snapshot into each connection,
- * and merges those friends into one list.
+ * Each person owns one permanent code and may also join other people's codes.
+ * The owner can discover everyone who used their code, while directed member
+ * snapshots keep sharing choices isolated to each friendship.
  */
 
 export function normalizeCode(raw: string): string | null {
@@ -28,8 +28,12 @@ export function memberIdFor(profileId: string, deviceId: string): string {
   return `${profileId}.${deviceId.slice(0, 8)}`;
 }
 
-export function connectionCodes(ws: { code: string | null; codes?: string[] }): string[] {
-  return [...new Set([...(ws.codes ?? []), ...(ws.code ? [ws.code] : [])])];
+export function connectionCodes(ws: { code: string | null; personalCode?: string | null; codes?: string[] }): string[] {
+  return [...new Set([
+    ...(ws.codes ?? []),
+    ...(ws.code ? [ws.code] : []),
+    ...(ws.personalCode ? [ws.personalCode] : []),
+  ])];
 }
 
 /** Builds the per-friend snapshot, honoring that connection's sharing choices. */
@@ -37,10 +41,22 @@ export function buildMemberSnapshot(friendId?: string | null): MemberSnapshot {
   const s = useStore.getState();
   const profile = s.profiles.find((p) => p.id === s.activeProfileId) ?? s.profiles[0];
   const sharing = friendId ? s.friendSharing[friendId] ?? {
+    shareNutrition: false,
+    shareFoodLogs: false,
+    shareWorkoutHistory: false,
+    shareHealth: false,
+    shareFarm: false,
+    shareWeightTrend: false,
     shareMealPlan: false,
     shareWorkoutPlan: false,
     sharedRecipeIds: [],
   } : {
+    shareNutrition: false,
+    shareFoodLogs: false,
+    shareWorkoutHistory: false,
+    shareHealth: false,
+    shareFarm: false,
+    shareWeightTrend: false,
     shareMealPlan: false,
     shareWorkoutPlan: false,
     sharedRecipeIds: [],
@@ -96,19 +112,37 @@ export function buildMemberSnapshot(friendId?: string | null): MemberSnapshot {
     ? s.plans.find((plan) => plan.id === (sharing.workoutPlanId ?? profile.planId))
     : undefined;
   const workoutSummaries = completedSessions.map(sessionSummary);
-  const foodLogs = [...(s.logs[profile.id] ?? [])]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, 100);
-  const health = Object.values(s.health?.[profile.id] ?? {})
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 7)
-    .map((entry) => ({ ...entry, workouts: (entry.workouts ?? []).map((workout) => ({ ...workout })) }));
-  const badges = gardenAchievements(farm)
-    .filter((achievement) => achievement.earned)
-    .map((achievement) => achievement.id);
+  const foodLogs = sharing.shareFoodLogs
+    ? [...(s.logs[profile.id] ?? [])].sort((a, b) => b.at - a.at).slice(0, 100)
+    : undefined;
+  const health = sharing.shareHealth
+    ? Object.values(s.health?.[profile.id] ?? {})
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 7)
+      .map((entry) => ({ ...entry, workouts: (entry.workouts ?? []).map((workout) => ({ ...workout })) }))
+    : undefined;
+  const badges = sharing.shareFarm
+    ? gardenAchievements(farm).filter((achievement) => achievement.earned).map((achievement) => achievement.id)
+    : undefined;
+  const sortedWeights = [...(s.weights[profile.id] ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const latestWeight = sortedWeights.at(-1);
+  const weeklyWeights = latestWeight
+    ? sortedWeights.filter((entry) => entry.date >= addDays(latestWeight.date, -7) && entry.date <= latestWeight.date)
+    : [];
+  const baselineWeight = latestWeight
+    ? weeklyWeights.find((entry) => entry.date < latestWeight.date)
+    : undefined;
+  const weightTrend = sharing.shareWeightTrend && latestWeight && baselineWeight
+    ? {
+        change: Math.round((latestWeight.value - baselineWeight.value) * 10) / 10,
+        unit: profile.unit,
+        days: Math.max(1, diffDays(latestWeight.date, baselineWeight.date)),
+        asOf: latestWeight.date,
+      }
+    : undefined;
 
   return {
-    version: 8,
+    version: 11,
     id: memberIdFor(profile.id, s.ws.deviceId),
     notificationDeviceId: s.ws.deviceId,
     name: profile.name,
@@ -118,43 +152,45 @@ export function buildMemberSnapshot(friendId?: string | null): MemberSnapshot {
     xp,
     streak: game?.streak ?? 0,
     best: game?.best ?? 0,
-    melons: game?.melons ?? 0,
-    golden: game?.golden ?? 0,
+    melons: sharing.shareFarm ? game?.melons ?? 0 : 0,
+    golden: sharing.shareFarm ? game?.golden ?? 0 : 0,
     theme: s.theme,
     badges,
-    garden,
-    today: {
+    garden: sharing.shareFarm ? garden : undefined,
+    today: sharing.shareNutrition ? {
       date: today,
       cal: tot.cal,
       calGoal: profile.goals.cal,
       protein: Math.round(tot.protein),
       proteinGoal: profile.goals.protein,
-    },
-    lastWorkout: lastSession
+    } : undefined,
+    lastWorkout: sharing.shareWorkoutHistory && lastSession
       ? sessionSummary(lastSession)
       : undefined,
     foodLogs,
     health,
-    farm: {
+    weightTrend,
+    dailyProgress: friendId ? s.friendDailyProgress[friendId] : undefined,
+    farm: sharing.shareFarm ? {
       dew: farm.dew,
       unlockedPlots: farm.unlockedPlots,
       plots: farm.plots.map((plot) => ({ ...plot })),
       harvests: { ...farm.harvests },
       totalHarvests: farm.totalHarvests,
       lastTended: farm.lastTended,
-    },
+    } : undefined,
     mealPlan: sharing.shareMealPlan ? { days: mealDays, recipes: mealRecipes } : undefined,
     sharedRecipes: sharedRecipes.length ? sharedRecipes : undefined,
     workoutPlan: workoutPlan
       ? { plan: workoutPlan, unit: profile.unit }
       : undefined,
-    workouts: {
+    workouts: sharing.shareWorkoutHistory ? {
       unit: profile.unit,
       completed: workoutSummaries.length,
       totalPrs: workoutSummaries.reduce((total, workout) => total + workout.prs, 0),
       totalVolume: workoutSummaries.reduce((total, workout) => total + workout.volume, 0),
       recent: workoutSummaries.slice(0, 6),
-    },
+    } : undefined,
     updatedAt: Date.now(),
   };
 }
@@ -200,6 +236,7 @@ async function createApi(member: MemberSnapshot): Promise<{ code: string; doc: W
 
 let activeFriendSync: Promise<void> | null = null;
 let friendSyncQueued = false;
+let activeCodeCreation: Promise<string> | null = null;
 
 /** Pull + merge + push. Concurrent calls are coalesced and one trailing sync preserves edits made in flight. */
 export function syncNow(): Promise<void> {
@@ -237,10 +274,18 @@ async function performSync(): Promise<void> {
       const knownFriendIds = Object.entries(s.friendCodes)
         .filter(([, friendCode]) => friendCode === code)
         .map(([friendId]) => friendId);
-      const targetFriendId = knownFriendIds.length === 1 ? knownFriendIds[0] : knownFriendIds.length > 1 ? undefined : null;
+      const ownsCode = s.ws.personalCode === code;
+      const targetFriendId = !ownsCode && knownFriendIds.length === 1 ? knownFriendIds[0] : null;
+      const views = ownsCode
+        ? Object.fromEntries(knownFriendIds.map((friendId) => [friendId, buildMemberSnapshot(friendId)]))
+        : undefined;
       const updated = await api(code, {
         method: "PUT",
-        body: JSON.stringify({ member: buildMemberSnapshot(targetFriendId) }),
+        body: JSON.stringify({
+          member: buildMemberSnapshot(targetFriendId),
+          ...(targetFriendId ? { recipientId: targetFriendId } : {}),
+          ...(views ? { views } : {}),
+        }),
       });
       latestRev = Math.max(latestRev, updated.rev);
       successes += 1;
@@ -275,21 +320,31 @@ async function performSync(): Promise<void> {
   });
 }
 
-/** Create a fresh one-to-one invite without replacing existing friends. */
+/** Create this person's permanent six-digit friend code once. */
 export async function createWorkspace(): Promise<string> {
   const s = useStore.getState();
-  const { code, doc } = await createApi(buildMemberSnapshot(null));
-  const codes = [...new Set([...connectionCodes(s.ws), code])];
-  s.setWs({ code, codes, lastSync: Date.now(), error: null });
-  useStore.setState({ sharedRev: doc.rev, sharedDirty: false });
-  return code;
+  if (s.ws.personalCode) return s.ws.personalCode;
+  if (activeCodeCreation) return activeCodeCreation;
+  activeCodeCreation = (async () => {
+    const current = useStore.getState();
+    if (current.ws.personalCode) return current.ws.personalCode;
+    const { code, doc } = await createApi(buildMemberSnapshot(null));
+    const codes = [...new Set([...connectionCodes(current.ws), code])];
+    current.setWs({ code, personalCode: code, codes, lastSync: Date.now(), error: null });
+    useStore.setState({ sharedRev: doc.rev, sharedDirty: false });
+    return code;
+  })().finally(() => {
+    activeCodeCreation = null;
+  });
+  return activeCodeCreation;
 }
 
-/** Join another one-to-one invite without replacing existing connections. */
+/** Add the owner of a permanent friend code; repeated joins are idempotent. */
 export async function joinWorkspace(rawCode: string): Promise<void> {
   const code = normalizeCode(rawCode);
   if (!code) throw new Error("bad-code");
   const s = useStore.getState();
+  if (code === s.ws.personalCode) throw new Error("own-code");
   const doc = await api(code, {
     method: "PUT",
     body: JSON.stringify({ member: buildMemberSnapshot(null) }),
@@ -300,7 +355,7 @@ export async function joinWorkspace(rawCode: string): Promise<void> {
     ...s.friendCodes,
     ...Object.fromEntries(Object.keys(incoming).map((friendId) => [friendId, code])),
   };
-  s.setWs({ code, codes: [...new Set([...connectionCodes(s.ws), code])], lastSync: Date.now(), error: null });
+  s.setWs({ codes: [...new Set([...connectionCodes(s.ws), code])], lastSync: Date.now(), error: null });
   useStore.setState({
     friends: { ...s.friends, ...incoming },
     friendCodes,
@@ -311,8 +366,16 @@ export async function joinWorkspace(rawCode: string): Promise<void> {
 
 export function leaveWorkspace(): void {
   const s = useStore.getState();
-  s.setWs({ code: null, codes: [], lastSync: null, error: null, syncing: false });
-  useStore.setState({ friends: {}, friendCodes: {}, friendSharing: {}, friendNotifications: [], sharedRev: 0, sharedDirty: false });
+  s.setWs({ code: null, personalCode: null, codes: [], lastSync: null, error: null, syncing: false });
+  useStore.setState({
+    friends: {},
+    friendCodes: {},
+    friendSharing: {},
+    friendDailyProgress: {},
+    friendNotifications: [],
+    sharedRev: 0,
+    sharedDirty: false,
+  });
 }
 
 /** Human label for a sync error. */

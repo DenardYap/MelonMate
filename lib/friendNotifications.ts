@@ -40,7 +40,21 @@ export function detectFriendShareNotifications(
       }]
     : [];
 
-  return [...recipeNotifications, ...workoutNotifications];
+  const progress = incoming.dailyProgress;
+  const progressNotifications = progress && progress.id !== previous?.dailyProgress?.id
+    ? [{
+        id: notificationId(incoming.id, "progress", progress.id, createdAt),
+        friendId: incoming.id,
+        friendName: incoming.name,
+        kind: "progress" as const,
+        itemId: progress.id,
+        itemName: { en: "Today’s progress", zh: "今日進度" },
+        createdAt,
+        path: `/friends/${encodeURIComponent(incoming.id)}`,
+      }]
+    : [];
+
+  return [...recipeNotifications, ...workoutNotifications, ...progressNotifications];
 }
 
 export function mergeFriendShareNotifications(
@@ -56,11 +70,11 @@ export function mergeFriendShareNotifications(
 export function friendShareNotificationText(notification: FriendShareNotification, lang: "en" | "zh") {
   const item = notification.itemName[lang] || notification.itemName.en;
   if (lang === "zh") {
-    return notification.kind === "recipe"
-      ? `${notification.friendName} 儲存了食譜「${item}」`
-      : `${notification.friendName} 正在使用訓練計畫「${item}」`;
+    if (notification.kind === "recipe") return `${notification.friendName} 儲存了食譜「${item}」`;
+    if (notification.kind === "progress") return `${notification.friendName} 分享了今日進度`;
+    return `${notification.friendName} 正在使用訓練計畫「${item}」`;
   }
-  return notification.kind === "recipe"
-    ? `${notification.friendName} saved the recipe “${item}”`
-    : `${notification.friendName} is using the workout “${item}”`;
+  if (notification.kind === "recipe") return `${notification.friendName} saved the recipe “${item}”`;
+  if (notification.kind === "progress") return `${notification.friendName} shared today’s progress`;
+  return `${notification.friendName} is using the workout “${item}”`;
 }

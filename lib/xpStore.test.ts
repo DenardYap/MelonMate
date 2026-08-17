@@ -13,12 +13,12 @@ import { STREAK_MILESTONES } from "./streakRewards";
 
 const PROFILE = "p-me";
 
-function foodLog(date = todayStr()) {
+function foodLog(date = todayStr(), calories = 100) {
   return {
     date,
     meal: "breakfast" as const,
     name: { en: "Test food", zh: "測試食物" },
-    macros: { cal: 100, protein: 5, carbs: 10, fat: 2 },
+    macros: { cal: calories, protein: 5, carbs: 10, fat: 2 },
     src: "manual" as const,
   };
 }
@@ -94,9 +94,10 @@ describe("healthy-action XP store", () => {
   it("adds the large nutrition reward only when a closed day qualifies", () => {
     const yesterday = addDays(todayStr(), -1);
     const store = useStore.getState();
-    store.addLog(foodLog(yesterday));
-    store.addLog(foodLog(yesterday));
-    store.addLog(foodLog(yesterday));
+    store.addLog(foodLog(yesterday, 5_000));
+    store.addLog(foodLog(yesterday, 5_000));
+    store.addLog(foodLog(yesterday, 5_000));
+    store.addLog(foodLog(yesterday, 5_000));
 
     useStore.setState((state) => ({
       game: {
@@ -106,13 +107,53 @@ describe("healthy-action XP store", () => {
     }));
     useStore.getState().reconcileGame();
 
-    expect(useStore.getState().game[PROFILE].xp).toBe(3 * FOOD_LOG_XP_REWARD + DAILY_XP_REWARD);
+    expect(useStore.getState().game[PROFILE].xp).toBe(4 * FOOD_LOG_XP_REWARD + DAILY_XP_REWARD);
+  });
+
+  it("counts consecutive tracked days without requiring four logs or a calorie target", () => {
+    const first = addDays(todayStr(), -2);
+    const second = addDays(todayStr(), -1);
+    const store = useStore.getState();
+    store.addLog(foodLog(first, 5_000));
+    store.addLog(foodLog(second, 5_000));
+    useStore.setState((state) => ({
+      game: {
+        ...state.game,
+        [PROFILE]: { ...state.game[PROFILE], lastEval: addDays(first, -1) },
+      },
+    }));
+
+    useStore.getState().reconcileGame();
+
+    const game = useStore.getState().game[PROFILE];
+    expect(game.streak).toBe(2);
+    expect(game.best).toBe(2);
+    expect(game.xp).toBe(2 * FOOD_LOG_XP_REWARD);
+  });
+
+  it("breaks a tracking streak on a day with no food logs", () => {
+    const first = addDays(todayStr(), -3);
+    const last = addDays(todayStr(), -1);
+    const store = useStore.getState();
+    store.addLog(foodLog(first));
+    store.addLog(foodLog(last));
+    useStore.setState((state) => ({
+      game: {
+        ...state.game,
+        [PROFILE]: { ...state.game[PROFILE], lastEval: addDays(first, -1) },
+      },
+    }));
+
+    useStore.getState().reconcileGame();
+
+    expect(useStore.getState().game[PROFILE]).toMatchObject({ streak: 1, best: 1 });
   });
 
   it("awards a one-time XP badge at a streak milestone", () => {
     const store = useStore.getState();
     const dates = [addDays(todayStr(), -3), addDays(todayStr(), -2), addDays(todayStr(), -1)];
     dates.forEach((date) => {
+      store.addLog(foodLog(date));
       store.addLog(foodLog(date));
       store.addLog(foodLog(date));
       store.addLog(foodLog(date));
@@ -129,7 +170,7 @@ describe("healthy-action XP store", () => {
     const milestone = STREAK_MILESTONES[0];
     const game = useStore.getState().game[PROFILE];
     expect(game.streak).toBe(3);
-    expect(game.xp).toBe(dates.length * (3 * FOOD_LOG_XP_REWARD + DAILY_XP_REWARD) + milestone.xp);
+    expect(game.xp).toBe(dates.length * (4 * FOOD_LOG_XP_REWARD + DAILY_XP_REWARD) + milestone.xp);
     expect(game.streakMilestoneClaims).toEqual([milestone.days]);
     expect(game.pendingStreakRewards).toEqual([{ days: milestone.days, xp: milestone.xp, date: dates[2] }]);
 

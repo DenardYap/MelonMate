@@ -1,5 +1,4 @@
 import { addDays, dateStr, parseDate } from "./dates";
-import { isDailyXpEligible } from "./game";
 import { varietyById } from "./garden";
 import type { GardenPlot, Lang, LogEntry, MealSlot } from "./types";
 
@@ -87,10 +86,8 @@ function mealCopy(meal: Exclude<MealSlot, "snack">, lang: Lang): { title: string
   };
 }
 
-function dailyGoalComplete(logs: LogEntry[], date: string, calorieTarget: number): boolean {
-  const entries = logs.filter((entry) => entry.date === date);
-  const calories = entries.reduce((total, entry) => total + entry.macros.cal, 0);
-  return isDailyXpEligible(entries.length, calories, calorieTarget);
+function trackingComplete(logs: LogEntry[], date: string): boolean {
+  return logs.some((entry) => entry.date === date);
 }
 
 export function isAutomatedCampaignNotificationId(id: number): boolean {
@@ -131,13 +128,13 @@ export function buildNativeCampaignNotifications(
       const date = addDays(today, offset);
       const at = atLocalTime(date, 20, 30);
       if (at.getTime() <= now.getTime()) continue;
-      if (dailyGoalComplete(snapshot.logs, date, snapshot.calorieTarget)) continue;
+      if (trackingComplete(snapshot.logs, date)) continue;
       notifications.push({
         id: streakNotificationId(date),
         title: snapshot.lang === "zh" ? "讓連續紀錄繼續成長" : "Keep your streak growing",
         body: snapshot.lang === "zh"
-          ? "今天記錄至少 3 項食物，完成每日瓜瓜目標。"
-          : "Log at least 3 foods today to complete your daily melon goal.",
+          ? "今天記錄一項食物，讓連續追蹤繼續成長。"
+          : "Log a food today to keep your tracking streak growing.",
         at,
         extra: {
           campaign: "streak",

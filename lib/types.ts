@@ -330,6 +330,8 @@ export interface HealthWorkout {
   durationMinutes: number;
   activeCalories: number;
   startedAt: number;
+  /** XP actually granted after the shared daily XP cap is applied. */
+  earnedXp?: number;
 }
 
 export interface HealthActivitySnapshot {
@@ -539,8 +541,40 @@ export interface FriendWorkoutPlanSnapshot {
   unit: WeightUnit;
 }
 
+/** A privacy-safe weight summary. Absolute weigh-ins are never synchronized. */
+export interface FriendWeightTrend {
+  /** Signed change over the period: positive is gained, negative is lost. */
+  change: number;
+  unit: WeightUnit;
+  days: number;
+  asOf: string;
+}
+
+/** A deliberate, one-tap daily check-in sent to a specific friend. */
+export interface FriendDailyProgress {
+  id: string;
+  date: string;
+  sharedAt: number;
+  calories: number;
+  calorieGoal: number;
+  protein: number;
+  proteinGoal: number;
+  waterCups: number;
+  waterGoal: number;
+  workouts: number;
+  steps: number;
+  standMinutes: number;
+  streak: number;
+}
+
 /** Content this device has chosen to expose to one specific friend. */
 export interface FriendSharingSettings {
+  shareNutrition: boolean;
+  shareFoodLogs: boolean;
+  shareWorkoutHistory: boolean;
+  shareHealth: boolean;
+  shareFarm: boolean;
+  shareWeightTrend: boolean;
   shareMealPlan: boolean;
   shareWorkoutPlan: boolean;
   /** The specific plan shared with this friend. Falls back to the active plan for legacy settings. */
@@ -550,7 +584,7 @@ export interface FriendSharingSettings {
 
 /** What a member publishes for friends to see. */
 export interface MemberSnapshot {
-  version?: 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  version?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   id: string; // profileId.deviceId
   /** Full device identity used only to route opt-in friend-share push alerts. */
   notificationDeviceId?: string;
@@ -567,8 +601,8 @@ export interface MemberSnapshot {
   theme?: ThemeId;
   /** Permanently earned garden achievement badges. */
   badges?: GardenAchievementId[];
-  garden: { date: string; hit: boolean }[]; // last 7 evaluated days
-  today: {
+  garden?: { date: string; hit: boolean }[]; // last 7 evaluated days
+  today?: {
     date: string;
     cal: number;
     calGoal: number;
@@ -580,9 +614,13 @@ export interface MemberSnapshot {
   foodLogs?: LogEntry[];
   /** Recent Apple Health daily snapshots, newest first. */
   health?: HealthActivitySnapshot[];
+  /** Weekly gain/loss only. This deliberately contains no absolute weight. */
+  weightTrend?: FriendWeightTrend;
+  /** Latest check-in the person explicitly sent to this friend. */
+  dailyProgress?: FriendDailyProgress;
   farm?: FriendFarmSnapshot;
   mealPlan?: FriendMealPlanSnapshot;
-  /** Saved standalone recipes, published automatically for friends. */
+  /** Saved standalone recipes explicitly selected for this friend. */
   sharedRecipes?: Recipe[];
   workoutPlan?: FriendWorkoutPlanSnapshot;
   workouts?: FriendWorkoutProgress;
@@ -593,7 +631,7 @@ export interface FriendShareNotification {
   id: string;
   friendId: string;
   friendName: string;
-  kind: "recipe" | "workout";
+  kind: "recipe" | "workout" | "progress";
   itemId: string;
   itemName: BiText;
   createdAt: number;
@@ -614,5 +652,9 @@ export interface WorkspaceShared {
 export interface WorkspaceDoc {
   rev: number;
   shared: WorkspaceShared | null;
+  /** The member whose permanent friend code owns this workspace. */
+  ownerId?: string;
   members: Record<string, MemberSnapshot>;
+  /** Per-recipient snapshots keep each friendship's sharing choices private. */
+  memberViews?: Record<string, Record<string, MemberSnapshot>>;
 }

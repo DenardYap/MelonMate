@@ -27,6 +27,13 @@ describe("sparse charts", () => {
     expect(markup).toContain('x="10" y="16" width="300"');
   });
 
+  it("keeps the plot centered when the latest value is shown", () => {
+    const markup = renderToStaticMarkup(<LineChart points={[100, 105]} labels={["Aug 8", "Aug 9"]} />);
+
+    expect(markup).toContain('x="10" y="16" width="300"');
+    expect(markup).toContain('text-anchor="end"');
+  });
+
   it("uses substantial bar widths for one or two values", () => {
     const single = renderToStaticMarkup(<BarChart values={[1200]} labels={["W1"]} />);
     const pair = renderToStaticMarkup(<BarChart values={[1200, 1450]} labels={["W1", "W2"]} />);

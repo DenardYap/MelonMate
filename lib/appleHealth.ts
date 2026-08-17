@@ -115,12 +115,16 @@ async function performAppleHealthSync(date: string): Promise<AppleHealthSyncResu
       const standXp = Math.min(reward.standXp, remainingXp);
       remainingXp -= standXp;
       const awardedWorkoutXp = Math.min(workoutXp, remainingXp);
+      const savedWorkouts = useStore.getState().health?.[profileId]?.[date]?.workouts ?? [];
+      const awardedWorkouts = newlyCompletedWorkouts.map((workout) =>
+        savedWorkouts.find((savedWorkout) => savedWorkout.id === workout.id) ?? workout
+      );
       useHealthRewardQueue.getState().enqueue({
         ...reward,
         stepXp,
         standXp,
         workoutXp: awardedWorkoutXp,
-        workouts: newlyCompletedWorkouts,
+        workouts: awardedWorkouts,
         totalXp: xp,
         date,
         steps,

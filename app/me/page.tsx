@@ -6,19 +6,12 @@ import { useActiveProfile, useGame, useStore } from "@/lib/store";
 import { translate, type DictKey } from "@/lib/i18n";
 import { fmtDate, todayStr } from "@/lib/dates";
 import { fmtNum } from "@/lib/nutrition";
-import {
-  createWorkspace,
-  connectionCodes,
-  isSetupError,
-  joinWorkspace,
-  memberIdFor,
-  syncNow,
-} from "@/lib/sync";
+import { memberIdFor, syncNow } from "@/lib/sync";
 import { GlassCard, Sheet, toast } from "@/components/ui";
 import { LineChart } from "@/components/charts";
 import DailyTargetsSheet from "@/components/DailyTargetsSheet";
 import LockScreenWidget from "@/components/LockScreenWidget";
-import type { MemberSnapshot, ThemeId, WeightUnit } from "@/lib/types";
+import type { ThemeId, WeightUnit } from "@/lib/types";
 import { levelFromXp, MAX_PLAYER_LEVEL, xpForLevel } from "@/lib/game";
 import { THEME_UNLOCK_LEVEL, THEME_VISUALS } from "@/lib/themes";
 import { AppIcon } from "@/components/icons";
@@ -36,6 +29,7 @@ import LevelProgressRing from "@/components/LevelProgressRing";
 import { FriendNotificationButton } from "@/components/FriendShareNotifications";
 import RewardGuideSettings from "@/components/RewardGuideSettings";
 import { STREAK_MILESTONES } from "@/lib/streakRewards";
+import { applyNativeAppIcon } from "@/lib/themeAppearance";
 
 const THEME_OPTIONS: {
   id: ThemeId;
@@ -68,6 +62,8 @@ export default function MePage() {
   const photoFileRef = useRef<HTMLInputElement>(null);
   const level = levelFromXp(game.xp);
   const xpToNextLevel = Math.max(0, xpForLevel(level + 1) - game.xp);
+  const selfId = memberIdFor(profile.id, store.ws.deviceId);
+  const friendCount = Object.values(store.friends).filter((friend) => friend.id !== selfId).length;
 
   const chooseProfilePhoto = async (file: File) => {
     try {
@@ -297,7 +293,14 @@ export default function MePage() {
         )}
       </Sheet>
 
-      <FriendsSection />
+      <Link className="glass p-4 mb-4 press me-friends-link" href="/friends">
+        <span className="icon-tile"><AppIcon name="friends" size={20} /></span>
+        <div className="min-w-0 flex-1">
+          <div className="t-section">{t("friends")}</div>
+          <div className="t-cap mt-1">{friendCount} {lang === "zh" ? "位朋友 · 在專屬頁面管理與分享" : `${friendCount === 1 ? "friend" : "friends"} · manage and share on the dedicated page`}</div>
+        </div>
+        <AppIcon name="next" size={18} />
+      </Link>
 
       <GlassCard className="p-4 mb-4 press" onClick={() => setSetupOpen(true)}>
         <div className="flex items-center justify-between gap-3">
@@ -351,7 +354,11 @@ export default function MePage() {
                 type="button"
                 key={option.id}
                 className={`theme-option press ${active ? "on" : ""} ${unlocked ? "" : "locked"}`}
-                onClick={() => store.setTheme(option.id)}
+                onClick={() => {
+                  if (active) return;
+                  store.setTheme(option.id);
+                  applyNativeAppIcon(option.id);
+                }}
                 aria-pressed={active}
                 aria-label={`${t(option.label)}${unlocked ? "" : `, ${unlockCopy}`}`}
                 disabled={!unlocked}
@@ -455,304 +462,5 @@ export default function MePage() {
 
       {setupOpen && <OnboardingFlow edit onClose={() => setSetupOpen(false)} />}
     </main>
-  );
-}
-
-/* ------------------------------ friends ------------------------------ */
-
-function FriendsSection() {
-  const lang = useStore((s) => s.lang);
-  const store = useStore();
-  const profile = useActiveProfile();
-  const t = (k: DictKey) => translate(k, lang);
-  const [open, setOpen] = useState(false);
-  const [code, setCode] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const selfId = memberIdFor(profile.id, store.ws.deviceId);
-  const friends = Object.values(store.friends)
-    .filter((member) => member.id !== selfId)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-
-  const codes = connectionCodes(store.ws);
-
-  const copyCode = async () => {
-    if (!inviteCode) return;
-    await navigator.clipboard.writeText(inviteCode);
-    toast(t("copied"), "copy");
-  };
-
-  const create = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const nextCode = await createWorkspace();
-      setInviteCode(nextCode);
-      toast(lang === "zh" ? "朋友邀請已建立" : "Friend invite created", "fruit");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "sync-failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const join = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await joinWorkspace(code);
-      setCode("");
-      setOpen(false);
-      toast(t("joined"), "friends");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "sync-failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section className="mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <div className="t-section icon-label"><AppIcon name="friends" size={17} /> {t("friends")}</div>
-          <div className="t-cap">{t("friendsReadOnly")}</div>
-        </div>
-        <div className="flex gap-2">
-          <button className="chip chip-on press icon-label" onClick={() => setOpen(true)}><AppIcon name="addUser" size={16} /> {t("addFriend")}</button>
-        </div>
-      </div>
-
-      {friends.length === 0 ? (
-        <GlassCard className="p-5 text-center">
-          <div className="empty-icon mx-auto"><AppIcon name="friends" size={34} /></div>
-          <div className="font-bold mt-2">{t("noFriendsTitle")}</div>
-          <div className="t-sub mt-1">{codes.length ? t("noFriendsYet") : (lang === "zh" ? "建立一組一對一邀請碼，或輸入朋友傳給你的邀請碼。" : "Create a one-to-one invite, or enter a code a friend sent you.")}</div>
-          <button className="btn btn-primary press mt-3 icon-label" onClick={() => setOpen(true)}><AppIcon name="addUser" size={17} /> {t("addFriend")}</button>
-        </GlassCard>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {friends.map((friend) => (
-            <div className="friend-sharing-card" key={friend.id}>
-              <FriendProgressCard friend={friend} />
-              <FriendSharingControls friend={friend} />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {store.ws.error && (
-        <div className="t-cap mt-2" style={{ color: "var(--danger)" }}>
-          {isSetupError(store.ws.error) ? t("syncSetupHint") : t("syncError")}
-        </div>
-      )}
-
-      <Sheet open={open} onClose={() => setOpen(false)} title={<span className="icon-label"><AppIcon name="addUser" size={21} /> {t("addFriend")}</span>}>
-        <div className="flex flex-col gap-3 pb-2">
-          <div className="t-sub">{lang === "zh" ? "每組邀請碼只連結一位朋友。你可以建立邀請，也可以加入任何朋友傳來的邀請。" : "Each invite connects one friend. Create a code for them, or join any code a friend sends you."}</div>
-          {inviteCode ? (
-            <div className="flex flex-col gap-2">
-              <button
-                className="btn press w-full"
-                style={{ fontSize: 18, letterSpacing: 1.5 }}
-                onClick={() => void copyCode()}
-              >
-                {inviteCode} · {t("copy")}
-              </button>
-              <button className="btn btn-ghost press w-full" onClick={() => void create()} disabled={busy}>
-                {busy ? t("syncNow") : (lang === "zh" ? "為另一位朋友建立新邀請" : "Create an invite for another friend")}
-              </button>
-            </div>
-          ) : (
-            <button className="btn btn-primary press w-full" onClick={() => void create()} disabled={busy}>
-              {busy ? t("syncNow") : (lang === "zh" ? "建立朋友邀請碼" : "Create a friend invite")}
-            </button>
-          )}
-          <div className="flex items-center gap-2">
-            <div className="divider flex-1" />
-            <span className="t-cap">{t("or")}</span>
-            <div className="divider flex-1" />
-          </div>
-          <input
-            className="field tabular"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder={t("friendCodePlaceholder")}
-            autoCapitalize="characters"
-          />
-          <button className="btn press w-full" onClick={() => void join()} disabled={busy || !code.trim()}>
-            {lang === "zh" ? "加入朋友" : "Add friend with code"}
-          </button>
-        </div>
-        {error && (
-          <div className="t-cap mt-2" style={{ color: "var(--danger)" }}>
-            {isSetupError(error)
-              ? t("syncSetupHint")
-              : error === "bad-code"
-                ? t("badCode")
-                : error === "space-not-found"
-                  ? t("spaceNotFound")
-                  : error === "space-full"
-                    ? (lang === "zh" ? "此邀請已由另一位朋友使用。請對方建立新的邀請碼。" : "This invite was already used by another friend. Ask for a new code.")
-                    : t("syncError")}
-          </div>
-        )}
-      </Sheet>
-    </section>
-  );
-}
-
-function FriendSharingControls({ friend }: { friend: MemberSnapshot }) {
-  const lang = useStore((state) => state.lang);
-  const profile = useActiveProfile();
-  const recipes = useStore((state) => state.recipes);
-  const plans = useStore((state) => state.plans);
-  const settings = useStore((state) => state.friendSharing[friend.id]) ?? {
-    shareMealPlan: false,
-    shareWorkoutPlan: false,
-    sharedRecipeIds: [],
-  };
-  const updateSharing = useStore((state) => state.updateFriendSharing);
-  const toggleRecipe = useStore((state) => state.toggleFriendSharedRecipe);
-  const [open, setOpen] = useState(false);
-  const activePlan = plans.find((plan) => plan.id === profile.planId);
-  const recipeChoices = recipes.filter((recipe) => recipe.custom || (profile.selectedRecipeIds ?? []).includes(recipe.id));
-  const sharedCount = settings.sharedRecipeIds.length + Number(settings.shareWorkoutPlan) + Number(settings.shareMealPlan);
-
-  const syncSharing = () => void syncNow().catch(() => {
-    toast(lang === "zh" ? "分享設定已儲存，稍後會再同步" : "Sharing saved; sync will retry shortly", "warning");
-  });
-
-  return (
-    <>
-      <button type="button" className="friend-sharing-manage press" onClick={() => setOpen(true)}>
-        <AppIcon name="friends" size={15} />
-        {lang === "zh" ? `管理分享${sharedCount ? ` · ${sharedCount}` : ""}` : `Manage sharing${sharedCount ? ` · ${sharedCount}` : ""}`}
-      </button>
-      <Sheet open={open} onClose={() => setOpen(false)} title={<span className="icon-label"><AppIcon name="friends" size={19} />{lang === "zh" ? `分享給 ${friend.name}` : `Share with ${friend.name}`}</span>}>
-        <div className="friend-sharing-sheet">
-          <p className="t-sub">{lang === "zh" ? "只會把你在此處選擇的內容分享給這位朋友。" : "Only content selected here is shared with this friend."}</p>
-          <button type="button" className={`friend-sharing-toggle press ${settings.shareMealPlan ? "is-on" : ""}`} onClick={() => { updateSharing(friend.id, { shareMealPlan: !settings.shareMealPlan }); syncSharing(); }}>
-            <span><AppIcon name="calendar" size={18} /><b>{lang === "zh" ? "未來 7 天餐點計畫" : "Next 7 days meal plan"}</b></span>
-            <i>{settings.shareMealPlan ? (lang === "zh" ? "已分享" : "Shared") : (lang === "zh" ? "關閉" : "Off")}</i>
-          </button>
-          <button type="button" disabled={!activePlan} className={`friend-sharing-toggle press ${settings.shareWorkoutPlan ? "is-on" : ""}`} onClick={() => {
-            if (!activePlan) return;
-            updateSharing(friend.id, { shareWorkoutPlan: !settings.shareWorkoutPlan, workoutPlanId: activePlan.id });
-            syncSharing();
-          }}>
-            <span><AppIcon name="gym" size={18} /><b>{activePlan ? (activePlan.name[lang] || activePlan.name.en) : (lang === "zh" ? "尚未選擇訓練計畫" : "No workout plan selected")}</b></span>
-            <i>{settings.shareWorkoutPlan ? (lang === "zh" ? "已分享" : "Shared") : (lang === "zh" ? "關閉" : "Off")}</i>
-          </button>
-          <div className="t-section mt-2">{lang === "zh" ? "選擇食譜" : "Choose recipes"}</div>
-          {recipeChoices.length ? <div className="friend-sharing-recipes">
-            {recipeChoices.map((recipe) => {
-              const selected = settings.sharedRecipeIds.includes(recipe.id);
-              return <button type="button" key={recipe.id} className={`press ${selected ? "is-on" : ""}`} onClick={() => { toggleRecipe(friend.id, recipe.id); syncSharing(); }}><AppIcon name={selected ? "checkCircle" : "kitchen"} size={16} /><span>{recipe.name[lang] || recipe.name.en}</span></button>;
-            })}
-          </div> : <div className="t-sub">{lang === "zh" ? "先在餐點頁儲存或建立食譜。" : "Save or create a recipe on the Meal page first."}</div>}
-        </div>
-      </Sheet>
-    </>
-  );
-}
-
-function FriendProgressCard({ friend }: { friend: MemberSnapshot }) {
-  const lang = useStore((s) => s.lang);
-  const t = (k: DictKey) => translate(k, lang);
-  const calProgress = friend.today.calGoal > 0 ? Math.min(1, friend.today.cal / friend.today.calGoal) : 0;
-  const proteinProgress = friend.today.proteinGoal > 0 ? Math.min(1, friend.today.protein / friend.today.proteinGoal) : 0;
-
-  return (
-    <Link className="glass p-4 press friend-progress-card" href={`/friends?id=${encodeURIComponent(friend.id)}`}>
-      <div className="flex items-center gap-3 mb-3">
-        <ProfileAvatar
-          className="profile-icon"
-          name={friend.name}
-          photoDataUrl={friend.photoDataUrl}
-          iconSize={24}
-        />
-        <div className="flex-1 min-w-0">
-          <div className="font-bold" style={{ fontSize: 16 }}>{friend.name}</div>
-          <div className="t-cap">{t("level")} {friend.level} · {friend.xp} {t("xp")}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="chip icon-label" style={{ cursor: "default" }}><AppIcon name="fire" size={15} /> {friend.streak}</span>
-          <AppIcon name="next" size={17} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <FriendProgressBar
-          label={t("calToday")}
-          value={friend.today.cal}
-          goal={friend.today.calGoal}
-          progress={calProgress}
-          color="linear-gradient(90deg,var(--cal-from),var(--cal-to))"
-        />
-        <FriendProgressBar
-          label={t("protein")}
-          value={friend.today.protein}
-          goal={friend.today.proteinGoal}
-          progress={proteinProgress}
-          color="var(--protein)"
-        />
-      </div>
-
-      <div className="flex items-center gap-1 mb-3" aria-label={t("friendGarden")}>
-        {friend.garden.map((day) => (
-          <div
-            key={day.date}
-            title={day.date}
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 9,
-              display: "grid",
-              placeItems: "center",
-              fontSize: 13,
-              background: day.hit ? "var(--garden-hit)" : "var(--track)",
-            }}
-          >
-            {day.hit ? <AppIcon name="leaf" size={14} /> : ""}
-          </div>
-        ))}
-      </div>
-
-      {friend.lastWorkout && (
-        <div className="t-cap icon-label">
-          <AppIcon name="gym" size={15} /> {t("lastWorkoutLabel")}: {friend.lastWorkout.name[lang]} · {fmtDate(friend.lastWorkout.date, lang)}
-          {friend.lastWorkout.prs > 0 ? <span className="icon-label">· <AppIcon name="medal" size={14} /> {friend.lastWorkout.prs}</span> : ""}
-        </div>
-      )}
-    </Link>
-  );
-}
-
-function FriendProgressBar({
-  label,
-  value,
-  goal,
-  progress,
-  color,
-}: {
-  label: string;
-  value: number;
-  goal: number;
-  progress: number;
-  color: string;
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between t-cap mb-1">
-        <span>{label}</span>
-        <span className="tabular">{fmtNum(value)} / {fmtNum(goal)}</span>
-      </div>
-      <div style={{ height: 6, borderRadius: 99, overflow: "hidden", background: "var(--track)" }}>
-        <div style={{ width: `${progress * 100}%`, height: "100%", borderRadius: 99, background: color }} />
-      </div>
-    </div>
   );
 }

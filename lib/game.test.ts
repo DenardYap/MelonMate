@@ -10,6 +10,7 @@ import {
   healthWorkoutXp,
   inAppWorkoutXp,
   isDailyXpEligible,
+  isTrackingDay,
   levelFromXp,
   levelProgressFromXp,
   standTierFromMinutes,
@@ -26,14 +27,15 @@ describe("daily XP", () => {
     expect(DAILY_XP_REWARD).toBe(200);
   });
 
-  it("requires at least three logged items", () => {
-    expect(isDailyXpEligible(2, 1_600, 2_000)).toBe(false);
-    expect(isDailyXpEligible(3, 1_600, 2_000)).toBe(true);
+  it("requires at least four logged items", () => {
+    expect(isDailyXpEligible(3)).toBe(false);
+    expect(isDailyXpEligible(4)).toBe(true);
   });
 
-  it("allows the target but rejects calories over it", () => {
-    expect(isDailyXpEligible(3, 2_000, 2_000)).toBe(true);
-    expect(isDailyXpEligible(3, 2_001, 2_000)).toBe(false);
+  it("tracks food independently from the four-log daily bonus", () => {
+    expect(isTrackingDay(0)).toBe(false);
+    expect(isTrackingDay(1)).toBe(true);
+    expect(isDailyXpEligible(1)).toBe(false);
   });
 
   it("caps all food and fitness rewards at 300 XP per day", () => {

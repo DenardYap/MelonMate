@@ -405,12 +405,19 @@ function AddInner() {
 
   return (
     <main className={`page log-food-page ${searchActive && !review ? "is-searching" : ""}`}>
-      <header className="flex items-center justify-between mb-3">
-        <div>
+      <header className="flex items-start gap-2 mb-3">
+        <button
+          type="button"
+          className="ibtn press shrink-0"
+          onClick={() => router.back()}
+          aria-label={t("back")}
+        >
+          <AppIcon name="back" size={19} />
+        </button>
+        <div className="min-w-0">
           <h1 className="t-title icon-label"><AppIcon name="plus" size={22} /> {t("logMeal")}</h1>
           {!isToday && <div className="t-cap mt-1 icon-label"><AppIcon name="calendar" size={14} /> {fmtDate(date, lang)}</div>}
         </div>
-        <button className="chip press" onClick={() => router.back()}>{t("done")}</button>
       </header>
 
       <div className={`log-food-stage ${searchActive && !review ? "is-searching" : ""}`}>
@@ -721,8 +728,12 @@ function FoodReviewCard({
   onConfirm: (items: ReviewItem[], meal: MealSlot) => void;
 }) {
   const [meal, setMeal] = useState(initialMeal);
+  const [rows, setRows] = useState(() => review.items.map((item, index) => ({
+    key: `${review.id}:${index}`,
+    item,
+  })));
   const [amounts, setAmounts] = useState(() => review.items.map((item) => item.amount ?? 1));
-  const measuredItem = review.items.length === 1 && review.items[0].amount && review.items[0].amountUnit ? review.items[0] : null;
+  const measuredItem = rows.length === 1 && rows[0].item.amount && rows[0].item.amountUnit ? rows[0].item : null;
   const initialAmount = measuredItem?.amount ?? 1;
   const amount = amounts[0] ?? initialAmount;
   const setAmount = (value: number | ((current: number) => number)) => setAmounts((current) => {
@@ -732,9 +743,9 @@ function FoodReviewCard({
   });
   const factor = measuredItem ? amount / initialAmount : amount;
   const amountStep = measuredItem ? nutritionUnitStep(measuredItem.amountUnit as NutritionUnit) : 0.5;
-  const adjustedItems = review.items.map((item, index) => {
+  const adjustedItems = rows.map(({ item }, index) => {
     const itemAmount = amounts[index] ?? item.amount ?? 1;
-    const itemFactor = review.items.length === 1
+    const itemFactor = rows.length === 1
       ? factor
       : itemAmount / (item.amount ?? 1);
     return {
@@ -754,6 +765,11 @@ function FoodReviewCard({
     onMealChange(next);
   };
 
+  const removeComponent = (index: number) => {
+    setRows((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setAmounts((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   return (
     <GlassCard className="food-review-card p-4 mt-4 a-fadeUp">
       <div className="food-review-heading">
@@ -768,18 +784,17 @@ function FoodReviewCard({
 
       <div className="food-review-items">
         {adjustedItems.map((item, index) => {
-          const original = review.items[index];
+          const original = rows[index].item;
           const itemAmount = amounts[index] ?? original.amount ?? 1;
           const itemStep = original.amountUnit ? nutritionUnitStep(original.amountUnit as NutritionUnit) : 0.5;
-          return (
-          <div className="food-review-item" key={`${item.refId ?? item.name.en}-${index}`}>
+          const contents = <>
             <span><AppIcon name={iconFromLegacy(item.emoji, "cutlery")} size={20} /></span>
             <div className="flex-1 min-w-0">
               <b>{item.name[lang] || item.name.en}</b>
               <small>{original.amountUnit
                 ? `${formatAmount(itemAmount)} ${nutritionUnitLabel(original.amountUnit, itemAmount, lang)}`
                 : scaledServingLabel(original, itemAmount, lang)}</small>
-              {review.items.length > 1 && (
+              {rows.length > 1 && (
                 <div className="food-review-item-serving">
                   <button type="button" className="ibtn press" onClick={() => setAmounts((current) => current.map((value, itemIndex) => itemIndex === index ? Math.max(itemStep, Math.round((value - itemStep) * 100) / 100) : value))} disabled={itemAmount <= itemStep} aria-label={lang === "zh" ? `減少 ${item.name[lang] || item.name.en}` : `Decrease ${item.name.en}`}><AppIcon name="minus" size={14} /></button>
                   <DecimalInput className="" min={0.01} value={itemAmount} onChange={(value) => setAmounts((current) => current.map((saved, itemIndex) => itemIndex === index ? value : saved))} ariaLabel={lang === "zh" ? `${item.name[lang] || item.name.en} 食用量` : `${item.name.en} amount`} />
@@ -788,14 +803,35 @@ function FoodReviewCard({
               )}
             </div>
             <strong>{fmtNum(item.macros.cal)} cal</strong>
-          </div>
-          );
+          </>;
+          return review.source === "photo" ? (
+            <SwipeDeleteReviewItem
+              key={rows[index].key}
+              lang={lang}
+              itemName={item.name[lang] || item.name.en}
+              onDelete={() => removeComponent(index)}
+            >
+              {contents}
+            </SwipeDeleteReviewItem>
+          ) : <div className="food-review-item" key={rows[index].key}>{contents}</div>;
         })}
+        {rows.length === 0 && (
+          <div className="food-review-empty">
+            <AppIcon name="warning" size={19} />
+            <span>{lang === "zh" ? "沒有剩餘項目。請返回並重新分析或選擇其他食物。" : "No components left. Go back to analyze again or choose another food."}</span>
+          </div>
+        )}
       </div>
+      {review.source === "photo" && rows.length > 0 && (
+        <div className="food-review-delete-hint">
+          <AppIcon name="trash" size={14} />
+          {lang === "zh" ? "向左滑動即可刪除；或連點垃圾桶兩次。" : "Swipe left to delete, or tap the trash can twice."}
+        </div>
+      )}
 
       <div className="food-rationale"><AppIcon name="idea" size={18} /><span><b>{lang === "zh" ? "計算依據" : "Why this estimate"}</b>{review.rationale}</span></div>
 
-      {review.items.length === 1 && <div className="food-serving-editor mt-4">
+      {rows.length === 1 && <div className="food-serving-editor mt-4">
         <label>{measuredItem ? (lang === "zh" ? "食用量" : "Amount eaten") : (lang === "zh" ? "份數" : "Servings")}</label>
         <div className="food-serving-controls">
           <button type="button" className="ibtn press" onClick={() => setAmount((value) => Math.max(amountStep, Math.round((value - amountStep) * 100) / 100))} disabled={amount <= amountStep} aria-label={lang === "zh" ? "減少份量" : "Decrease amount"}><AppIcon name="minus" size={18} /></button>
@@ -805,16 +841,119 @@ function FoodReviewCard({
           </div>
           <button type="button" className="ibtn press" onClick={() => setAmount((value) => Math.round((value + amountStep) * 100) / 100)} aria-label={lang === "zh" ? "增加份量" : "Increase amount"}><AppIcon name="plus" size={18} /></button>
         </div>
-        <div className="food-serving-basis">{measuredItem?.amountUnit ? (lang === "zh" ? `營養資料以每 ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)} 計算` : `Nutrition saved per ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)}`) : servingBasisLabel(review.items[0], lang)}</div>
+        <div className="food-serving-basis">{measuredItem?.amountUnit ? (lang === "zh" ? `營養資料以每 ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)} 計算` : `Nutrition saved per ${formatAmount(initialAmount)} ${nutritionUnitLabel(measuredItem.amountUnit, initialAmount, lang)}`) : servingBasisLabel(rows[0].item, lang)}</div>
       </div>}
 
       <div className="nutrition-details tabular mt-3"><span>P {fmtNum(adjusted.protein)}g</span><span>C {fmtNum(adjusted.carbs)}g</span><span>F {fmtNum(adjusted.fat)}g</span></div>
       <div className="mt-3"><MealPick slot={meal} setSlot={chooseMeal} lang={lang} /></div>
       <div className="flex gap-2 mt-3">
         <button className="btn btn-ghost press" onClick={onBack}>{lang === "zh" ? "返回" : "Back"}</button>
-        <button className="btn btn-primary press flex-1" onClick={() => onConfirm(adjustedItems, meal)}><AppIcon name="checkCircle" size={18} /> {lang === "zh" ? "確認並記錄" : "Confirm & log"}</button>
+        <button className="btn btn-primary press flex-1" disabled={adjustedItems.length === 0} onClick={() => onConfirm(adjustedItems, meal)}><AppIcon name="checkCircle" size={18} /> {lang === "zh" ? "確認並記錄" : "Confirm & log"}</button>
       </div>
     </GlassCard>
+  );
+}
+
+function SwipeDeleteReviewItem({
+  children,
+  itemName,
+  lang,
+  onDelete,
+}: {
+  children: React.ReactNode;
+  itemName: string;
+  lang: Lang;
+  onDelete: () => void;
+}) {
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const startRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const offsetRef = useRef(0);
+  const draggingRef = useRef(false);
+  const suppressClickRef = useRef(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(false), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+
+  const resetSwipe = () => {
+    startRef.current = null;
+    offsetRef.current = 0;
+    draggingRef.current = false;
+    setOffset(0);
+    setDragging(false);
+  };
+
+  const finishSwipe = () => {
+    const shouldDelete = offsetRef.current <= -68;
+    const wasDragging = draggingRef.current;
+    suppressClickRef.current = wasDragging;
+    resetSwipe();
+    if (shouldDelete) onDelete();
+    if (wasDragging) window.setTimeout(() => { suppressClickRef.current = false; }, 0);
+  };
+
+  const clickTrash = () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
+    onDelete();
+  };
+
+  return (
+    <div className="food-review-swipe">
+      <div className="food-review-swipe-backdrop" aria-hidden="true">
+        <AppIcon name="trash" size={20} />
+        <span>{lang === "zh" ? "刪除" : "Delete"}</span>
+      </div>
+      <div
+        className={`food-review-item food-review-swipe-content${dragging ? " is-dragging" : ""}`}
+        style={{ transform: `translateX(${offset}px)` }}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          startRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+        }}
+        onPointerMove={(event) => {
+          const start = startRef.current;
+          if (!start || start.pointerId !== event.pointerId) return;
+          const dx = event.clientX - start.x;
+          const dy = event.clientY - start.y;
+          if (!draggingRef.current && (dx >= -5 || Math.abs(dx) <= Math.abs(dy))) return;
+          if (!draggingRef.current) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            draggingRef.current = true;
+            setDragging(true);
+          }
+          const nextOffset = Math.max(-96, Math.min(0, dx));
+          offsetRef.current = nextOffset;
+          setOffset(nextOffset);
+        }}
+        onPointerUp={finishSwipe}
+        onPointerCancel={resetSwipe}
+      >
+        {children}
+        <button
+          type="button"
+          className={`food-review-trash press${armed ? " is-armed" : ""}`}
+          onClick={clickTrash}
+          aria-label={armed
+            ? lang === "zh" ? `再次點擊以刪除 ${itemName}` : `Tap again to delete ${itemName}`
+            : lang === "zh" ? `刪除 ${itemName}` : `Delete ${itemName}`}
+          title={armed ? (lang === "zh" ? "再次點擊以刪除" : "Tap again to delete") : (lang === "zh" ? "刪除" : "Delete")}
+        >
+          <AppIcon name="trash" size={17} />
+          {armed && <span>{lang === "zh" ? "再點" : "Again"}</span>}
+        </button>
+      </div>
+    </div>
   );
 }
 

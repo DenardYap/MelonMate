@@ -89,11 +89,35 @@ describe("Apple Health sync", () => {
 
     expect(first).toMatchObject({ status: "synced", xp: 90, workouts: [pilates] });
     expect(second).toMatchObject({ status: "synced", xp: 0, workouts: [pilates] });
-    expect(useStore.getState().health["p-me"]["2026-08-09"].workouts).toEqual([pilates]);
+    expect(useStore.getState().health["p-me"]["2026-08-09"].workouts).toEqual([{ ...pilates, earnedXp: 90 }]);
     expect(useHealthRewardQueue.getState().pending[0]).toMatchObject({
       workoutXp: 90,
-      workouts: [pilates],
+      workouts: [{ ...pilates, earnedXp: 90 }],
       totalXp: 90,
+    });
+  });
+
+  it("records the actual XP earned by each workout when the daily cap is reached", async () => {
+    const workouts = [
+      { id: "morning", activityType: "Running", durationMinutes: 100, activeCalories: 600, startedAt: 1 },
+      { id: "evening", activityType: "Cycling", durationMinutes: 100, activeCalories: 500, startedAt: 2 },
+    ];
+    healthPlugin.readDailyActivity.mockResolvedValue({ steps: 0, standMinutes: 10, workouts });
+
+    const result = await connectAndSyncAppleHealth("2026-08-09");
+
+    expect(result).toMatchObject({ status: "synced", xp: 300 });
+    expect(useStore.getState().health["p-me"]["2026-08-09"].workouts).toEqual([
+      { ...workouts[0], earnedXp: 200 },
+      { ...workouts[1], earnedXp: 96 },
+    ]);
+    expect(useHealthRewardQueue.getState().pending[0]).toMatchObject({
+      standXp: 4,
+      workoutXp: 296,
+      workouts: [
+        { id: "morning", earnedXp: 200 },
+        { id: "evening", earnedXp: 96 },
+      ],
     });
   });
 

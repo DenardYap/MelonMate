@@ -17,6 +17,7 @@ import SoundProvider from "@/components/SoundProvider";
 import { FriendShareNotifier } from "@/components/FriendShareNotifications";
 import StreakRewardCelebration from "@/components/StreakRewardCelebration";
 import { applyThemeAppearance } from "@/lib/themeAppearance";
+import DailyProgressPrompt from "@/components/DailyProgressPrompt";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -124,6 +125,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <LevelUpCelebration />
       <AchievementCelebration />
       <FriendShareNotifier />
+      <DailyProgressPrompt />
       <ToastHost />
       <ConfettiHost />
     </SoundProvider>

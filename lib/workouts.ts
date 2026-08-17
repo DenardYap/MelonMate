@@ -1,4 +1,4 @@
-import { est1RM, exKey } from "./nutrition";
+import { exKey } from "./nutrition";
 import type {
   ExerciseEquipment,
   MuscleGroup,
@@ -10,11 +10,68 @@ import type {
   WeightUnit,
 } from "./types";
 
+const LB_PER_KG = 2.20462;
+
+/** Converts a displayed weight while keeping user-entered values practical. */
+export function convertWeightUnit(value: number, from: WeightUnit, to: WeightUnit): number {
+  if (from === to) return value;
+  const converted = from === "lb" ? value / LB_PER_KG : value * LB_PER_KG;
+  return Math.round(converted * 10) / 10;
+}
+
+/** Converts user-authored target weights; imported seed weights remain canonical pounds. */
+export function convertWorkoutPlanWeights(
+  plan: WorkoutPlan,
+  from: WeightUnit,
+  to: WeightUnit
+): WorkoutPlan {
+  return {
+    ...structuredClone(plan),
+    weeks: plan.weeks.map((week) => ({
+      days: week.days.map((day) => ({
+        ...day,
+        exercises: day.exercises.map((exercise) => ({
+          ...exercise,
+          targetWeight: exercise.targetWeight == null
+            ? undefined
+            : convertWeightUnit(exercise.targetWeight, from, to),
+        })),
+      })),
+    })),
+  };
+}
+
 /** Bundled plan seed weights were imported in pounds; convert before showing or logging them. */
 export function seedWeightInUnit(seedWeight: number | undefined, unit: WeightUnit): number | undefined {
   if (seedWeight == null) return undefined;
-  if (unit === "lb") return seedWeight;
-  return Math.round((seedWeight / 2.20462) * 2) / 2;
+  return convertWeightUnit(seedWeight, "lb", unit);
+}
+
+/**
+ * Locates the next workout across weeks that may contain different numbers of
+ * training days. Once the full plan is complete, the final populated week
+ * repeats so a finished plan remains usable.
+ */
+export function nextWorkoutPosition(
+  plan: WorkoutPlan,
+  completedCount: number
+): { weekIdx: number; dayIdx: number } | undefined {
+  let remaining = Math.max(0, Math.floor(completedCount));
+  let lastPopulatedWeek = -1;
+
+  for (let weekIdx = 0; weekIdx < plan.weeks.length; weekIdx += 1) {
+    const dayCount = plan.weeks[weekIdx].days.length;
+    if (dayCount === 0) continue;
+    lastPopulatedWeek = weekIdx;
+    if (remaining < dayCount) return { weekIdx, dayIdx: remaining };
+    remaining -= dayCount;
+  }
+
+  if (lastPopulatedWeek < 0) return undefined;
+  return {
+    weekIdx: lastPopulatedWeek,
+    dayIdx: remaining % plan.weeks[lastPopulatedWeek].days.length,
+  };
 }
 
 /**
@@ -41,6 +98,44 @@ export function lastCompletedSessionForDay(
 
 export function completedSets(sets: SetLog[]): SetLog[] {
   return sets.filter((set) => set.done);
+}
+
+export function compareSetPerformance(a: Pick<SetLog, "w" | "reps">, b: Pick<SetLog, "w" | "reps">): number {
+  if (a.w !== b.w) return a.w - b.w;
+  return a.reps - b.reps;
+}
+
+/** The most demanding completed set, using only values the person actually logged. */
+export function topCompletedSet(sets: SetLog[]): SetLog | undefined {
+  return completedSets(sets).reduce<SetLog | undefined>(
+    (best, set) => (!best || compareSetPerformance(set, best) > 0 ? set : best),
+    undefined
+  );
+}
+
+export interface ExerciseHistoryItem {
+  sessionId: string;
+  date: string;
+  startedAt: number;
+  workoutName: { en: string; zh: string };
+  sets: SetLog[];
+}
+
+/** Full completed-set history for an exercise, newest workout first. */
+export function exerciseHistory(sessions: WorkoutSession[], key: string): ExerciseHistoryItem[] {
+  return sessions
+    .filter((session) => Boolean(session.endedAt))
+    .map((session) => ({
+      sessionId: session.id,
+      date: session.date,
+      startedAt: session.startedAt,
+      workoutName: session.dayName,
+      sets: session.entries
+        .filter((entry) => entry.key === key)
+        .flatMap((entry) => completedSets(entry.sets)),
+    }))
+    .filter((item) => item.sets.length > 0)
+    .sort((a, b) => b.startedAt - a.startedAt);
 }
 
 export interface ExerciseChoiceLike {
@@ -222,19 +317,24 @@ function estimateStarterWeight(
 export function exerciseProgressSeries(sessions: WorkoutSession[], key: string) {
   const matchingEntries = sessions.flatMap((session) => session.entries.filter((entry) => entry.key === key));
   const weighted = matchingEntries.some((entry) => entry.sets.some((set) => set.done && set.w > 0));
-  const points: { date: string; v: number }[] = [];
+  const points: { date: string; v: number; weight: number; reps: number; rpe?: number }[] = [];
 
   for (const session of sessions) {
-    const entries = session.entries.filter((entry) => entry.key === key);
-    let best = 0;
-    for (const entry of entries) {
-      for (const set of entry.sets) {
-        if (!set.done) continue;
-        best = Math.max(best, weighted && set.w > 0 ? est1RM(set.w, set.reps) : set.reps);
-      }
-    }
-    if (best > 0) points.push({ date: session.date, v: best });
+    const sets = session.entries
+      .filter((entry) => entry.key === key)
+      .flatMap((entry) => completedSets(entry.sets))
+      .filter((set) => !weighted || set.w > 0);
+    const topSet = topCompletedSet(sets);
+    if (!topSet) continue;
+    const value = weighted ? topSet.w : topSet.reps;
+    if (value > 0) points.push({
+      date: session.date,
+      v: value,
+      weight: topSet.w,
+      reps: topSet.reps,
+      rpe: topSet.rpe,
+    });
   }
 
-  return { points, metric: weighted ? ("est1rm" as const) : ("reps" as const) };
+  return { points, metric: weighted ? ("topWeight" as const) : ("reps" as const) };
 }

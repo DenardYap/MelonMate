@@ -46,8 +46,8 @@ describe("buildNativeCampaignNotifications", () => {
     });
   });
 
-  it("schedules streak nudges only while a streak exists and the daily goal is incomplete", () => {
-    const todayComplete = [log("breakfast"), log("lunch"), log("dinner")];
+  it("stops today's streak nudge after any food is tracked", () => {
+    const todayComplete = [log("breakfast", 5_000)];
     const notifications = buildNativeCampaignNotifications(
       { ...allCampaigns, mealReminders: false, harvestReminders: false },
       {

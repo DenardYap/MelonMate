@@ -1,22 +1,12 @@
-import { randomInt } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createDoc, storageAvailable } from "@/lib/server/wsdb";
+import { generateFriendCode } from "@/lib/server/friendCode";
 import type { MemberSnapshot, WorkspaceDoc } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 10;
-const CREATE_ATTEMPTS = 12;
-
-function generateInviteCode(): string {
-  let tail = "";
-  for (let index = 0; index < CODE_LENGTH; index += 1) {
-    tail += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
-  }
-  return `MELON-${tail}`;
-}
+const CREATE_ATTEMPTS = 32;
 
 function bad(status: number, error: string) {
   return NextResponse.json({ error }, { status });
@@ -35,13 +25,15 @@ export async function POST(req: NextRequest) {
 
   try {
     for (let attempt = 0; attempt < CREATE_ATTEMPTS; attempt += 1) {
-      const code = generateInviteCode();
+      const code = generateFriendCode();
       const doc: WorkspaceDoc = {
         rev: 0,
         shared: null,
+        ownerId: body.member.id,
         members: {
           [body.member.id]: { ...body.member, updatedAt: Date.now() },
         },
+        memberViews: {},
       };
       if (await createDoc(code, doc)) {
         return NextResponse.json({ code, doc }, { status: 201 });

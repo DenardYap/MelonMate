@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { todayStr } from "./dates";
+import { addDays, todayStr } from "./dates";
 import { buildMemberSnapshot } from "./sync";
 import { useStore } from "./store";
 import type { FriendMealPlanSnapshot, Recipe, WorkoutPlan } from "./types";
@@ -34,7 +34,7 @@ describe("friend content sharing", () => {
     store.updateFriendSharing("close-friend", { shareMealPlan: true, shareWorkoutPlan: true, workoutPlanId: planId, sharedRecipeIds: [RECIPE.id] });
 
     const snapshot = buildMemberSnapshot("close-friend");
-    expect(snapshot.version).toBe(8);
+    expect(snapshot.version).toBe(11);
     expect(snapshot.notificationDeviceId).toBe(store.ws.deviceId);
     expect(snapshot.mealPlan?.recipes.map((recipe) => recipe.id)).toContain(RECIPE.id);
     expect(snapshot.sharedRecipes?.map((recipe) => recipe.id)).toEqual([RECIPE.id]);
@@ -53,6 +53,35 @@ describe("friend content sharing", () => {
     useStore.getState().updateProfile("p-me", { photoDataUrl });
 
     expect(buildMemberSnapshot("friend-with-avatar").photoDataUrl).toBe(photoDataUrl);
+  });
+
+  it("shares a one-time daily snapshot only with the selected friend", () => {
+    const store = useStore.getState();
+    const today = todayStr();
+    store.addLog({
+      date: today,
+      meal: "lunch",
+      name: { en: "Protein bowl", zh: "蛋白碗" },
+      emoji: "🥗",
+      grams: 300,
+      macros: { cal: 640, protein: 48, carbs: 62, fat: 20 },
+      src: "food",
+    });
+    store.addWater(today, 5);
+    store.applyHealthActivity({ date: today, steps: 9_432, standMinutes: 105, workouts: [] });
+
+    const progress = useStore.getState().shareDailyProgress("progress-friend");
+
+    expect(progress).toMatchObject({
+      date: today,
+      calories: 640,
+      protein: 48,
+      waterCups: 5,
+      steps: 9_432,
+      standMinutes: 105,
+    });
+    expect(buildMemberSnapshot("progress-friend").dailyProgress).toEqual(progress);
+    expect(buildMemberSnapshot("different-friend").dailyProgress).toBeUndefined();
   });
 
   it("keeps sharing choices isolated per friend", () => {
@@ -99,12 +128,81 @@ describe("friend content sharing", () => {
       src: "food",
     });
     store.applyHealthActivity({ date: todayStr(), steps: 8_000, standMinutes: 90, workouts: [] });
+    store.updateFriendSharing("activity-friend", {
+      shareFoodLogs: true,
+      shareHealth: true,
+      shareFarm: true,
+    });
 
-    const snapshot = buildMemberSnapshot();
+    const snapshot = buildMemberSnapshot("activity-friend");
     expect(snapshot.theme).toBe("honeydew");
     expect(snapshot.badges).toEqual([]);
     expect(snapshot.foodLogs?.[0].name.en).toBe("Apple");
     expect(snapshot.health?.[0]).toMatchObject({ steps: 8_000, standMinutes: 90 });
+  });
+
+  it("keeps personal activity private until each category is enabled for that friend", () => {
+    const store = useStore.getState();
+    store.addLog({
+      date: todayStr(),
+      meal: "lunch",
+      name: { en: "Apple", zh: "蘋果" },
+      emoji: "🍎",
+      grams: 100,
+      macros: { cal: 52, protein: 0.3, carbs: 14, fat: 0.2 },
+      src: "food",
+    });
+    store.applyHealthActivity({ date: todayStr(), steps: 8_000, standMinutes: 90, workouts: [] });
+
+    const privateSnapshot = buildMemberSnapshot("privacy-friend");
+    expect(privateSnapshot).toMatchObject({ melons: 0, golden: 0 });
+    expect(privateSnapshot.today).toBeUndefined();
+    expect(privateSnapshot.foodLogs).toBeUndefined();
+    expect(privateSnapshot.health).toBeUndefined();
+    expect(privateSnapshot.workouts).toBeUndefined();
+    expect(privateSnapshot.farm).toBeUndefined();
+    expect(privateSnapshot.garden).toBeUndefined();
+    expect(privateSnapshot.badges).toBeUndefined();
+
+    store.updateFriendSharing("privacy-friend", {
+      shareNutrition: true,
+      shareFoodLogs: true,
+      shareWorkoutHistory: true,
+      shareHealth: true,
+      shareFarm: true,
+    });
+    const sharedSnapshot = buildMemberSnapshot("privacy-friend");
+    expect(sharedSnapshot.today?.cal).toBe(52);
+    expect(sharedSnapshot.foodLogs?.[0].name.en).toBe("Apple");
+    expect(sharedSnapshot.health?.[0].steps).toBe(8_000);
+    expect(sharedSnapshot.workouts).toMatchObject({ completed: 0, recent: [] });
+    expect(sharedSnapshot.farm).toBeDefined();
+    expect(sharedSnapshot.garden).toHaveLength(7);
+    expect(sharedSnapshot.badges).toEqual([]);
+  });
+
+  it("shares only weekly weight change and never an absolute weight", () => {
+    const store = useStore.getState();
+    const today = todayStr();
+    useStore.setState({
+      weights: {
+        ...store.weights,
+        [store.activeProfileId]: [
+          { date: addDays(today, -7), value: 182.5 },
+          { date: addDays(today, -3), value: 181 },
+          { date: today, value: 179.5 },
+        ],
+      },
+    });
+
+    expect(buildMemberSnapshot("weight-friend").weightTrend).toBeUndefined();
+
+    useStore.getState().updateFriendSharing("weight-friend", { shareWeightTrend: true });
+    const snapshot = buildMemberSnapshot("weight-friend");
+
+    expect(snapshot.weightTrend).toEqual({ change: -3, unit: "lb", days: 7, asOf: today });
+    expect(Object.keys(snapshot.weightTrend ?? {})).toEqual(["change", "unit", "days", "asOf"]);
+    expect(snapshot).not.toHaveProperty("weights");
   });
 
   it("adds and deletes a workout plan while clearing active sharing safely", () => {
@@ -151,11 +249,39 @@ describe("friend content sharing", () => {
     };
     const initialPlanCount = useStore.getState().plans.length;
 
-    const copiedId = useStore.getState().importFriendWorkoutPlan("friend.two", source);
+    const copiedId = useStore.getState().importFriendWorkoutPlan("friend.two", source, "lb");
     expect(useStore.getState().profiles[0].planId).toBe(copiedId);
     expect(useStore.getState().plans).toHaveLength(initialPlanCount + 1);
 
-    useStore.getState().importFriendWorkoutPlan("friend.two", source);
+    useStore.getState().importFriendWorkoutPlan("friend.two", source, "lb");
     expect(useStore.getState().plans).toHaveLength(initialPlanCount + 1);
+  });
+
+  it("converts a friend's authored target weights into the local unit on import", () => {
+    const source: WorkoutPlan = {
+      id: "friend-custom",
+      name: { en: "Friend custom", zh: "朋友自訂" },
+      weeks: [{
+        days: [{
+          id: "day-one",
+          name: { en: "Day one", zh: "第一天" },
+          exercises: [{
+            id: "bench",
+            name: { en: "Bench press", zh: "臥推" },
+            sets: 3,
+            reps: "8",
+            targetWeight: 100,
+            seedWeight: 135,
+          }],
+        }],
+      }],
+    };
+    useStore.getState().updateProfile("p-me", { unit: "kg" });
+
+    const copiedId = useStore.getState().importFriendWorkoutPlan("friend.kg", source, "lb");
+    const copied = useStore.getState().plans.find((plan) => plan.id === copiedId)!;
+
+    expect(copied.weeks[0].days[0].exercises[0].targetWeight).toBe(45.4);
+    expect(copied.weeks[0].days[0].exercises[0].seedWeight).toBe(135);
   });
 });

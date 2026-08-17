@@ -1,4 +1,4 @@
-export const MIN_DAILY_ITEMS = 3;
+export const MIN_DAILY_ITEMS = 4;
 export const FOOD_LOG_XP_REWARD = 5;
 export const MAX_DAILY_REWARDED_FOOD_LOGS = 8;
 export const WEIGHT_LOG_XP_REWARD = 5;
@@ -170,11 +170,12 @@ export function inAppWorkoutXp(
   };
 }
 
-/** A day qualifies after 3+ logged items without exceeding the calorie cap. */
-export function isDailyXpEligible(
-  itemCount: number,
-  totalCal: number,
-  calorieTarget: number
-): boolean {
-  return itemCount >= MIN_DAILY_ITEMS && calorieTarget > 0 && totalCal <= calorieTarget;
+/** The daily food bonus depends only on consistently logging four items. */
+export function isDailyXpEligible(itemCount: number): boolean {
+  return itemCount >= MIN_DAILY_ITEMS;
+}
+
+/** A tracking streak advances on any day where at least one food was logged. */
+export function isTrackingDay(itemCount: number): boolean {
+  return itemCount > 0;
 }

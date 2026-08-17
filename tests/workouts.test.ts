@@ -69,7 +69,8 @@ describe("workout history", () => {
 
     const series = exerciseProgressSeries([workout], "bench");
     expect(series.points).toHaveLength(1);
-    expect(series.points[0].v).toBeGreaterThan(120);
+    expect(series.metric).toBe("topWeight");
+    expect(series.points[0]).toMatchObject({ v: 120, weight: 120, reps: 5 });
   });
 });
 

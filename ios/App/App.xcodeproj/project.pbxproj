@@ -18,6 +18,9 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A20000000000000000000001 /* MelonMateAudioPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20100000000000000000001 /* MelonMateAudioPlugin.swift */; };
 		C20000000000000000000001 /* MelonMateAppearancePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20100000000000000000001 /* MelonMateAppearancePlugin.swift */; };
+		D10000000000000000000001 /* MelonMateWorkoutActivityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10100000000000000000001 /* MelonMateWorkoutActivityPlugin.swift */; };
+		D10000000000000000000002 /* WorkoutActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10100000000000000000002 /* WorkoutActivityAttributes.swift */; };
+		D10000000000000000000003 /* WorkoutActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10100000000000000000002 /* WorkoutActivityAttributes.swift */; };
 		B10000000000000000000001 /* MelonMateWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10100000000000000000001 /* MelonMateWidgets.swift */; };
 		B10000000000000000000002 /* MelonMateWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B10200000000000000000001 /* MelonMateWidgets.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -59,6 +62,8 @@
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		A20100000000000000000001 /* MelonMateAudioPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MelonMateAudioPlugin.swift; sourceTree = "<group>"; };
 		C20100000000000000000001 /* MelonMateAppearancePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MelonMateAppearancePlugin.swift; sourceTree = "<group>"; };
+		D10100000000000000000001 /* MelonMateWorkoutActivityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MelonMateWorkoutActivityPlugin.swift; sourceTree = "<group>"; };
+		D10100000000000000000002 /* WorkoutActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutActivityAttributes.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		A14EAA010000000000000001 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		B10100000000000000000001 /* MelonMateWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MelonMateWidgets.swift; sourceTree = "<group>"; };
@@ -90,6 +95,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				D12000000000000000000001 /* Shared */,
 				B12000000000000000000001 /* MelonMateWidgets */,
 				504EC3051FED79650016851F /* Products */,
 			);
@@ -110,6 +116,7 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				A20100000000000000000001 /* MelonMateAudioPlugin.swift */,
 				C20100000000000000000001 /* MelonMateAppearancePlugin.swift */,
+				D10100000000000000000001 /* MelonMateWorkoutActivityPlugin.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -130,6 +137,14 @@
 				B10300000000000000000001 /* Info.plist */,
 			);
 			path = MelonMateWidgets;
+			sourceTree = "<group>";
+		};
+		D12000000000000000000001 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				D10100000000000000000002 /* WorkoutActivityAttributes.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -251,6 +266,8 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A20000000000000000000001 /* MelonMateAudioPlugin.swift in Sources */,
 				C20000000000000000000001 /* MelonMateAppearancePlugin.swift in Sources */,
+				D10000000000000000000001 /* MelonMateWorkoutActivityPlugin.swift in Sources */,
+				D10000000000000000000002 /* WorkoutActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -259,6 +276,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000000000000000000001 /* MelonMateWidgets.swift in Sources */,
+				D10000000000000000000003 /* WorkoutActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -409,7 +427,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.debug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = H8JVUA6295;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -434,7 +452,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = KF7Y4XG4SG;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -456,10 +474,10 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = H8JVUA6295;
 				INFOPLIST_FILE = MelonMateWidgets/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -482,10 +500,10 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = KF7Y4XG4SG;
 				INFOPLIST_FILE = MelonMateWidgets/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

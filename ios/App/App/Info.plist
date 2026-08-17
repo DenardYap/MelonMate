@@ -96,6 +96,8 @@
 	<string>MelonMate lets you choose a food photo for a nutrition estimate.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>MelonMate converts the food description you speak into a reviewable food log.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -7,7 +7,7 @@ import { makeSessionEntries } from "@/lib/store";
 import { MEAL_ORDER, translate, type DictKey } from "@/lib/i18n";
 import { addDays, fmtDate, fmtDateLong, todayStr } from "@/lib/dates";
 import { fmtNum, mulMacros, sumMacros } from "@/lib/nutrition";
-import { isDailyXpEligible, MIN_DAILY_ITEMS } from "@/lib/game";
+import { healthWorkoutXp, isDailyXpEligible, MIN_DAILY_ITEMS } from "@/lib/game";
 import { GlassCard, MacroBar, Ring, Sheet, Stepper, EmptyState, toast, useCountUp } from "@/components/ui";
 import { LineChart } from "@/components/charts";
 import DailyTargetsSheet from "@/components/DailyTargetsSheet";
@@ -35,7 +35,7 @@ export default function TodayPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t("greetingMorning") : hour < 18 ? t("greetingAfternoon") : t("greetingEvening");
 
-  const goalHit = isDailyXpEligible(entries.length, totals.cal, profile.goals.cal);
+  const goalHit = isDailyXpEligible(entries.length);
 
   const [editing, setEditing] = useState<LogEntry | null>(null);
   const [targetsSheet, setTargetsSheet] = useState(false);
@@ -249,6 +249,7 @@ export default function TodayPage() {
                 <div key={workout.id}>
                   <AppIcon name="gym" size={17} />
                   <span><b>{workout.activityType}</b><small>{Math.round(workout.durationMinutes)} min · {Math.round(workout.activeCalories)} cal</small></span>
+                  <em className="health-workout-xp">+{workout.earnedXp ?? healthWorkoutXp(workout.durationMinutes)} XP</em>
                 </div>
               ))}
             </div>

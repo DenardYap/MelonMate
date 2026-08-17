@@ -25,7 +25,7 @@ export function LineChart({
   const W = 320;
   const H = height;
   const padL = 10;
-  const padR = showLastValue ? 48 : 10;
+  const padR = 10;
   const padT = 16;
   const padB = labels ? 22 : 8;
   const plotRight = W - padR;
@@ -99,7 +99,15 @@ export function LineChart({
           <circle key={i} cx={x(i)} cy={y(p)} r={i === points.length - 1 ? 4.8 : 3.2} fill={color} stroke="var(--bg)" strokeWidth="2" />
         ))}
       {showLastValue && (
-        <text x={x(points.length - 1) + 7} y={y(last) + 4} fontSize="11" fontWeight="700" fill="var(--ink)" className="tabular">
+        <text
+          x={x(points.length - 1) - 3}
+          y={Math.max(12, y(last) - 8)}
+          fontSize="11"
+          fontWeight="700"
+          fill="var(--ink)"
+          textAnchor="end"
+          className="tabular"
+        >
           {Math.round(last * 10) / 10}
           {unit}
         </text>

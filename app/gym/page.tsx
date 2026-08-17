@@ -11,10 +11,18 @@ import { EmptyState, GlassCard, Segmented, Sheet, toast } from "@/components/ui"
 import { BarChart, LineChart } from "@/components/charts";
 import { AppIcon } from "@/components/icons";
 import { ExercisePickerSheet } from "@/components/ExercisePickerSheet";
-import { exerciseProgressSeries, seedWeightInUnit } from "@/lib/workouts";
-import type { ExerciseSpec, WorkoutPlan, WorkoutSession, WorkoutWeek } from "@/lib/types";
+import { ExerciseGlyph } from "@/components/ExerciseGlyph";
+import {
+  compareSetPerformance,
+  exerciseProgressSeries,
+  nextWorkoutPosition,
+  seedWeightInUnit,
+  topCompletedSet,
+} from "@/lib/workouts";
+import type { ExerciseSpec, WeightUnit, WorkoutPlan, WorkoutSession, WorkoutWeek } from "@/lib/types";
 import { recommendWorkoutPlans } from "@/lib/onboarding";
 import { connectAndSyncAppleHealth, hasAppleHealthBridge, isAppleHealthConnected } from "@/lib/appleHealth";
+import { healthWorkoutXp } from "@/lib/game";
 
 type Tab = "train" | "plans" | "progress" | "shared";
 
@@ -90,6 +98,7 @@ export default function GymPage() {
 
 function SharedWorkoutsTab() {
   const lang = useStore((state) => state.lang);
+  const profile = useActiveProfile();
   const friendsById = useStore((state) => state.friends);
   const importFriendWorkoutPlan = useStore((state) => state.importFriendWorkoutPlan);
   const markRead = useStore((state) => state.markFriendNotificationsRead);
@@ -111,8 +120,8 @@ function SharedWorkoutsTab() {
     .sort((left, right) => Number(right.friendId === focusFriendId) - Number(left.friendId === focusFriendId)),
   [focusFriendId, friendsById]);
 
-  const copyPlan = (friendId: string, plan: WorkoutPlan) => {
-    importFriendWorkoutPlan(friendId, plan);
+  const copyPlan = (friendId: string, plan: WorkoutPlan, sourceUnit: WeightUnit) => {
+    importFriendWorkoutPlan(friendId, plan, sourceUnit);
     toast(lang === "zh" ? "訓練計畫已複製並選用" : "Workout plan copied and selected", "checkCircle");
   };
 
@@ -134,7 +143,7 @@ function SharedWorkoutsTab() {
                   <div className="flex-1 min-w-0">
                     <div className="t-cap">{friendEmoji} {lang === "zh" ? `來自 ${friendName}` : `From ${friendName}`}</div>
                     <div className="t-title mt-1">{plan.name[lang] || plan.name.en}</div>
-                    <div className="t-sub mt-1">{plan.weeks.length} {lang === "zh" ? "週" : plan.weeks.length === 1 ? "week" : "weeks"} · {days.length} {lang === "zh" ? "天／週" : "days/week"} · {unit}</div>
+                    <div className="t-sub mt-1">{plan.weeks.length} {lang === "zh" ? "週" : plan.weeks.length === 1 ? "week" : "weeks"} · {days.length} {lang === "zh" ? "天／週" : "days/week"} · {profile.unit}</div>
                   </div>
                 </div>
                 {days.length ? (
@@ -143,7 +152,7 @@ function SharedWorkoutsTab() {
                     {days.length > 5 && <span className="t-cap self-center">+{days.length - 5}</span>}
                   </div>
                 ) : null}
-                <button className="btn btn-primary press w-full mt-3" onClick={() => copyPlan(friendId, plan)}>
+                <button className="btn btn-primary press w-full mt-3" onClick={() => copyPlan(friendId, plan, unit)}>
                   <AppIcon name="download" size={17} />{lang === "zh" ? "使用這個訓練計畫" : "Use this workout plan"}
                 </button>
               </GlassCard>
@@ -176,10 +185,11 @@ function TrainTab({ onChoosePlan }: { onChoosePlan: () => void }) {
   const open = openSession(store);
   const sessions = (store.sessions[profile.id] ?? []).filter((x) => x.endedAt).sort((a, b) => b.startedAt - a.startedAt);
   const doneCount = sessions.filter((x) => x.planId === profile.planId).length;
-  const daysPerWeek = plan?.weeks[0]?.days.length || 4;
-  const weekIdx = plan ? Math.min(Math.floor(doneCount / daysPerWeek), plan.weeks.length - 1) : 0;
-  const dayIdx = plan ? doneCount % daysPerWeek : 0;
+  const position = plan ? nextWorkoutPosition(plan, doneCount) : undefined;
+  const weekIdx = position?.weekIdx ?? 0;
+  const dayIdx = position?.dayIdx ?? 0;
   const nextDay = plan?.weeks[weekIdx]?.days[dayIdx];
+  const daysPerWeek = plan?.weeks[weekIdx]?.days.length ?? 0;
   const activeExercises = open ? open.entries : nextDay?.exercises ?? [];
   const planLabel = plan ? displayPlanName(plan, lang, profile.name) : "";
   const totalSets = activeExercises.reduce(
@@ -215,6 +225,12 @@ function TrainTab({ onChoosePlan }: { onChoosePlan: () => void }) {
           <div className="flex flex-wrap gap-1 mb-4">
             {activeExercises.slice(0, 4).map((exercise, index) => (
               <span key={index} className="chip" style={{ fontSize: 12.5, padding: "4px 10px" }}>
+                <ExerciseGlyph
+                  name={exercise.name}
+                  group={store.customExercises.find((custom) => custom.historyKey === ("key" in exercise ? exercise.key : exercise.historyKey))?.group ?? groupOf(exercise.name.en)}
+                  size={15}
+                  compact
+                />
                 {exercise.name[lang]}
               </span>
             ))}
@@ -238,12 +254,12 @@ function TrainTab({ onChoosePlan }: { onChoosePlan: () => void }) {
       <AppleHealthStatsCard />
 
       {/* week overview */}
-      {plan && (
+      {plan && plan.weeks[weekIdx] && (
         <GlassCard className="p-4 mb-4">
           <div className="t-section mb-2">{t("week")} {weekIdx + 1}</div>
           <div className="flex flex-col gap-2">
             {plan.weeks[weekIdx].days.map((d, i) => {
-              const done = i < dayIdx || (weekIdx * daysPerWeek + i) < doneCount;
+              const done = i < dayIdx;
               const isNext = i === dayIdx && !done;
               return (
                 <div key={d.id} className="flex items-center gap-3">
@@ -398,6 +414,7 @@ function AppleHealthStatsCard() {
                 <b>{workout.activityType}</b>
                 <small>{fmtDate(date, lang)} · {Math.round(workout.durationMinutes)} min · {Math.round(workout.activeCalories)} cal</small>
               </span>
+              <em className="health-workout-xp">+{workout.earnedXp ?? healthWorkoutXp(workout.durationMinutes)} XP</em>
             </div>
           ))}
         </div>
@@ -509,7 +526,7 @@ function PlanCreateSheet({ onClose, onCreated }: { onClose: () => void; onCreate
       weeks: Array.from({ length: weekCount }, (_, index) => index === 0 ? firstWeek : cloneWeek(firstWeek)),
       daysPerWeek: dayCount,
     };
-    addPlan(plan);
+    addPlan(plan, true);
     toast(lang === "zh" ? "計畫已建立" : "Plan created", "checkCircle");
     onCreated(plan.id);
   };
@@ -630,6 +647,7 @@ function PlanEditor({ plan, onBack }: { plan: WorkoutPlan; onBack: () => void })
           </div>
           {d.exercises.map((e, ei) => (
             <button key={e.id} type="button" className="row row-button press cursor-pointer" onClick={() => setEditEx({ dayIdx: di, exIdx: ei })}>
+              <ExerciseGlyph name={e.name} group={store.customExercises.find((custom) => custom.historyKey === e.historyKey)?.group ?? groupOf(e.name.en)} size={19} />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold truncate" style={{ fontSize: 15 }}>{e.name[lang]}</div>
                 <div className="t-cap tabular">
@@ -1034,17 +1052,24 @@ function ProgressTab() {
   const activeKey = selKey ?? keys[keys.length - 1]?.[0] ?? null;
   const activeName = keys.find(([k]) => k === activeKey)?.[1];
 
-  // 1RM series for selected exercise
+  // Directly logged top-set weight (or reps for unweighted exercises).
   const series = useMemo(
-    () => (activeKey ? exerciseProgressSeries(sessions, activeKey) : { points: [], metric: "est1rm" as const }),
+    () => (activeKey ? exerciseProgressSeries(sessions, activeKey) : { points: [], metric: "topWeight" as const }),
     [sessions, activeKey]
   );
 
-  const trend =
-    series.points.length >= 2
-      ? series.points[series.points.length - 1].v > series.points[series.points.length - 2].v
+  const latestPoint = series.points[series.points.length - 1];
+  const previousPoint = series.points[series.points.length - 2];
+  const trendComparison = latestPoint && previousPoint
+    ? compareSetPerformance(
+        { w: latestPoint.weight, reps: latestPoint.reps },
+        { w: previousPoint.weight, reps: previousPoint.reps }
+      )
+    : 0;
+  const trend = series.points.length >= 2
+      ? trendComparison > 0
         ? "up"
-        : series.points[series.points.length - 1].v === series.points[series.points.length - 2].v
+        : trendComparison === 0
         ? "flat"
         : "down"
       : null;
@@ -1111,7 +1136,10 @@ function ProgressTab() {
             <div>
               <div className="font-bold" style={{ fontSize: 16 }}>{activeName[lang]}</div>
               <div className="t-cap">
-                {series.metric === "est1rm" ? `${t("est1rm")} (${profile.unit})` : t("bestReps")}
+                {series.metric === "topWeight" ? `${t("topSetWeight")} (${profile.unit})` : t("bestReps")}
+                {latestPoint && (
+                  <> · {latestPoint.weight > 0 ? `${fmtNum(latestPoint.weight)}${profile.unit} × ` : ""}{latestPoint.reps}{latestPoint.rpe ? ` @ RPE ${latestPoint.rpe}` : ""}</>
+                )}
               </div>
             </div>
             {trend && (
@@ -1213,6 +1241,7 @@ function ExerciseProgressCard({
     .find((session) => session.entries.some((entry) => entry.key === exerciseKey));
   const lastEntry = lastSession?.entries.find((entry) => entry.key === exerciseKey);
   const doneSets = lastEntry?.sets.filter((set) => set.done) ?? [];
+  const latestTopSet = topCompletedSet(doneSets);
   const averageRpe = doneSets.filter((set) => set.rpe != null).length
     ? doneSets.reduce((sum, set) => sum + (set.rpe ?? 0), 0) /
       doneSets.filter((set) => set.rpe != null).length
@@ -1229,7 +1258,7 @@ function ExerciseProgressCard({
           </div>
         </div>
         <span className="chip" style={{ fontSize: 11, padding: "4px 8px" }}>
-          {series.metric === "est1rm" ? t("est1rm") : t("bestReps")}
+          {series.metric === "topWeight" ? t("topSetWeight") : t("bestReps")}
         </span>
       </div>
       <LineChart
@@ -1238,14 +1267,14 @@ function ExerciseProgressCard({
           index === 0 || index === series.points.length - 1 ? fmtDate(point.date, lang) : ""
         )}
         height={88}
-        unit={series.metric === "est1rm" ? unit : ""}
+        unit={series.metric === "topWeight" ? unit : ""}
       />
       <div className="flex gap-1.5 flex-wrap mt-1">
         <span className="previous-set-chip">{doneSets.length} {t("sets")}</span>
-        {doneSets.length > 0 && (
+        {latestTopSet && (
           <span className="previous-set-chip tabular">
-            {doneSets[doneSets.length - 1].w > 0 ? `${doneSets[doneSets.length - 1].w}${unit} × ` : ""}
-            {doneSets[doneSets.length - 1].reps}
+            {latestTopSet.w > 0 ? `${latestTopSet.w}${unit} × ` : ""}
+            {latestTopSet.reps}
           </span>
         )}
         {averageRpe != null && <span className="previous-set-chip tabular">RPE {fmtNum(averageRpe)}</span>}

@@ -38,8 +38,8 @@ export default function RewardGuideSettings() {
 
   const xpItems: GuideItem[] = lang === "zh" ? [
     { icon: "cutlery", title: "記錄食物", detail: `每天前 ${MAX_DAILY_REWARDED_FOOD_LOGS} 筆各 +${FOOD_LOG_XP_REWARD} XP。刪除後重新記錄不會重複獲獎。` },
-    { icon: "goal", title: "完成每日飲食目標", detail: `記錄至少 3 筆食物且不超過熱量目標，隔天結算 +${DAILY_XP_REWARD} XP。` },
-    { icon: "fire", title: "達成連續紀錄里程碑", detail: `${STREAK_MILESTONES.map((milestone) => `${milestone.days} 天 +${milestone.xp}`).join("、")} XP；每個徽章只獎勵一次。` },
+    { icon: "goal", title: "完成每日飲食目標", detail: `記錄至少 4 筆食物，隔天結算 +${DAILY_XP_REWARD} XP；不受熱量高低影響。` },
+    { icon: "fire", title: "達成連續紀錄里程碑", detail: `每天記錄至少一項食物即可延續連續追蹤；不受熱量高低影響。${STREAK_MILESTONES.map((milestone) => `${milestone.days} 天 +${milestone.xp}`).join("、")} XP；每個徽章只獎勵一次。` },
     { icon: "weight", title: "記錄體重", detail: `每天第一次記錄 +${WEIGHT_LOG_XP_REWARD} XP。` },
     { icon: "stretch", title: "Apple 健康步數", detail: `每 ${STEP_INCREMENT.toLocaleString()} 步達成一個里程碑，每天計至 ${(STEP_INCREMENT * STEP_DAILY_TIER_CAP).toLocaleString()} 步；後段里程碑獎勵較高。` },
     { icon: "timer", title: "Apple 健康站立", detail: `每 ${STAND_MINUTES_INCREMENT} 分鐘 +${STAND_XP_PER_TIER} XP，每天計至 ${STAND_MINUTES_INCREMENT * STAND_DAILY_TIER_CAP} 分鐘。` },
@@ -47,8 +47,8 @@ export default function RewardGuideSettings() {
     { icon: "gym", title: "App 內訓練", detail: `每個完成組數 +${IN_APP_WORKOUT_SET_XP} XP；完成動作的所有組數再 +${IN_APP_WORKOUT_EXERCISE_XP} XP。` },
   ] : [
     { icon: "cutlery", title: "Log food", detail: `The first ${MAX_DAILY_REWARDED_FOOD_LOGS} entries each day earn +${FOOD_LOG_XP_REWARD} XP. Deleting and re-adding an entry cannot earn it twice.` },
-    { icon: "goal", title: "Complete the daily food goal", detail: `Log at least 3 items and stay at or below your calorie target to receive +${DAILY_XP_REWARD} XP when the day is evaluated.` },
-    { icon: "fire", title: "Reach streak milestones", detail: `${STREAK_MILESTONES.map((milestone) => `${milestone.days} days +${milestone.xp}`).join(", ")} XP. Each badge pays out once.` },
+    { icon: "goal", title: "Complete the daily food goal", detail: `Log at least 4 foods to receive +${DAILY_XP_REWARD} XP when the day is evaluated, regardless of calories.` },
+    { icon: "fire", title: "Reach streak milestones", detail: `Log at least one food each day to continue your tracking streak, regardless of calories. ${STREAK_MILESTONES.map((milestone) => `${milestone.days} days +${milestone.xp}`).join(", ")} XP. Each badge pays out once.` },
     { icon: "weight", title: "Log your weight", detail: `Your first weight check-in each day earns +${WEIGHT_LOG_XP_REWARD} XP.` },
     { icon: "stretch", title: "Apple Health steps", detail: `Reach a milestone every ${STEP_INCREMENT.toLocaleString()} steps, up to ${(STEP_INCREMENT * STEP_DAILY_TIER_CAP).toLocaleString()} steps per day. Later milestones are worth more.` },
     { icon: "timer", title: "Apple Health standing", detail: `Earn +${STAND_XP_PER_TIER} XP per ${STAND_MINUTES_INCREMENT} standing minutes, up to ${STAND_MINUTES_INCREMENT * STAND_DAILY_TIER_CAP} minutes per day.` },

@@ -20,7 +20,7 @@ function upsertLink(rel: string, href: string) {
   link.href = href;
 }
 
-/** Keep browser/PWA branding and the native iOS alternate icon in theme sync. */
+/** Keep browser/PWA branding in theme sync without prompting native users on launch. */
 export function applyThemeAppearance(theme: ThemeId) {
   const brand = themeBrand(theme);
   if (typeof document !== "undefined") {
@@ -28,6 +28,10 @@ export function applyThemeAppearance(theme: ThemeId) {
     upsertLink("apple-touch-icon", brand.appleTouchIcon);
     upsertLink("manifest", brand.manifest);
   }
+}
+
+/** Change the native app icon only in response to an explicit theme selection. */
+export function applyNativeAppIcon(theme: ThemeId) {
   if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("MelonMateAppearance")) {
     void MelonMateAppearance.setAppIcon({ theme }).catch(() => {});
   }
